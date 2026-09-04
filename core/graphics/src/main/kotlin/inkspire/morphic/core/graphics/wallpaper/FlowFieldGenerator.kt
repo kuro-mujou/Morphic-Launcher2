@@ -99,8 +99,8 @@ object FlowFieldGenerator : Generator {
      * The reference does the same, and "absent, not disabled" is why: a *Dots* slider beside *Eclectic*'s working
      * knobs would drag, re-render, and change nothing.
      */
-    override fun styleFor(variant: Int): DesignStyle =
-        if (lookAt(variant).beadable) style.copy(roundness = "Dots") else style
+    override fun styleFor(params: DesignParams): DesignStyle =
+        if (lookAt(params.variant).beadable) style.copy(roundness = "Dots") else style
 
     /**
      * Which of the design's two looks is drawn — the reference's *Style*, and gart's two arts.

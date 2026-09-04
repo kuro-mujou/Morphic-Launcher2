@@ -35,18 +35,28 @@ interface Generator {
     val style: DesignStyle
 
     /**
-     * The knobs this generator reads *at [variant]* — the same declaration as [style] for a design whose sub-looks
-     * all answer to the same set, which is every design but one.
+     * The knobs this generator reads *at [params]* — the same declaration as [style] for a design whose choices all
+     * answer to the same set, which is most of them.
      *
-     * **Overridden only where a sub-look genuinely has a knob the others do not**, because "absent, not disabled" is
+     * **Overridden only where a choice genuinely takes away a knob or gives one**, because "absent, not disabled" is
      * a standing rule and a knob that changes nothing is the silent failure [DesignStyle] exists to prevent — worse
-     * here than usual, since the panel would offer it beside knobs that do work. Flow Field is the case: its *Pearls*
-     * beads a share of its lines and its *Eclectic* has no beads to control.
+     * here than usual, since the panel would offer it beside knobs that do work. Flow Field is the original case: its
+     * *Pearls* beads a share of its lines and its *Eclectic* has no beads to control.
      *
-     * Defaulted rather than replacing [style] so the twenty-eight designs whose knobs do not vary say nothing, and
-     * so the sweeps that enumerate a design's variants still have one declaration to ask for the variant list itself.
+     * **It takes the whole [DesignParams] rather than a variant index**, because the variant is not the only choice a
+     * knob set can hang off. The Polygon Cascade's shadow belongs to its *filled* finish and is meaningless on an
+     * outline, which the narrower signature could not say at all — it would have had to offer a dead knob under
+     * Stroke, or drop the shadow. A generator still reads only the fields it branches on; passing the rest costs
+     * nothing and means the next design that gates on a different one needs no second widening.
+     *
+     * **Only the *presence* and *naming* of knobs may depend on [params], never a value.** The panel asks this to
+     * decide which tabs to draw, so a `DesignStyle` that changed with, say, `density` would rebuild the tab row under
+     * a moving finger. Gate on the choices — [DesignParams.variant] and [DesignParams.finish] — not on the sliders.
+     *
+     * Defaulted rather than replacing [style] so the designs whose knobs do not vary say nothing, and so the sweeps
+     * that enumerate a design's choices still have one declaration to ask for the option lists themselves.
      */
-    fun styleFor(variant: Int): DesignStyle = style
+    fun styleFor(params: DesignParams): DesignStyle = style
 
     /**
      * A `[width] × [height]` bitmap of this design, painted from [palette], tuned by [params], varied by [seed].

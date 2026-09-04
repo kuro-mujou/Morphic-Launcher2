@@ -59,8 +59,9 @@ internal fun WallpaperStylePanel(
 ) {
     val params = recipe.params
     // The design's knobs, asked of the generator that reads them rather than tabulated here — and asked *at the
-    // current variant*, since one design's two looks answer to different sets.
-    val style = Generators.forDesign(recipe.design).styleFor(params.variant)
+    // current params*, since a design's looks answer to different sets: the cascade's shadow belongs to its filled
+    // finish, Flow Field's dots to its beaded look.
+    val style = Generators.forDesign(recipe.design).styleFor(params)
     val tabs = style.tabs()
     // A design switch can take away the knob that was selected — Contour has a Look, the Mosaic it flips to has none.
     // Color is in every list, so there is always something to fall back to.
@@ -177,7 +178,8 @@ private fun FractionControl(what: String, value: Float, default: Float, onCommit
  * Which knob the Style panel is showing.
  *
  * Only [COLOR] is offered for every design; the others appear when the current generator declares them. The order is
- * the panel's, and it runs from what a design *is* toward how it is painted — [ROUNDNESS] sits with the shape knobs
+ * the panel's, and it runs from what a design *is* toward how it is painted — [TAPER] sits beside [SCALE], the two
+ * being the size at each end of a run — [ROUNDNESS] sits with the shape knobs
  * before [VARIANT], and [DEPTH] past it, because a relief is lighting rather than shape. [DEPTH_SCALE] follows
  * [DEPTH] directly, being the size of the very thing that one counts. [ROTATION] closes the shape group, being how the
  * shape is placed rather than what it is. [FINISH] follows [VARIANT], being how the shape it chose is painted.
@@ -190,6 +192,7 @@ internal enum class StyleTab(
 ) {
     AMOUNT,
     SCALE(fraction = FractionField({ it.scale }, { params, v -> params.copy(scale = v) })),
+    TAPER(fraction = FractionField({ it.taper }, { params, v -> params.copy(taper = v) })),
     IRREGULARITY(fraction = FractionField({ it.irregularity }, { params, v -> params.copy(irregularity = v) })),
     ROUNDNESS(fraction = FractionField({ it.roundness }, { params, v -> params.copy(roundness = v) })),
     ROTATION(fraction = FractionField({ it.rotation }, { params, v -> params.copy(rotation = v) })),
@@ -239,6 +242,7 @@ internal class ChooserField(
 internal fun DesignStyle.tabs(): List<StyleTab> = buildList {
     if (amount != null) add(StyleTab.AMOUNT)
     if (scale != null) add(StyleTab.SCALE)
+    if (taper != null) add(StyleTab.TAPER)
     if (irregularity != null) add(StyleTab.IRREGULARITY)
     if (roundness != null) add(StyleTab.ROUNDNESS)
     if (rotation != null) add(StyleTab.ROTATION)
@@ -254,6 +258,7 @@ internal fun DesignStyle.tabs(): List<StyleTab> = buildList {
 private fun DesignStyle.labelOf(tab: StyleTab): String = when (tab) {
     StyleTab.AMOUNT -> amount?.label.orEmpty()
     StyleTab.SCALE -> scale.orEmpty()
+    StyleTab.TAPER -> taper.orEmpty()
     StyleTab.IRREGULARITY -> irregularity.orEmpty()
     StyleTab.ROUNDNESS -> roundness.orEmpty()
     StyleTab.ROTATION -> rotation.orEmpty()

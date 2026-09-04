@@ -2,6 +2,7 @@ package inkspire.morphic.core.graphics.wallpaper
 
 import inkspire.morphic.core.graphics.wallpaper.PolygonCascadeGenerator.CascadeFinish
 import inkspire.morphic.core.graphics.wallpaper.PolygonCascadeGenerator.CascadeShape
+import inkspire.morphic.core.model.wallpaper.DesignParams
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -43,6 +44,30 @@ class PolygonCascadeGeneratorTest {
         assertEquals(CascadeFinish.FILL, PolygonCascadeGenerator.finishOf(1))
         assertEquals(CascadeFinish.FILL, PolygonCascadeGenerator.finishOf(9)) // clamped at the end
         assertEquals(CascadeFinish.STROKE, PolygonCascadeGenerator.finishOf(-1)) // and at the start
+    }
+
+    @Test
+    fun `the shadow is offered under the fill and withheld from the outline`() {
+        val filled = DesignParams(finish = 1)
+        val stroked = DesignParams(finish = 0)
+        // What it lifts off the page is a copy's interior, and an outline has none — so the knob is absent rather
+        // than present and inert, which is the whole contract DesignStyle rests on.
+        assertEquals("Shadow", PolygonCascadeGenerator.styleFor(filled).depth)
+        assertEquals(null, PolygonCascadeGenerator.styleFor(stroked).depth)
+        // And the taper is not the shadow's neighbour by accident: it belongs to both finishes.
+        assertEquals("Taper", PolygonCascadeGenerator.styleFor(filled).taper)
+        assertEquals("Taper", PolygonCascadeGenerator.styleFor(stroked).taper)
+    }
+
+    @Test
+    fun `a circle offers neither corners nor a turn, in either finish`() {
+        val circle = PolygonCascadeGenerator.shapeOf(1)
+        assertEquals(CascadeShape.CIRCLE, circle)
+        for (finish in 0..1) {
+            val style = PolygonCascadeGenerator.styleFor(DesignParams(variant = 1, finish = finish))
+            assertEquals("finish $finish: a circle has no corners", null, style.roundness)
+            assertEquals("finish $finish: a circle has no orientation", null, style.rotation)
+        }
     }
 
     @Test

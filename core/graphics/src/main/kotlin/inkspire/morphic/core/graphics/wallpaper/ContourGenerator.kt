@@ -84,8 +84,8 @@ object ContourGenerator : Generator {
      * becomes its paper-cut *Shadow* instead, which is the same family reading the same field, and
      * [DesignParams.depthScale] goes away entirely rather than sitting there moving nothing.
      */
-    override fun styleFor(variant: Int): DesignStyle =
-        if (variant == VariantEmbossed) style.copy(depth = "Shadow", depthScale = null) else style
+    override fun styleFor(params: DesignParams): DesignStyle =
+        if (params.variant == VariantEmbossed) style.copy(depth = "Shadow", depthScale = null) else style
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val bitmap = createBitmap(width, height)

@@ -53,52 +53,61 @@ class GeneratorKnobTest {
             val variants = generator.style.variant?.options?.indices ?: 0..0
 
             for (variant in variants) {
-                val style = generator.styleFor(variant)
-                val base = DesignParams(variant = variant, colorMode = WallpaperColorMode.COLORFUL)
+                val atVariant = DesignParams(variant = variant, colorMode = WallpaperColorMode.COLORFUL)
+                val finishes = generator.styleFor(atVariant).finish?.options?.indices ?: 0..0
 
-                // Each knob at both ends, against the same everything else — so a difference can only be this knob.
-                val knobs = buildList {
-                    if (style.amount != null) add(Knob("amount", base.copy(density = 0f), base.copy(density = 1f)))
-                    if (style.scale != null) add(Knob("scale", base.copy(scale = 0f), base.copy(scale = 1f)))
-                    if (style.irregularity != null) {
-                        add(Knob("irregularity", base.copy(irregularity = 0f), base.copy(irregularity = 1f)))
+                // **Every finish, not only the default one**, because a knob set may now hang off the finish as well
+                // as the variant: the cascade's shadow exists under its fill and not under its outline, so asking
+                // only the default would check the one arrangement where the knob is not declared at all.
+                for (finish in finishes) {
+                    val base = atVariant.copy(finish = finish)
+                    val style = generator.styleFor(base)
+                    val where = "${design.name}[variant $variant, finish $finish]"
+
+                    // Each knob at both ends, against the same everything else — so a difference can only be this
+                    // knob.
+                    val knobs = buildList {
+                        if (style.amount != null) add(Knob("amount", base.copy(density = 0f), base.copy(density = 1f)))
+                        if (style.scale != null) add(Knob("scale", base.copy(scale = 0f), base.copy(scale = 1f)))
+                        if (style.taper != null) add(Knob("taper", base.copy(taper = 0f), base.copy(taper = 1f)))
+                        if (style.irregularity != null) {
+                            add(Knob("irregularity", base.copy(irregularity = 0f), base.copy(irregularity = 1f)))
+                        }
+                        if (style.depth != null) add(Knob("depth", base.copy(depth = 0f), base.copy(depth = 1f)))
+                        if (style.depthScale != null) {
+                            add(Knob("depthScale", base.copy(depthScale = 0f), base.copy(depthScale = 1f)))
+                        }
+                        if (style.roundness != null) {
+                            add(Knob("roundness", base.copy(roundness = 0f), base.copy(roundness = 1f)))
+                        }
+                        if (style.rotation != null) {
+                            add(Knob("rotation", base.copy(rotation = 0f), base.copy(rotation = 1f)))
+                        }
                     }
-                    if (style.depth != null) add(Knob("depth", base.copy(depth = 0f), base.copy(depth = 1f)))
-                    if (style.depthScale != null) {
-                        add(Knob("depthScale", base.copy(depthScale = 0f), base.copy(depthScale = 1f)))
+
+                    for (knob in knobs) {
+                        if (drawsTheSame(design, knob.low, knob.high)) {
+                            dead.add("$where declares ${knob.name} and ignores it")
+                        }
                     }
-                    if (style.roundness != null) {
-                        add(Knob("roundness", base.copy(roundness = 0f), base.copy(roundness = 1f)))
-                    }
-                    if (style.rotation != null) {
-                        add(Knob("rotation", base.copy(rotation = 0f), base.copy(rotation = 1f)))
+
+                    // The color layouts are the sub-look check on one of the panel's *other* segmented controls, and
+                    // they are asked per arrangement because a design's looks can spend a layout differently — a
+                    // filled band and a stroked path take their color from the same knob and could easily agree in
+                    // one and not the other.
+                    val layouts = style.colorLayout?.options?.indices ?: IntRange.EMPTY
+                    for (layout in layouts.drop(1)) {
+                        val previous = base.copy(colorLayout = layout - 1)
+                        if (drawsTheSame(design, previous, base.copy(colorLayout = layout))) {
+                            dead.add("$where color layout $layout draws what layout ${layout - 1} draws")
+                        }
                     }
                 }
 
-                for (knob in knobs) {
-                    if (drawsTheSame(design, knob.low, knob.high)) {
-                        dead.add("${design.name}[$variant] declares ${knob.name} and ignores it")
-                    }
-                }
-
-                // The color layouts are the sub-look check on one of the panel's *other* segmented controls, and
-                // they are asked per variant because a design's two looks can spend a layout differently — a filled
-                // band and a stroked path take their color from the same knob and could easily agree in one and not
-                // the other.
-                val layouts = style.colorLayout?.options?.indices ?: IntRange.EMPTY
-                for (layout in layouts.drop(1)) {
-                    val previous = base.copy(colorLayout = layout - 1)
-                    if (drawsTheSame(design, previous, base.copy(colorLayout = layout))) {
-                        dead.add("${design.name}[$variant] color layout $layout draws what layout ${layout - 1} draws")
-                    }
-                }
-
-                // And the finishes are the same check on the last of them, asked per variant for the same reason:
-                // a finish is how a shape is inked, so a design whose shapes differ could ink one of them alike.
-                val finishes = style.finish?.options?.indices ?: IntRange.EMPTY
+                // And the finishes themselves are the same check on the last of those controls.
                 for (finish in finishes.drop(1)) {
-                    val previous = base.copy(finish = finish - 1)
-                    if (drawsTheSame(design, previous, base.copy(finish = finish))) {
+                    val previous = atVariant.copy(finish = finish - 1)
+                    if (drawsTheSame(design, previous, atVariant.copy(finish = finish))) {
                         dead.add("${design.name}[$variant] finish $finish draws what finish ${finish - 1} draws")
                     }
                 }

@@ -74,6 +74,22 @@ import kotlinx.serialization.Serializable
  * because "a full turn" means different things to a design that *points* somewhere and one that turns each of its
  * copies a little further. `0` is always *untouched*: square-on, or every copy aligned.
  *
+ * **[taper] is the *other end's* size, which is the spacing family's second member and the one it never had a field
+ * for.** [scale] is how much room an element takes, and that is one number — but a design laid out along a **run**
+ * has two: the reference's Polygon Cascade sets a *Size* and a *Scale delta*, its Neon Ribbons a *Start area* and an
+ * *End area*, its Gradient Columns a *Start spread* and an *End spread*. The teardown had already named the squeeze
+ * ("a design exposing both a Coverage and a Spacing has two members of one family and one field, and the coverage
+ * wins"); this is that field, for the half that loses.
+ *
+ * **`0` is no change**, in keeping with every other fraction here — a run whose elements are all one size — with the
+ * far end shrinking away as it climbs. A design with no run, or one whose elements are all the same size by nature,
+ * ignores it exactly as a size-less design ignores [scale].
+ *
+ * **It exists because [depth] was the wrong place for it, and four designs say so.** The cascade's taper sat on
+ * [depth] while that field is what Louvers, Metaballs, Waves and Topography's relief all spend on a knob they each
+ * label *Shadow* — so when the cascade gained a shadow of its own there were two depth-family knobs and one field,
+ * and the one that had to move is the one whose family is really *size*.
+ *
  * **[finish] is *how* a design's marks are painted, which is a third question again — not what shape they are
  * ([variant]) and not where their colors go ([colorLayout]).** The reference exposes it as a segmented control beside
  * both: the Polygon Cascade's *Mode* is **Stroke / Fill**, and Soft Overlaps and Rounded Tiles each carry a *Blend
@@ -119,6 +135,9 @@ import kotlinx.serialization.Serializable
  *   narrow tile becomes a pill). A design with no corners ignores it. See the class note.
  * @property rotation which way the design points or how far it turns, `0..1` — `0` is untouched (square-on, every
  *   copy aligned) and `1` is as far as this design turns. A design with no orientation ignores it. See the class note.
+ * @property taper how much the design's elements change size along its run, `0..1` — `0` is no change at all (every
+ *   element the size [scale] asks for) and `1` is the far end shrunk almost away. A design with no run ignores it.
+ *   See the class note.
  * @property finish which of a design's *finishes* is chosen, by index — how its marks are painted (outlined or
  *   filled, and how they blend), as against [variant]'s what-shape and [colorLayout]'s where-the-colors-go. `0` is
  *   the design's own default finish; a design that paints one way ignores it. See the class note.
@@ -135,6 +154,7 @@ data class DesignParams(
     val density: Float = 0.5f,
     val irregularity: Float = 0.5f,
     val scale: Float = 0.5f,
+    val taper: Float = 0.5f,
     val depth: Float = 0.5f,
     val depthScale: Float = 0.5f,
     val roundness: Float = 0.5f,

@@ -1,5 +1,6 @@
 package inkspire.morphic.core.graphics.wallpaper
 
+import inkspire.morphic.core.model.wallpaper.DesignParams
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -121,10 +122,13 @@ class FlowFieldGeneratorTest {
     @Test
     fun `Dots is offered for Pearls and withheld from Eclectic`() {
         // "Absent, not disabled": Eclectic has no beads, so the knob must not appear beside its working ones.
-        assertEquals("Dots", FlowFieldGenerator.styleFor(1).roundness)
-        assertEquals(null, FlowFieldGenerator.styleFor(0).roundness)
-        assertEquals("Dots", FlowFieldGenerator.styleFor(7).roundness) // clamped to the last look, Pearls
-        assertEquals("Orb size", FlowFieldGenerator.styleFor(0).depthScale)
+        val eclectic = DesignParams(variant = 0)
+        val pearls = DesignParams(variant = 1)
+        val pastTheEnd = DesignParams(variant = 7) // clamped to the last look, Pearls
+        assertEquals("Dots", FlowFieldGenerator.styleFor(pearls).roundness)
+        assertEquals(null, FlowFieldGenerator.styleFor(eclectic).roundness)
+        assertEquals("Dots", FlowFieldGenerator.styleFor(pastTheEnd).roundness)
+        assertEquals("Orb size", FlowFieldGenerator.styleFor(eclectic).depthScale)
     }
 
     @Test

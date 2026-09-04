@@ -1,7 +1,9 @@
 package inkspire.morphic.core.graphics.wallpaper
 
 import android.graphics.Bitmap
+import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.CornerPathEffect
 import android.graphics.Paint
 import android.graphics.Path
@@ -14,6 +16,7 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
@@ -35,11 +38,10 @@ import kotlin.random.Random
  *
  * **The knobs.** [DesignParams.variant] picks the shape from a named vocabulary of six ([CascadeShape]) rather than a
  * side count, because the reference's own list has a circle and a star in it and neither is a regular polygon.
- * [DesignParams.scale] is the first copy's size and [DesignParams.depth] the taper — how much smaller the last copy
- * is, with `0` a cascade of identical copies, which is the rigid end the old fixed shrink could not reach.
- * [DesignParams.rotation] is the turn spent over the whole cascade, [DesignParams.roundness] softens the corners
- * (which is where the reference's own rectangle sits), and [DesignParams.irregularity] is *Wobble*, ours rather than
- * theirs. Deterministic in [render]'s seed.
+ * [DesignParams.scale] is the first copy's size and [DesignParams.taper] the last copy's, with `0` a cascade of
+ * identical copies — the rigid end the old fixed shrink could not reach. [DesignParams.rotation] is the turn spent
+ * over the whole cascade, [DesignParams.roundness] softens the corners (which is where the reference's own rectangle
+ * sits), and [DesignParams.irregularity] is *Wobble*, ours rather than theirs. Deterministic in [render]'s seed.
  *
  * **[DesignParams.finish] is their *Mode*, and the two are different pictures of the same geometry.** Stroked, every
  * copy is an outline and the whole cascade shows through itself — the ground, and every copy behind the one in
@@ -47,12 +49,17 @@ import kotlin.random.Random
  * leading sliver of each copy survives. Nothing about the cascade moves between them: it is one geometry and two
  * ways of inking it, which is why it is a *finish* rather than a second set of shapes.
  *
- * **Two of theirs are still not knobs here.** Their *Thickness* has no field left — [DesignParams.scale] is spent on
+ * **[DesignParams.depth] is their *Shadow*, and it belongs to the filled finish alone.** Measured off the reference:
+ * a blurred silhouette of each copy drawn **behind** it with **no offset at all** — an outer glow in black rather
+ * than a thrown shadow, which is what scanning across a copy's left and right edges settled, both giving the same
+ * profile mirrored. The radius is theirs and fixed (~6.5% of the frame width); the knob is the opacity, as theirs is.
+ * A stroked copy has no interior to lift off the page, so [styleFor] withholds the knob there rather than letting it
+ * drag and change nothing.
+ *
+ * **One of theirs is still not a knob here.** Their *Thickness* has no field left — [DesignParams.scale] is spent on
  * *Size*, which is the composition where a stroke weight is a finish, and the teardown's note on the spacing family
- * says the bigger of two members wins the field. Their *Shadow*, which appears under *Fill* in place of *Thickness*,
- * has none either; it is measured (a blurred silhouette behind each copy, no offset) but their own default for it is
- * `0`, so a fill without it is exactly the filled picture theirs opens on. Their two nudge pads are seeded rather
- * than exposed — theirs re-randomizes the pair on every pick, so a shuffle is already the same gesture.
+ * says the bigger of two members wins the field. Their two nudge pads are seeded rather than exposed — theirs
+ * re-randomizes the pair on every pick, so a shuffle is already the same gesture.
  *
  * [copyCount], [shapeOf] and [ring] are pure and tested: a ring whose vertices sit off their radius, or a shape whose
  * proportions are wrong, is silently wrong geometry the bitmap only confirms afterwards.
@@ -99,10 +106,10 @@ object PolygonCascadeGenerator : Generator {
     override val style = DesignStyle(
         amount = Amount,
         scale = "Size",
+        taper = "Taper",
         irregularity = "Wobble",
         roundness = "Roundness",
         rotation = "Turn",
-        depth = "Taper",
         // Named off the vocabularies themselves, so a seventh shape or a third finish cannot arrive without the
         // panel offering it.
         variant = VariantKnob("Shape", CascadeShape.entries.map { it.label }),
@@ -110,11 +117,21 @@ object PolygonCascadeGenerator : Generator {
     )
 
     /**
-     * A circle has no corners to soften and no orientation to turn, so it offers neither knob — and [render] skips
-     * both rather than letting a stored value move pixels behind an absent control.
+     * Two knobs come and go with a choice, and both are "absent, not disabled" rather than a preference.
+     *
+     * A **circle** has no corners to soften and no orientation to turn, so it offers neither, and [render] skips both
+     * rather than letting a stored value move pixels behind a control that is not on screen. The **shadow** is the
+     * mirror case: it exists only for the filled finish, because what it lifts off the page is a copy's *interior*
+     * and an outline has none — a stroked cascade with a shadow behind every hairline is a smudge, not depth.
      */
-    override fun styleFor(variant: Int): DesignStyle =
-        if (shapeOf(variant) == CascadeShape.CIRCLE) style.copy(roundness = null, rotation = null) else style
+    override fun styleFor(params: DesignParams): DesignStyle {
+        val shadowed = if (finishOf(params.finish) == CascadeFinish.FILL) style.copy(depth = "Shadow") else style
+        return if (shapeOf(params.variant) == CascadeShape.CIRCLE) {
+            shadowed.copy(roundness = null, rotation = null)
+        } else {
+            shadowed
+        }
+    }
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val bitmap = createBitmap(width, height)
@@ -156,23 +173,25 @@ object PolygonCascadeGenerator : Generator {
         val firstY = height / 2f - headingY * run / 2f
 
         val firstRadius = shortSide * (MinSize + (MaxSize - MinSize) * params.scale.coerceIn(0f, 1f))
-        val lastRadius = firstRadius * (1f - MaxTaper * params.depth.coerceIn(0f, 1f))
+        val lastRadius = firstRadius * (1f - MaxTaper * params.taper.coerceIn(0f, 1f))
         // Half a turn covers every one of these shapes' symmetry periods — a rectangle's is the longest, at 180° — so
         // nothing is unreachable and the knob's top is not a repeat of its bottom. Which way is the seed's.
         val turn = (if (random.nextBoolean()) 1f else -1f) * PI.toFloat() * params.rotation.coerceIn(0f, 1f)
         val roundness = params.roundness.coerceIn(0f, 1f)
 
+        val filled = finishOf(params.finish) == CascadeFinish.FILL
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = when (finishOf(params.finish)) {
-                CascadeFinish.STROKE -> Paint.Style.STROKE
-                CascadeFinish.FILL -> Paint.Style.FILL
-            }
+            style = if (filled) Paint.Style.FILL else Paint.Style.STROKE
             strokeJoin = Paint.Join.ROUND
             strokeCap = Paint.Cap.ROUND
             strokeWidth = StrokeFraction * shortSide
         }
+        // Only the filled finish casts one — see [styleFor] — so a stroked cascade never pays for the blur either.
+        val shadow = if (filled) shadowPaint(params.depth, shortSide) else null
 
-        // The first copy first, so the later and smaller ones sit in front — the order theirs draws in.
+        // The first copy first, so the later and smaller ones sit in front — the order theirs draws in. Each copy's
+        // shadow goes down immediately before the copy itself, which is what puts it over everything already drawn
+        // and under the copy casting it.
         for (i in 0 until copies) {
             val t = i.toFloat() / (copies - 1)
             val radius = firstRadius + (lastRadius - firstRadius) * t
@@ -181,19 +200,40 @@ object PolygonCascadeGenerator : Generator {
                 shape == CascadeShape.CIRCLE || roundness == 0f -> null
                 else -> CornerPathEffect(MaxCorner * roundness * radius)
             }
-            canvas.drawPath(
-                ringPath(
-                    ring = ring,
-                    cx = firstX + headingX * run * t,
-                    cy = firstY + headingY * run * t,
-                    radius = radius,
-                    turn = if (shape == CascadeShape.CIRCLE) 0f else turn * t,
-                    wobble = wobble,
-                ),
-                paint,
+            val path = ringPath(
+                ring = ring,
+                cx = firstX + headingX * run * t,
+                cy = firstY + headingY * run * t,
+                radius = radius,
+                turn = if (shape == CascadeShape.CIRCLE) 0f else turn * t,
+                wobble = wobble,
             )
+            if (shadow != null) {
+                shadow.pathEffect = paint.pathEffect // the shadow is this copy's silhouette, rounded corners and all
+                canvas.drawPath(path, shadow)
+            }
+            canvas.drawPath(path, paint)
         }
         return bitmap
+    }
+
+    /**
+     * The brush a copy's shadow is laid down with at [shadow] strength, or `null` where there is none to draw.
+     *
+     * **A blur with no offset, which is the measured shape of theirs and not the obvious one.** A shadow is normally
+     * thrown some direction, and reading one off a render invites fitting an offset to it; scanning across a copy's
+     * left edge and its right edge gives the *same* falloff mirrored, which no throw can do. So it is an outer glow
+     * in black — a blurred copy of the path, drawn behind it, its inner half hidden under the fill it belongs to.
+     */
+    private fun shadowPaint(shadow: Float, shortSide: Int): Paint? {
+        val strength = shadow.coerceIn(0f, 1f)
+        if (strength == 0f) return null
+        return Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = Color.BLACK
+            alpha = (strength * MaxShadowAlpha * ChannelMax).roundToInt()
+            maskFilter = BlurMaskFilter(ShadowRadiusFraction * shortSide, BlurMaskFilter.Blur.NORMAL)
+        }
     }
 
     /** How many copies [density] asks for — two ends and nothing between, up to a dense fan. */
@@ -326,6 +366,19 @@ object PolygonCascadeGenerator : Generator {
      * rectangle, whose corners measure `0.3` of its short side, lands almost exactly here.
      */
     private const val MaxCorner = 0.3f
+
+    /**
+     * The shadow's blur radius as a share of the short side, and how dark it may go at full strength.
+     *
+     * Both measured off the reference, which puts its own knob on the darkness alone: at *Shadow* `54` an edge fell
+     * to `0.56` of the color under it and at `100` to `0.29`, while the reach stayed at about `70px` on a 1080-wide
+     * frame — `0.065` of it — at both. So the strength is an alpha and the blur is a constant.
+     */
+    private const val ShadowRadiusFraction = 0.065f
+    private const val MaxShadowAlpha = 0.6f
+
+    /** A byte's greatest value — what a `0..1` strength scales to when it becomes a paint's alpha. */
+    private const val ChannelMax = 255
 
     /**
      * How far a vertex may leave its radius at full *Wobble*, as a share of that radius.

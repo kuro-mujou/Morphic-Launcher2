@@ -141,105 +141,93 @@ class GeneratorRenderHarness {
     }
 
     /**
-     * Every design that reads [DesignParams.depth], flat and fully dimensional — the knob whose whole job is to stop a
-     * faceted field reading as a blurred one, and which therefore cannot be judged from the default alone.
-     *
-     * **The list is asked of the generators**, for the variant sweep's reason: a hand-kept one goes stale silently.
+     * [DesignParams.depth], flat and fully dimensional — the knob whose whole job is to stop a faceted field reading
+     * as a blurred one, and which therefore cannot be judged from the default alone. On the cascade it is the
+     * **shadow**, which exists only under the filled finish; see [arrangementsDeclaring].
      */
     @Test
-    fun renderDepthSweep() {
+    fun renderDepthSweep() = sweepFraction("depth", floatArrayOf(0f, 1f), { it.depth }) { params, v ->
+        params.copy(depth = v)
+    }
+
+    /**
+     * [DesignParams.taper], from a run whose elements are all one size to one whose far end has all but vanished —
+     * the spacing family's second member, and what a design with a run has beside its [DesignParams.scale].
+     */
+    @Test
+    fun renderTaperSweep() = sweepFraction("taper", floatArrayOf(0f, 0.5f, 1f), { it.taper }) { params, v ->
+        params.copy(taper = v)
+    }
+
+    /**
+     * [DesignParams.roundness], sharp and fully round — the knob whose two ends are two different designs (a Mondrian
+     * in a light grout, and a field of pills), so neither can be judged from the middle.
+     */
+    @Test
+    fun renderRoundnessSweep() = sweepFraction("round", floatArrayOf(0f, 0.5f, 1f), { it.roundness }) { params, v ->
+        params.copy(roundness = v)
+    }
+
+    /** [DesignParams.rotation], square-on and turned as far as the design turns — the orientation family's sweep. */
+    @Test
+    fun renderRotationSweep() = sweepFraction("turn", floatArrayOf(0f, 0.5f, 1f), { it.rotation }) { params, v ->
+        params.copy(rotation = v)
+    }
+
+    /**
+     * One fraction knob at [values], wherever [declares] finds a generator reading it, saved under [name].
+     *
+     * **Four sweeps were one nested enumeration and a different field**, which is three near-copies of a loop, and
+     * the taper's arrival would have made it four. The part worth sharing is not the loop but *where* it looks —
+     * [arrangementsDeclaring].
+     */
+    private fun sweepFraction(
+        name: String,
+        values: FloatArray,
+        declares: (DesignStyle) -> Any?,
+        set: (DesignParams, Float) -> DesignParams,
+    ) {
         val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
         val moded = PaletteColorMode.resolve(palette, WallpaperColorMode.BICHROMATIC)
-        val designs = WallpaperDesign.entries.filter { Generators.forDesign(it).style.depth != null }
+        val cases = arrangementsDeclaring(declares)
 
-        for (depth in floatArrayOf(0f, 1f)) {
-            for (design in designs) {
+        for (value in values) {
+            for ((design, params) in cases) {
                 val bitmap = Generators.forDesign(design).render(
                     width = 1080,
                     height = 2400,
                     palette = moded,
-                    params = DesignParams(depth = depth, colorMode = WallpaperColorMode.BICHROMATIC),
+                    params = set(params, value),
                     seed = 42L,
                 )
-                save(resolver, "depth_${(depth * 100).toInt()}_${design.name}.png", bitmap)
+                val where = "${design.name}_${params.variant}_${params.finish}"
+                save(resolver, "${name}_${(value * 100).toInt()}_$where.png", bitmap)
                 bitmap.recycle()
             }
         }
     }
 
     /**
-     * Every design that reads [DesignParams.roundness], sharp and fully round — the knob whose two ends are two
-     * different designs (a Mondrian in a light grout, and a field of pills), so neither can be judged from the middle.
+     * Every arrangement of every design — each variant crossed with each finish — at which [declares] finds a knob.
      *
-     * **Asked per variant, not per design**, since a sub-look can declare a knob its siblings do not: Flow Field's
-     * *Dots* belongs to *Pearls* alone, and a design-level question would have rendered *Eclectic* twice and the knob
-     * that actually moves not at all.
+     * **A knob set hangs off a design's choices, not off the design**, which is why nothing here filters on `style`
+     * alone. Flow Field's *Dots* belongs to *Pearls*; the cascade's rotation belongs to its five cornered shapes and
+     * its shadow to its filled finish. Asking at the design level renders the arrangements where a knob does nothing
+     * and misses the ones where it is the point — silently, which is the failure these sweeps exist to make visible.
      */
-    @Test
-    fun renderRoundnessSweep() {
-        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
-        val moded = PaletteColorMode.resolve(palette, WallpaperColorMode.BICHROMATIC)
-        val cases = WallpaperDesign.entries.flatMap { design ->
+    private fun arrangementsDeclaring(declares: (DesignStyle) -> Any?): List<Pair<WallpaperDesign, DesignParams>> =
+        WallpaperDesign.entries.flatMap { design ->
             val generator = Generators.forDesign(design)
             val variants = generator.style.variant?.options?.indices ?: 0..0
-            variants.filter { generator.styleFor(it).roundness != null }.map { design to it }
-        }
-
-        for (roundness in floatArrayOf(0f, 0.5f, 1f)) {
-            for ((design, variant) in cases) {
-                val bitmap = Generators.forDesign(design).render(
-                    width = 1080,
-                    height = 2400,
-                    palette = moded,
-                    params = DesignParams(
-                        roundness = roundness,
-                        variant = variant,
-                        colorMode = WallpaperColorMode.BICHROMATIC,
-                    ),
-                    seed = 42L,
-                )
-                save(resolver, "round_${(roundness * 100).toInt()}_${design.name}_$variant.png", bitmap)
-                bitmap.recycle()
+            variants.flatMap { variant ->
+                val atVariant = DesignParams(variant = variant, colorMode = WallpaperColorMode.BICHROMATIC)
+                val finishes = generator.styleFor(atVariant).finish?.options?.indices ?: 0..0
+                finishes
+                    .map { atVariant.copy(finish = it) }
+                    .filter { declares(generator.styleFor(it)) != null }
+                    .map { design to it }
             }
         }
-    }
-
-    /**
-     * Every design that reads [DesignParams.rotation], square-on and turned as far as the design turns — the
-     * orientation family's first sweep, added with the field itself.
-     *
-     * **Asked per variant**, for the roundness sweep's reason and with a live case: the cascade's circle declares no
-     * orientation at all where its other five shapes do, so a design-level question would render the one shape the
-     * knob cannot move.
-     */
-    @Test
-    fun renderRotationSweep() {
-        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
-        val moded = PaletteColorMode.resolve(palette, WallpaperColorMode.BICHROMATIC)
-        val cases = WallpaperDesign.entries.flatMap { design ->
-            val generator = Generators.forDesign(design)
-            val variants = generator.style.variant?.options?.indices ?: 0..0
-            variants.filter { generator.styleFor(it).rotation != null }.map { design to it }
-        }
-
-        for (rotation in floatArrayOf(0f, 0.5f, 1f)) {
-            for ((design, variant) in cases) {
-                val bitmap = Generators.forDesign(design).render(
-                    width = 1080,
-                    height = 2400,
-                    palette = moded,
-                    params = DesignParams(
-                        rotation = rotation,
-                        variant = variant,
-                        colorMode = WallpaperColorMode.BICHROMATIC,
-                    ),
-                    seed = 42L,
-                )
-                save(resolver, "turn_${(rotation * 100).toInt()}_${design.name}_$variant.png", bitmap)
-                bitmap.recycle()
-            }
-        }
-    }
 
     /**
      * Every design that reads [DesignParams.depthScale], at nothing / shipped / large — the size beside the count,
@@ -316,7 +304,8 @@ class GeneratorRenderHarness {
             val generator = Generators.forDesign(design)
             val variants = generator.style.variant?.options?.indices ?: 0..0
             variants.flatMap { variant ->
-                val finishes = generator.styleFor(variant).finish?.options?.indices ?: IntRange.EMPTY
+                val finishes = generator.styleFor(DesignParams(variant = variant)).finish?.options?.indices
+                    ?: IntRange.EMPTY
                 finishes.map { Triple(design, variant, it) }
             }
         }
@@ -356,7 +345,8 @@ class GeneratorRenderHarness {
             val generator = Generators.forDesign(design)
             val variants = generator.style.variant?.options?.indices ?: 0..0
             variants.flatMap { variant ->
-                val layouts = generator.styleFor(variant).colorLayout?.options?.indices ?: IntRange.EMPTY
+                val layouts = generator.styleFor(DesignParams(variant = variant)).colorLayout?.options?.indices
+                    ?: IntRange.EMPTY
                 layouts.map { Triple(design, variant, it) }
             }
         }
