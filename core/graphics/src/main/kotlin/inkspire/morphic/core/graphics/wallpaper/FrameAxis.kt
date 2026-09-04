@@ -36,6 +36,19 @@ internal class FrameAxis(
     val lengthPx: Float get() = span
 
     /**
+     * The two ends of this axis in pixels — where [at] reads `0` and where it reads `1`.
+     *
+     * For a design that hands the axis to a **shader** rather than sampling it: a `LinearGradient` is given two
+     * points and works out the projection itself, so a caller that computed them from the angle again would be
+     * running this class' arithmetic a second time — and a gradient that spans slightly the wrong pixels is a
+     * wallpaper that is merely a little flatter than intended, which nothing reports.
+     */
+    val startX: Float get() = dx * lowest
+    val startY: Float get() = dy * lowest
+    val endX: Float get() = dx * (lowest + span)
+    val endY: Float get() = dy * (lowest + span)
+
+    /**
      * Where ([x], [y]) falls along this axis, `0..1`.
      *
      * A frame with no extent along the axis — a one-pixel strip — answers the middle, so a degenerate size draws the

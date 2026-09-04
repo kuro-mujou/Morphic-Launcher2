@@ -56,6 +56,13 @@ Plus a **Community** feed (Populars / New / Top week/month, author attribution, 
 
 ### The 22 designs, mapped to gart primitives
 
+**Guessed from thumbnails, before any of them was driven — [WALLPAPER_STUDIO_TEARDOWN.md](WALLPAPER_STUDIO_TEARDOWN.md)'s
+design-by-design table supersedes every row it has reached.** Kept because the *grouping* is still how the work was
+ordered, but the primitives are already wrong in the ones that have been measured: the Modern Mosaic is a recursive
+subdivision rather than a Voronoi, the Polygon Cascade is a tween between two shapes rather than a tessellation at all,
+Rounded Tiles is a fan of separate capsules rather than a tiling, and Ribbon Flow is a displaced rank of parallel lines
+rather than anything traced through a flow field.
+
 | Design | Gart primitive | Group |
 |---|---|---|
 | Triangular Facets | Delaunay triangulation | tessellation |
