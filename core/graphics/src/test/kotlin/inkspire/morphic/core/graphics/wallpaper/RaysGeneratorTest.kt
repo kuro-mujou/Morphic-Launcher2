@@ -3,6 +3,7 @@ package inkspire.morphic.core.graphics.wallpaper
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
 import kotlin.random.Random
 
 /**
@@ -88,6 +89,60 @@ class RaysGeneratorTest {
                 }
                 assertTrue("the last edge must leave the closing wedge room", edges.last() < 1f)
             }
+        }
+    }
+
+    /**
+     * `0` is the hard-edged sunburst this design drew before the quality pass, and it has to stay exactly that: the
+     * knob's low end is the whole reason the old look is still reachable.
+     */
+    @Test
+    fun `no softness leans nowhere, at any bearing`() {
+        val edges = even(8)
+        var bearing = 0f
+        while (bearing < 1f) {
+            assertEquals(0f, RaysGenerator.neighborMix(bearing, RaysGenerator.wedgeAt(bearing, edges), edges, 0f), 0f)
+            bearing += 0.01f
+        }
+    }
+
+    /**
+     * The blend is continuous across a seam without either wedge knowing the other exists, which rests entirely on
+     * both of them reading exactly half-way there. Asked of the *same* bearing from both sides, which is the only way
+     * a mismatch would show.
+     */
+    @Test
+    fun `a seam reads half way in from either wedge`() {
+        val edges = even(8)
+        val seam = edges[2]
+        assertEquals(-0.5f, RaysGenerator.neighborMix(seam, 2, edges, 1f), 1e-4f)
+        assertEquals(0.5f, RaysGenerator.neighborMix(seam, 1, edges, 1f), 1e-4f)
+    }
+
+    /** However soft, the middle of a wedge is its own flat color — there is no softness that washes the palette out. */
+    @Test
+    fun `the middle of a wedge is its own color at every softness`() {
+        val edges = even(8)
+        for (softness in listOf(0f, 0.25f, 0.5f, 0.75f, 1f)) {
+            val middle = (edges[3] + edges[4]) / 2f
+            assertEquals(0f, RaysGenerator.neighborMix(middle, 3, edges, softness), 1e-4f)
+        }
+    }
+
+    /**
+     * Full softness leaves no flat interior at all — every part of every wedge is in transition, which is what makes
+     * the knob's top end a conic gradient rather than a sunburst with soft seams.
+     */
+    @Test
+    fun `full softness leaves no flat interior`() {
+        val edges = even(8)
+        val low = edges[3]
+        val span = edges[4] - low
+        for (step in 1..9) {
+            if (step == 5) continue // the exact middle, which is the one pure color a full blend keeps
+            val bearing = low + span * step / 10f
+            val lean = RaysGenerator.neighborMix(bearing, 3, edges, 1f)
+            assertTrue("flat at $bearing", abs(lean) > 1e-3f)
         }
     }
 }
