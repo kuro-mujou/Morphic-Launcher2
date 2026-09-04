@@ -129,3 +129,37 @@ Everything else follows from that:
   opens at `300`, a big number whose unit the drive still has to settle.
 - **Four knobs have no counterpart at all**: *Complexity*, *Irregularity* (the blob's, not a scatter's),
   *Distance from centre* and *Blur*. Ours' *Jitter* is their *Position jitter*.
+
+### 4. *Mode = Glow* is what ours built, and the shape is a blob
+
+**Driven, and it settles the identity claim: their *Glow* is our design.** Switching *Mode* from Fill to Glow draws
+the same four shapes as soft radial falloffs on the dark ground, edges dissolving into it — which is what
+`SoftOverlapsGenerator` renders at every setting. So ours did not merely differ from theirs; it built **their
+alternate look as the whole design**, leaving their default — the flat, hard-edged one — unreachable. Same shape of
+finding as Bauhaus (ours was a Mondrian, W11a) and Dot Grid (ours was a halftone, W11e).
+
+**The shape is a closed curve of `Complexity` points around an ellipse, each pushed off its radius by `Irregularity`.**
+Both knobs driven to both ends, and the ends prove it:
+
+| Knob | Range | Default | At its ends |
+|---|---|---|---|
+| Complexity | `3..16` | **8** | `3` draws smooth eggs with one or two gentle lobes; `16` draws many-lobed organic forms with several bulges each |
+| Irregularity | `0..100` | **25** | **`0` is a perfect ellipse** — smooth and symmetric, and Complexity does nothing there; `100` is a hooked amoeba with deep concavities |
+
+That `0` is the tell. A knob whose rigid end is an *exact ellipse*, under a second knob that counts something, is a
+radius-per-control-point construction and nothing else — and it is why theirs can draw a squircle, an egg and a
+circle from one generator. Ours calls `drawCircle`, so its shape vocabulary is one shape.
+
+### 5. gart has no match for this either, and that is the finding
+
+Now that the mechanism is known, the two candidates worth reading were read:
+
+- `arts/bubbles/src/blob/Blobs.kt` is a **metaball field** — a per-pixel product of distances to Lissajous-moving
+  points, mapped through a palette. That is our `MetaballsGenerator`'s family, not this one.
+- `gfx/deformPath` (the helper `monet` uses) roughens a path by **inserting a Gaussian-offset midpoint per segment**,
+  doubling the point count each pass. Structurally near — points pushed off a polygon — but it cannot be theirs: at
+  zero offset it leaves an N-gon where theirs leaves an *ellipse*, and its point count is `2^k · n` rather than the
+  `Complexity` it was given.
+
+So **gart is not where this mechanism is**, and the KDoc citation of `arts/monet` should go rather than be corrected
+to something else. The construction is a standard blob and needs no source beyond the two measurements above.
