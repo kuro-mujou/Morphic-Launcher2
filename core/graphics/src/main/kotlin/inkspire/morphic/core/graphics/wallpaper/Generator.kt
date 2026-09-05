@@ -114,5 +114,6 @@ object Generators {
         WallpaperDesign.VITRALL -> VitrallGenerator
         WallpaperDesign.MODERN_MOSAIC -> ModernMosaicGenerator
         WallpaperDesign.ROUNDED_TILES -> RoundedTilesGenerator
+        WallpaperDesign.IMPASTO -> ImpastoGenerator
     }
 }

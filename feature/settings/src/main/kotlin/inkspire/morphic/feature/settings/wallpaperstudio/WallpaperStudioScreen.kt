@@ -356,6 +356,7 @@ private val WallpaperDesign.label: String
         WallpaperDesign.VITRALL -> "Vitrall"
         WallpaperDesign.MODERN_MOSAIC -> "Mosaic"
         WallpaperDesign.ROUNDED_TILES -> "Bars"
+        WallpaperDesign.IMPASTO -> "Impasto"
     }
 
 /** A short, human name for the color-mode segment — the enum name is a code identifier, not a label. */

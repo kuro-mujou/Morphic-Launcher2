@@ -245,4 +245,13 @@ enum class WallpaperDesign {
      */
     @SerialName("roundedTiles")
     ROUNDED_TILES,
+
+    /**
+     * Ragged translucent dabs laid along a sweep across the frame, building into a painted wash — the impasto. The
+     * catalog's first **painterly** design: not a field like [PLASMA] and not a shape like [SOFT_OVERLAPS], but a
+     * heap of overlapping marks whose torn edges are the texture, so the picture is what the marks do together.
+     * [DesignParams.depth] is how many dabs each mark is built from, which is literally how thick the paint is.
+     */
+    @SerialName("impasto")
+    IMPASTO,
 }
