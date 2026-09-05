@@ -97,11 +97,9 @@ object Generators {
         WallpaperDesign.BAUHAUS -> BauhausGenerator
         WallpaperDesign.MONDRIAN -> MondrianGenerator
         WallpaperDesign.CONFETTI -> ConfettiGenerator
-        WallpaperDesign.RINGS -> RingsGenerator
         WallpaperDesign.TRUCHET -> TruchetGenerator
         WallpaperDesign.METABALLS -> MetaballsGenerator
         WallpaperDesign.RIBBONS -> RibbonsGenerator
-        WallpaperDesign.RAYS -> RaysGenerator
         WallpaperDesign.DOT_GRID -> DotGridGenerator
         WallpaperDesign.HALFTONE -> HalftoneGenerator
         WallpaperDesign.FLOW_LINES -> FlowLinesGenerator

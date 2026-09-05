@@ -14,6 +14,12 @@ import kotlinx.serialization.Serializable
  *
  * Persisted inside the recipe, so the names are an on-disk contract. A recipe naming a design an older build does not
  * have is the one case a reader has to handle — see [WallpaperRecipe].
+ *
+ * **A value is removed the same way, and it costs nothing today only because nothing stores a recipe yet.** `rings`
+ * and `rays` were dropped when the two radial designs were: both drew a target — a bullseye or a pinwheel with a
+ * point of convergence sitting among the icons — and reworking the origin off the frame turned them into designs the
+ * catalog already had. When a store does exist, dropping a value is the *reader's* unknown-design path run against
+ * our own history rather than a newer build's, so it lands in the same place: catch, drop the recipe, keep the rest.
  */
 @Serializable
 enum class WallpaperDesign {
@@ -101,13 +107,6 @@ enum class WallpaperDesign {
     CONFETTI,
 
     /**
-     * Concentric rings of palette color rippling out from an off-center point — the echo / sonar op-art. Distance
-     * banded through the looped palette, the radial sibling of [PLASMA].
-     */
-    @SerialName("rings")
-    RINGS,
-
-    /**
      * A grid of quarter-arc tiles turned at random that join into a maze of flowing loops — the Truchet pattern.
      * Emergent from the tiling: arcs meet every edge at its midpoint, so neighbours always connect.
      */
@@ -129,13 +128,6 @@ enum class WallpaperDesign {
      */
     @SerialName("ribbons")
     RIBBONS,
-
-    /**
-     * Hard-edged wedges of palette color fanning from an off-center point — the sunburst. The angular sibling of
-     * [RINGS], which bands distance; this bands bearing.
-     */
-    @SerialName("rays")
-    RAYS,
 
     /**
      * A contained block of evenly-spaced rounded tiles, stepping through the palette in bands down its rows — the dot
