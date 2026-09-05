@@ -20,24 +20,40 @@ import kotlin.random.Random
  * every one of them renders a particle's *path*. This renders the particle: a dot dropped at each step and left
  * there, so what accumulates is a **density** rather than a stroke.
  *
- * **[DesignParams.scale] is what decides whether that reads as spray at all, and both ends are the design.** A dot is
- * placed every [StepShare] of the short side, so a dot smaller than that leaves the trail as a *stipple* — separate
- * marks, drifting pollen, gart's own look — and a dot larger than it laps its neighbor and the trail closes into a
- * continuous plume. The knob crosses that threshold in the middle of its range rather than at an end, which is
- * unusual here and worth knowing before tuning either bound.
+ * **[DesignParams.scale] is the grain.** A dot is placed every [StepShare] of the short side and gart's is very
+ * slightly wider than its own step, so the marks of a *Plume* just touch and close into a line while the marks of a
+ * *Spray*, going a different way each time, stay legible as grain however much they overlap.
  *
- * **The field is an analytic wave rather than noise, which is the other half of what separates it.** Perlin noise
- * gives the wandering, unrepeating swirl the other four are built on; gart's `WaveFlow` is
- * `sin(x) + cos(y)` read as an angle, which turns through several whole revolutions across the frame and so folds the
- * particles into long smooth arcs that come back on themselves. [DesignParams.irregularity] is that amplitude, and
- * `0` is the rigid end the field's contract asks for: no turn at all, so every particle runs the same way and the
- * mist falls into parallel dotted lanes.
+ * **The field is `sin(x) + cos(y)` read as an angle, and the only thing that decides what the design looks like is
+ * how fast it turns compared to how far a particle steps.** That is [DesignParams.variant], and it is a difference of
+ * one number:
  *
- * **The color runs along each trail, not across the frame.** A dot's tone is how many steps its particle has taken,
- * read off the ramp below the ground — so a trail fades from one end of the palette to the other as it travels, and
- * because neighbouring particles are at different stages the frame comes out in soft drifts of color rather than in
- * bands. That is the whole of gart's own coloring, which indexes a nineteen-stop palette expanded to the trail's
- * length.
+ * - **Spray** reads the field at [SprayFrequency], whose period is a *fraction of a step*. Two consecutive positions
+ *   are then several periods apart, so the angle a particle gets is uncorrelated with the last one and it **random
+ *   walks**: a trail is not a curve at all but a compact cloud that spreads as the square root of its length. A
+ *   thousand of those overlapping is the granular mist gart draws, and it is the default.
+ * - **Plume** reads it at [PlumeFrequency], slow enough that neighbouring steps agree, so the same particles trace
+ *   long smooth arcs that fold back on themselves and the frame fills with feathered plumes.
+ *
+ * **The first build of this design had only the second, by mistake, and the mistake is worth recording.** gart builds
+ * its field with `FlowField.of(d) { x, y -> … }`, which hands the function **pixel** coordinates — so `sin(x * 10)`
+ * has a period of `0.63` of a pixel against a step of seven. Read as though the coordinates were normalized, the same
+ * two numbers describe a field that turns once or twice across the whole frame. Both draw something; only one of them
+ * is Spring, and nothing in the source says which reading is meant except the picture.
+ *
+ * **[DesignParams.irregularity] is how far the field turns**, gart's own two amplitudes. `0` is the rigid end the
+ * field's contract asks for — no turn at all, so every particle runs one way and the mist falls into parallel dotted
+ * lanes — and anything past about a third already spans every direction, which is why the chaos does not need the top
+ * of the knob to arrive.
+ *
+ * **The color is mostly where a trail *started* and partly how far along it is** — see [toneAt]. gart colors purely by
+ * the second, indexing a nineteen-stop palette expanded to the trail's length, and gets the broad warm-top,
+ * cool-bottom drift of its own picture from somewhere else entirely: it runs six hundred frames, kills trails that
+ * leave the frame and reseeds the replacements in the **bottom half**, so the population itself sorts by age and
+ * therefore by color. A generator that renders one pass has no history to sort, and reproducing that would mean
+ * simulating six hundred frames to throw away five hundred and ninety-nine. Reading part of the tone off the start
+ * height is the same picture from a mechanism a single pass has: the drift arrives, and the walk still mixes the ramp
+ * inside each cloud so it never bands.
  *
  * **The dots are batched by tone into [ColorBands] draws, and that is a rendering decision with a bound behind it.**
  * A dot per call is up to a hundred and fifty thousand `drawCircle`s, which is seconds rather than milliseconds; one
@@ -53,18 +69,18 @@ object SprayGenerator : Generator {
     /**
      * What [DesignParams.density] resolves to — the particles released, and the *Trails* slider's own range.
      *
-     * The top is gart's order of magnitude rather than a guess: it releases a thousand and keeps replacing the ones
-     * that leave, which over its run puts a few hundred thousand dots on the frame. One pass of this reaches the same
-     * place, and the dense end is the whole reason the design was worth building — a sparse drift of arcs is a
-     * different and much quieter picture.
+     * The top is gart's own: it releases a thousand and keeps replacing the ones that leave. Paired with a trail of
+     * [MaxSteps] that is around half a million dots on the frame, which is what a mist is made of — a few hundred
+     * clouds is a different and much quieter picture.
      */
-    private val Amount = AmountKnob.Count("Trails", 100..1500)
+    private val Amount = AmountKnob.Count("Trails", 100..1200)
 
     override val style = DesignStyle(
         amount = Amount,
         scale = "Dot size",
-        irregularity = "Swirl",
+        irregularity = "Turbulence",
         roundness = "Trail length",
+        variant = VariantKnob("Look", listOf("Spray", "Plume")),
     )
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
@@ -77,32 +93,38 @@ object SprayGenerator : Generator {
         val steps = trailSteps(params.roundness)
         val shortSide = min(width, height)
         val dot = shortSide * (MinDot + (MaxDot - MinDot) * params.scale.coerceIn(0f, 1f))
-        val swirl = params.irregularity.coerceIn(0f, 1f)
+        val turbulence = params.irregularity.coerceIn(0f, 1f)
+        val frequency = if (params.variant.coerceIn(0, 1) == LookPlume) PlumeFrequency else SprayFrequency
         val stride = shortSide * StepShare
         // The field is read in width-shares on both axes, so its arcs are the same shape across the frame as down it.
         val perWidth = 1f / width
+        val perHeight = 1f / height
 
-        // One bucket per tone. Step `i` lands in band `i * ColorBands / steps`, so a band takes at most one point per
-        // trail for each step it covers — which is what makes an exact size possible rather than a growing list.
-        val perBand = (steps + ColorBands - 1) / ColorBands
-        val buckets = Array(ColorBands) { FloatArray(trails * perBand * 2) }
+        // One bucket per tone. A dot's band is its tone, and a tone is mostly the trail's start height — so unlike a
+        // pure along-the-trail ramp there is no per-step bound on a band, and the buckets are grown rather than sized.
+        val buckets = Array(ColorBands) { FloatArray(InitialBucket) }
         val counts = IntArray(ColorBands)
 
         for (t in 0 until trails) {
-            // A stream per trail, so the length and swirl knobs cannot shift where the others start.
+            // A stream per trail, so the length and turbulence knobs cannot shift where the others start.
             val random = Random(seed + t * TrailStride)
             var x = random.nextFloat() * width
             var y = random.nextFloat() * height
+            val from = y * perHeight
 
             for (i in 0 until steps) {
                 if (!inFrame(x, y, width, height)) break
-                val band = i * ColorBands / steps
+                val along = if (steps <= 1) 0f else i.toFloat() / (steps - 1)
+                val band = (bandAt(from, along) * ColorBands).toInt().coerceIn(0, ColorBands - 1)
+                if (counts[band] * 2 == buckets[band].size) {
+                    buckets[band] = buckets[band].copyOf(buckets[band].size * 2)
+                }
                 val at = counts[band] * 2
                 buckets[band][at] = x
                 buckets[band][at + 1] = y
                 counts[band]++
 
-                val angle = flowAngle(x * perWidth, y * perWidth, swirl)
+                val angle = flowAngle(x * perWidth, y * perWidth, turbulence, frequency)
                 x += cos(angle) * stride
                 y += sin(angle) * stride
             }
@@ -151,29 +173,50 @@ object SprayGenerator : Generator {
      * turns the angle through several whole revolutions across the frame, which is what folds the trails into arcs
      * that come back on themselves rather than merely bending them.
      */
-    internal fun flowAngle(nx: Float, ny: Float, swirl: Float): Float =
-        swirl * WaveAmplitude * (sin(nx * WaveFrequency) + cos(ny * WaveFrequency))
+    internal fun flowAngle(nx: Float, ny: Float, turbulence: Float, frequency: Float): Float =
+        turbulence * WaveAmplitude * (sin(nx * frequency) + cos(ny * frequency))
 
     /**
-     * The color a dot [along] its trail takes — the ramp read **below the ground**, which is the palette's last stop.
+     * Where on the ramp a dot sits: mostly the height its trail started [from], partly how far [along] the trail it
+     * is — `0..1`, before the ground is kept clear of it.
      *
-     * Scaled by [RampTones.spanBelowGround] so the far end of a trail never lands on the ground it is drawn over.
-     * That is the mirror of the mosaic's own problem one design across — a mark painted in the color behind it does
-     * not read as subtle, it reads as a mark that failed to draw.
+     * **[DriftShare] of the answer is the start height and the rest is the walk**, which is the port's own arithmetic
+     * and not gart's — see the class note for why a single pass cannot get the drift the way gart does. The split
+     * matters in both directions: all height and the frame bands into flat horizontal stripes with no mixing, all
+     * walk and every cloud holds the whole palette so the frame averages to one muddy tone.
      */
-    internal fun toneAt(along: Float, palette: Palette): Int =
-        LinearGradientGenerator.colorAt(along.coerceIn(0f, 1f) * RampTones.spanBelowGround(palette.size), palette)
+    internal fun bandAt(from: Float, along: Float): Float =
+        (from.coerceIn(0f, 1f) * DriftShare + along.coerceIn(0f, 1f) * (1f - DriftShare)).coerceIn(0f, 1f)
 
-    /** A dot's diameter as a share of the frame's short side — a fine mist up to a coarse spatter. */
-    private const val MinDot = 0.004f
-    private const val MaxDot = 0.022f
+    /**
+     * The color at [position] on the ramp — read **below the ground**, which is the palette's last stop.
+     *
+     * Scaled by [RampTones.spanBelowGround] so a dot never lands on the ground it is drawn over. That is the mirror
+     * of the mosaic's own problem one design across — a mark painted in the color behind it does not read as subtle,
+     * it reads as a mark that failed to draw.
+     */
+    internal fun toneAt(position: Float, palette: Palette): Int =
+        LinearGradientGenerator.colorAt(position.coerceIn(0f, 1f) * RampTones.spanBelowGround(palette.size), palette)
+
+    /**
+     * A dot's diameter as a share of the frame's short side — a fine mist up to a coarse spatter.
+     *
+     * gart's is `8` pixels on a `1024` frame, a shade under `0.008`, which lands just above the middle here.
+     */
+    private const val MinDot = 0.003f
+    private const val MaxDot = 0.014f
 
     /** How far a particle moves per step, as a share of the short side — gart's magnitude, in a frame-relative unit. */
     private const val StepShare = 0.006f
 
-    /** The steps a particle takes at each end of *Trail length*. */
-    private const val MinSteps = 24
-    private const val MaxSteps = 260
+    /**
+     * The steps a particle takes at each end of *Trail length* — gart's trail holds five hundred.
+     *
+     * On a *Spray* this is not a length but a **density**: a random walk of `n` steps spreads as `√n`, so four times
+     * the steps is only twice the cloud and the rest of them pile into it.
+     */
+    private const val MinSteps = 40
+    private const val MaxSteps = 500
 
     /**
      * How opaque one dot is.
@@ -184,9 +227,29 @@ object SprayGenerator : Generator {
      */
     private const val DotAlpha = 52
 
-    /** The field's cycles across the frame's width, and how far it turns — gart's own two numbers. */
-    private const val WaveFrequency = 10f
+    /**
+     * How fast the field turns, for each look — the one number that separates a mist from a plume.
+     *
+     * [SprayFrequency] puts the field's period at a fraction of one [StepShare], so consecutive steps read it several
+     * periods apart and the particle random walks. That is gart's own regime expressed in a **frame-relative** unit
+     * rather than its pixel one: reading `sin(x * 10)` off pixel coordinates ties the grain to the render's
+     * resolution, where this keeps the same picture at any size. [PlumeFrequency] is slow enough that a step barely
+     * moves the angle, so the walk straightens into an arc.
+     */
+    private const val SprayFrequency = 3000f
+    private const val PlumeFrequency = 10f
+
+    /** How far the field turns at full *Turbulence*, per axis — gart's own, and more than a whole revolution over the two. */
     private const val WaveAmplitude = 4f
+
+    /** [DesignParams.variant] selecting the smooth field, whose particles trace arcs instead of walking. */
+    private const val LookPlume = 1
+
+    /** How much of a dot's tone is the height its trail started at rather than its distance along it — see [bandAt]. */
+    private const val DriftShare = 0.7f
+
+    /** Room for a band's first dots; it doubles from here, since a band's share of them is not known in advance. */
+    private const val InitialBucket = 4096
 
     /**
      * How many tones the trail's ramp is drawn in.

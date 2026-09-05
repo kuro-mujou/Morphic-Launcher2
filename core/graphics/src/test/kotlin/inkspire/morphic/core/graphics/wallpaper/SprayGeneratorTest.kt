@@ -10,14 +10,21 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * The field's metric and the trail's ramp. Both fail the same quiet way: a stretched field draws arcs that are simply
- * the wrong shape, and a ramp that reaches the ground paints dots in the color of the ground behind them — neither
- * looks like an error, only like a design that was composed for something else.
+ * The field, the walk it produces and the trail's ramp. All three fail the same quiet way — a field read at the wrong
+ * rate draws a picture that is simply a *different* design rather than a broken one, which is exactly what happened
+ * the first time this generator was built.
  */
 class SprayGeneratorTest {
 
     /** A tall phone: 1080×2400. Every aspect-sensitive case is measured on one, since a square frame hides the bug. */
     private val phone = 2400f / 1080f
+
+    /** The two looks' field rates, as the generator's own constants. */
+    private val spray = 3000f
+    private val plume = 10f
+
+    /** One step, as a share of the frame's width — what the field's rate has to be judged against. */
+    private val step = 0.006f
 
     private val palette = Palette(
         listOf(0xFFF2E2C4.toInt(), 0xFFE6A15C.toInt(), 0xFF2C6E6B.toInt(), 0xFF121E2B.toInt()),
@@ -26,111 +33,154 @@ class SprayGeneratorTest {
     @Test
     fun `density maps to the trail count range`() {
         assertEquals(100, SprayGenerator.trailCount(0f))
-        assertEquals(1500, SprayGenerator.trailCount(1f))
+        assertEquals(1200, SprayGenerator.trailCount(1f))
         assertEquals(100, SprayGenerator.trailCount(-1f)) // clamped
-        assertEquals(1500, SprayGenerator.trailCount(2f)) // clamped
+        assertEquals(1200, SprayGenerator.trailCount(2f)) // clamped
     }
 
     @Test
     fun `trail length maps to the step range`() {
-        assertEquals(24, SprayGenerator.trailSteps(0f))
-        assertEquals(260, SprayGenerator.trailSteps(1f))
-        assertEquals(24, SprayGenerator.trailSteps(-1f)) // clamped
-        assertEquals(260, SprayGenerator.trailSteps(2f)) // clamped
+        assertEquals(40, SprayGenerator.trailSteps(0f))
+        assertEquals(500, SprayGenerator.trailSteps(1f))
+        assertEquals(40, SprayGenerator.trailSteps(-1f)) // clamped
+        assertEquals(500, SprayGenerator.trailSteps(2f)) // clamped
     }
 
     /** `0` is a flat field — every particle runs the same way, which is the rigid end and a picture of its own. */
     @Test
-    fun `no swirl leaves one direction everywhere`() {
-        val here = SprayGenerator.flowAngle(0.1f, 0.3f, swirl = 0f)
-        val there = SprayGenerator.flowAngle(0.9f, 1.8f, swirl = 0f)
+    fun `no turbulence leaves one direction everywhere`() {
+        val here = SprayGenerator.flowAngle(0.1f, 0.3f, turbulence = 0f, frequency = spray)
+        val there = SprayGenerator.flowAngle(0.9f, 1.8f, turbulence = 0f, frequency = spray)
 
         assertEquals(here, there, 0f)
     }
 
-    /** And it genuinely turns at the other end — far enough to fold a trail back on itself, not merely bend it. */
+    /** And it reaches every direction at the top, so a particle can be sent anywhere rather than merely deflected. */
     @Test
-    fun `full swirl turns the field through more than a whole revolution`() {
+    fun `full turbulence spans a whole revolution`() {
         var lowest = Float.MAX_VALUE
         var highest = -Float.MAX_VALUE
         var nx = 0f
         while (nx <= 1f) {
-            var ny = 0f
-            while (ny <= phone) {
-                val angle = SprayGenerator.flowAngle(nx, ny, swirl = 1f)
-                lowest = minOf(lowest, angle)
-                highest = maxOf(highest, angle)
-                ny += 0.02f
-            }
-            nx += 0.02f
+            val angle = SprayGenerator.flowAngle(nx, nx * phone, turbulence = 1f, frequency = plume)
+            lowest = minOf(lowest, angle)
+            highest = maxOf(highest, angle)
+            nx += 0.001f
         }
         assertTrue("the field barely turns: ${highest - lowest}", highest - lowest > 2f * Math.PI.toFloat())
     }
 
     /**
-     * **The metric bug five designs carried into the quality pass.** Both coordinates are shares of the frame's
-     * *width*, so the field is the same shape across the frame as down it: a particle a given number of *pixels*
-     * along either axis has been carried the same distance through the field.
+     * **The finding this design was rebuilt on.** gart's field is `sin(x * 10)` over *pixel* coordinates, so its
+     * period is a fraction of one step and consecutive positions read it several periods apart — which is what makes
+     * a particle random walk and the picture a mist. Read as though those coordinates were normalized, the same two
+     * numbers describe a field that turns once across the whole frame and the particles trace arcs instead.
      *
-     * Measured as the two axes agreeing at equal pixel offsets, which is exactly what reading each as a share of its
-     * own side gets wrong.
+     * Both are drawable and only one is Spring, so the two rates are pinned against the step they are judged by.
      */
     @Test
-    fun `the field is read in one metric, so it is not stretched by the frame`() {
-        val step = 0.2f
-        // The same pixel offset across and down, expressed in the width-share metric the generator uses.
-        val across = SprayGenerator.flowAngle(0.5f + step, 0.5f, swirl = 1f)
-        val down = SprayGenerator.flowAngle(0.5f, 0.5f + step, swirl = 1f)
+    fun `a spray step crosses several of the field's periods and a plume step stays inside one`() {
+        val sprayPeriods = step / (2f * Math.PI.toFloat() / spray)
+        val plumePeriods = step / (2f * Math.PI.toFloat() / plume)
 
-        // sin and cos of the same argument, so the two are a quarter turn of the wave apart and never equal — what
-        // matters is that the *field's* period is the same on both axes.
-        val acrossAgain = SprayGenerator.flowAngle(0.5f + step + 2f * Math.PI.toFloat() / 10f, 0.5f, swirl = 1f)
-        val downAgain = SprayGenerator.flowAngle(0.5f, 0.5f + step + 2f * Math.PI.toFloat() / 10f, swirl = 1f)
-
-        assertEquals("the field's period differs across", across, acrossAgain, 1e-3f)
-        assertEquals("the field's period differs down", down, downAgain, 1e-3f)
+        assertTrue("a spray step must cross several periods, was $sprayPeriods", sprayPeriods > 2f)
+        assertTrue("a plume step must stay inside one, was $plumePeriods", plumePeriods < 0.05f)
     }
 
-    /** A dot at the end of its trail must never be painted in the ground it lies on, at any palette length. */
+    /** Which is the property that actually matters: on a spray, one step is enough to forget the last direction. */
+    @Test
+    fun `a spray step decorrelates the direction and a plume step does not`() {
+        var sprayApart = 0f
+        var plumeApart = 0f
+        var nx = 0.1f
+        while (nx <= 0.9f) {
+            val sprayHere = SprayGenerator.flowAngle(nx, 0.4f, 1f, spray)
+            val sprayNext = SprayGenerator.flowAngle(nx + step, 0.4f, 1f, spray)
+            sprayApart = maxOf(sprayApart, abs(sprayNext - sprayHere))
+
+            val plumeHere = SprayGenerator.flowAngle(nx, 0.4f, 1f, plume)
+            val plumeNext = SprayGenerator.flowAngle(nx + step, 0.4f, 1f, plume)
+            plumeApart = maxOf(plumeApart, abs(plumeNext - plumeHere))
+            nx += 0.0013f
+        }
+
+        assertTrue("a spray step should swing the angle past a right angle, was $sprayApart", sprayApart > 2.5f)
+        assertTrue("a plume step should barely move it, was $plumeApart", plumeApart < 0.5f)
+    }
+
+    /**
+     * A particle carried by the spray field has to spread as a **cloud**, not travel as a line — the random walk is
+     * the whole design, and it is what a smooth field cannot produce.
+     */
+    @Test
+    fun `a spray particle walks and a plume particle travels`() {
+        fun reach(frequency: Float): Float {
+            var x = 0.5f
+            var y = 0.5f
+            repeat(400) {
+                val angle = SprayGenerator.flowAngle(x, y, 1f, frequency)
+                x += cos(angle) * step
+                y += sin(angle) * step
+            }
+            return abs(x - 0.5f) + abs(y - 0.5f)
+        }
+
+        val walked = reach(spray)
+        val travelled = reach(plume)
+        val straight = 400 * step
+
+        assertTrue("a walk should stay near where it started, went $walked of $straight", walked < straight / 4f)
+        assertTrue("an arc should get somewhere, went $travelled", travelled > straight / 4f)
+    }
+
+    /** A dot must never be painted in the ground it lies on, at any palette length. */
     @Test
     fun `no dot is painted in the ground`() {
         for (stops in 2..6) {
             val reduced = Palette(List(stops) { 0xFF000000.toInt() or (it * 0x2A2A2A) })
             val ground = reduced.colorAt(reduced.size - 1)
-            var along = 0f
-            while (along <= 1f) {
-                assertNotEquals("a dot took the ground at $stops stops, $along", ground, SprayGenerator.toneAt(along, reduced))
-                along += 0.01f
+            var at = 0f
+            while (at <= 1f) {
+                val tone = SprayGenerator.toneAt(at, reduced)
+                assertNotEquals("a dot took the ground at $stops stops, $at", ground, tone)
+                at += 0.01f
             }
         }
     }
 
-    /** The ramp still runs the length of the trail — a start and an end that are plainly different colors. */
+    /** The ramp still runs the length of the palette — two ends that are plainly different colors. */
     @Test
-    fun `the tone travels along the trail`() {
+    fun `the ramp spans the palette`() {
         val start = SprayGenerator.toneAt(0f, palette)
         val end = SprayGenerator.toneAt(1f, palette)
         val apart = (0..2).sumOf { c -> abs((start shr (c * 8) and 0xFF) - (end shr (c * 8) and 0xFF)) }
 
-        assertTrue("the trail barely changes color: $apart", apart > 120)
+        assertTrue("the ramp barely changes color: $apart", apart > 120)
     }
 
     /**
-     * A particle stepped through the field has to actually go somewhere — the integration is two lines in the render
-     * loop and would sit still if the angle were read in degrees, which nothing else would report.
+     * The tone is mostly where a trail started and partly how far along it is, and the split matters both ways: all
+     * height and the frame bands into flat stripes with no mixing, all walk and every cloud holds the whole palette
+     * so the frame averages to one tone.
      */
     @Test
-    fun `a particle carried by the field travels`() {
-        var x = 0.5f
-        var y = 0.5f
-        val stride = 0.006f
-        repeat(60) {
-            val angle = SprayGenerator.flowAngle(x, y, swirl = 1f)
-            x += cos(angle) * stride
-            y += sin(angle) * stride
-        }
+    fun `the tone drifts with the start height and still mixes along the trail`() {
+        val high = SprayGenerator.bandAt(from = 0.1f, along = 0.5f)
+        val low = SprayGenerator.bandAt(from = 0.9f, along = 0.5f)
+        assertTrue("the start height should carry the drift", low - high > 0.4f)
 
-        val moved = abs(x - 0.5f) + abs(y - 0.5f)
-        assertTrue("the particle went nowhere: $moved", moved > stride * 4f)
+        val early = SprayGenerator.bandAt(from = 0.5f, along = 0f)
+        val late = SprayGenerator.bandAt(from = 0.5f, along = 1f)
+        assertTrue("a cloud should still spread over the ramp", late - early > 0.15f)
+    }
+
+    /** It stays on the ramp whatever it is handed, since the render indexes a band array with it. */
+    @Test
+    fun `the tone stays in the unit range`() {
+        for (from in listOf(-1f, 0f, 0.5f, 1f, 2f)) {
+            for (along in listOf(-1f, 0f, 0.5f, 1f, 2f)) {
+                assertTrue(SprayGenerator.bandAt(from, along) in 0f..1f)
+            }
+        }
     }
 }
