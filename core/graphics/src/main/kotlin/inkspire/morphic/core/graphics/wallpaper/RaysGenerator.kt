@@ -7,6 +7,7 @@ import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
+import kotlin.math.roundToInt
 import kotlin.random.Random
 
 /**
@@ -17,8 +18,19 @@ import kotlin.random.Random
  * Each pixel takes its color from the wedge its bearing falls in, so the whole design is an `atan2` and a palette
  * lookup — a cheap full-screen pass with no geometry and no overdraw.
  *
- * **The center is seeded and off-center**, so the fan sweeps asymmetrically like light through a gap rather than a
- * symmetrical pinwheel. [DesignParams.density] sets how many wedges. Deterministic in [seed].
+ * **The apex is [OffFrameOrigin], and it is never on screen — which is the design, not a detail of it.** This used to
+ * place it inside the frame behind an inset, so every render was a **pinwheel**: every wedge converging on one point
+ * among the icons, at full palette contrast, with a hard star at the middle that even full softness cannot remove
+ * because it is a singularity rather than an edge. That is what made this unusable as a wallpaper. From outside the
+ * frame the same arithmetic draws a *fan entering from one side* — light through a gap, which is what the old KDoc
+ * claimed and the inset made impossible. [DesignParams.scale] is how far out, from a wide splay to nearly parallel
+ * beams.
+ *
+ * **[DesignParams.density] is how many rays the frame *shows*, not how many the fan has** — see [fanCount]. From
+ * outside, the frame subtends a slice of the turn that narrows as the apex moves away, so a count tiled over the full
+ * turn would put eight wedges around the apex and two of them on screen. The fan is still cut over the whole turn (a
+ * ray has to meet its neighbor cleanly at the wrap), but its count is derived so the number on the slider is the
+ * number a person can count. Deterministic in [seed].
  *
  * **[DesignParams.roundness] is how soft the seam between two wedges is, and until the quality pass there was no such
  * knob: every edge was hard, at full palette contrast, across the whole frame.** That made this the loudest design in
@@ -34,27 +46,30 @@ import kotlin.random.Random
  */
 object RaysGenerator : Generator {
 
-    /** What [DesignParams.density] resolves to for this design — the count, and the *Rays* slider's own range. */
+    /**
+     * What [DesignParams.density] resolves to for this design — the count, and the *Rays* slider's own range.
+     *
+     * Rays **the frame shows**, which is what a person counts; [fanCount] turns it into the fan's own count.
+     */
     private val Amount = AmountKnob.Count("Rays", 4..16)
 
     override val style = DesignStyle(
         amount = Amount,
+        scale = "Distance",
         irregularity = "Unevenness",
         roundness = "Softness",
     )
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val random = Random(seed)
-        val cx = CenterInset + random.nextFloat() * (1f - 2f * CenterInset)
-        val cy = CenterInset + random.nextFloat() * (1f - 2f * CenterInset)
-        val rays = rayCount(params.density)
-        // Drawn after the center, so a stored recipe's fan stays where it was before the knob existed.
-        val edges = edges(rays, params.irregularity, random)
+        // The bearing has to be taken on the screen rather than in the unit square — see [bearing].
+        val heightOverWidth = if (width <= 0) 1f else height.toFloat() / width
+        val origin = offFrameOrigin(random, params.scale, heightOverWidth)
+        // Drawn after the apex, so tuning the unevenness cannot move where the fan enters from.
+        val edges = edges(fanCount(rayCount(params.density), origin.sectorTurns), params.irregularity, random)
         val softness = params.roundness.coerceIn(0f, 1f)
         // A flat palette stop per wedge, cycling — hoisted, since the loop would otherwise take the modulo per pixel.
         val wedgeColors = IntArray(edges.size) { palette.colorAt(it % palette.size) }
-        // The bearing has to be taken on the screen rather than in the unit square — see [bearing].
-        val heightOverWidth = if (width <= 0) 1f else height.toFloat() / width
 
         val pixels = IntArray(width * height)
         for (y in 0 until height) {
@@ -62,7 +77,7 @@ object RaysGenerator : Generator {
             for (x in 0 until width) {
                 val nx = if (width <= 1) 0.5f else x.toFloat() / (width - 1)
                 pixels[y * width + x] =
-                    shadeAt(bearing(nx, ny, cx, cy, heightOverWidth), edges, wedgeColors, softness)
+                    shadeAt(bearing(nx, ny, origin.x, origin.y, heightOverWidth), edges, wedgeColors, softness)
             }
         }
 
@@ -71,8 +86,24 @@ object RaysGenerator : Generator {
         return bitmap
     }
 
-    /** How many wedges [density] asks for — a few broad fans up to a fine starburst. */
+    /** How many wedges [density] asks the frame to **show** — a few broad fans up to a fine starburst. */
     internal fun rayCount(density: Float): Int = Amount.at(density)
+
+    /**
+     * How many wedges the whole fan is cut into, so that [visible] of them fall inside a frame subtending
+     * [sectorTurns] of the turn.
+     *
+     * **The fan is cut over the full turn even though most of it is off screen**, because the wrap is what lets the
+     * last wedge meet the first: [shadeAt] blends a seam by leaning into the *next* wedge round, and a fan tiled over
+     * a sector alone would have two ends with no neighbor to lean into. Cutting the whole turn and showing a slice of
+     * it costs an array of a few hundred floats and nothing per pixel that [wedgeAt]'s search does not already handle.
+     *
+     * Never fewer than [visible], so a frame that somehow sees most of the turn still gets the count it asked for, and
+     * never more than [MaxFan] — an apex far enough out to need more than that would be drawing beams too fine to
+     * tell apart, and the bound is what keeps a pathological aspect from allocating without limit.
+     */
+    internal fun fanCount(visible: Int, sectorTurns: Float): Int =
+        if (sectorTurns <= 0f) visible else (visible / sectorTurns).roundToInt().coerceIn(visible, MaxFan)
 
     /**
      * The color a pixel on this [bearing] takes — its wedge's stop, leaned toward a neighbor's near a seam.
@@ -106,16 +137,23 @@ object RaysGenerator : Generator {
         return (angle / (2f * PI.toFloat())) + Halfway // 0..1
     }
 
-    /** Which wedge [bearing] falls in, `0 until edges.size`. */
+    /**
+     * Which wedge [bearing] falls in, `0 until edges.size` — the last edge at or below it, since the edges ascend and
+     * the first is `0`.
+     *
+     * **A binary search rather than the walk this used to be**, which was right while a fan was at most sixteen
+     * wedges and is not now that the fan is cut over the whole turn to show a slice of it ([fanCount]): a walk over a
+     * few hundred edges, run for every pixel of a 1080×2400 frame, is hundreds of millions of comparisons for an
+     * answer eight of them give.
+     */
     internal fun wedgeAt(bearing: Float, edges: FloatArray): Int {
-        // The edges ascend and the first is 0, so the last one at or below the bearing owns it. A linear walk beats a
-        // search at these counts, and it is the same handful of comparisons whatever the fan.
-        var found = 0
-        for (i in edges.indices) {
-            if (edges[i] > bearing) break
-            found = i
+        var low = 0
+        var high = edges.size - 1
+        while (low < high) {
+            val mid = (low + high + 1) / 2
+            if (edges[mid] <= bearing) low = mid else high = mid - 1
         }
-        return found
+        return low
     }
 
     /** Which wedge the bearing from ([cx], [cy]) to ([nx], [ny]) falls in — [bearing] read by [wedgeAt]. */
@@ -179,8 +217,8 @@ object RaysGenerator : Generator {
 
     // Softened toward broad fans: the default density now opens on a few wide wedges rather than a fine starburst (W7).
 
-    /** How far off the frame's center the fan's origin is kept, so the rays sweep asymmetrically across it. */
-    private const val CenterInset = 0.2f
+    /** The most wedges the whole fan is ever cut into — see [fanCount]. */
+    private const val MaxFan = 512
 
     /**
      * Half of something, three times over: half a turn, which is what shifts `atan2`'s range onto `0..1`; half a

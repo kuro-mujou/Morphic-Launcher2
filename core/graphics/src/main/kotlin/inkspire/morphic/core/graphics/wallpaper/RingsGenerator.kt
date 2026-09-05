@@ -17,9 +17,20 @@ import kotlin.random.Random
  * first), so the bands ripple outward without a seam where the ramp turns over. There is no geometry and no overdraw —
  * just distance — which is what makes it a cheap full-screen pixel pass.
  *
- * **The center is seeded and set off-center**, because rings centered in the frame read as a target while rings from a
- * corner or an edge read as a rising sun or a sonar echo — far the stronger wallpaper. [DesignParams.density] sets the
- * ring frequency — a few broad haloes or a tight ripple. Deterministic in [seed].
+ * **The center is [OffFrameOrigin], and it is never on screen — which is the design, not a detail of it.** This used
+ * to place it inside the frame behind an inset, and every render was therefore a **bullseye**: a singularity sitting
+ * among the icons with rings closing around it at full palette contrast. That is op-art, and it is the reason this
+ * design was not usable as a wallpaper. From outside the frame the same arithmetic draws *arcs sweeping across the
+ * screen* with no point of convergence anywhere in view — which is the rising sun the old KDoc claimed and the inset
+ * made impossible. [DesignParams.scale] is how far out, from arcs curving hard across the frame to lazy ones.
+ *
+ * **Both of the design's counts are read from that origin rather than from the frame**, because from outside it the
+ * frame covers only a slice of the distance and a slice of the turn — see [OffFrameOrigin]. The ring pitch divides
+ * [OffFrameOrigin.distanceSpan], so *Rings* `10` still draws ten visible bands however far out the origin is placed;
+ * the wobble's harmonics are read over [OffFrameOrigin.sectorTurns], so its lobes still bend the arcs rather than
+ * shifting by a twentieth of a cycle across a narrow fan and reading as nothing at all.
+ *
+ * [DesignParams.density] sets the ring frequency — a few broad haloes or a tight ripple. Deterministic in [seed].
  *
  * [ringFraction] is pure and tested: mapping a distance to a looped position is the arithmetic that decides whether the
  * rings even close, and it needs no bitmap.
@@ -31,21 +42,22 @@ object RingsGenerator : Generator {
 
     override val style = DesignStyle(
         amount = Amount,
+        scale = "Distance",
         irregularity = "Wobble",
     )
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val random = Random(seed)
-        // The center, off-center within an inset so the rings always sweep across most of the frame.
-        val cx = CenterInset + random.nextFloat() * (1f - 2f * CenterInset)
-        val cy = CenterInset + random.nextFloat() * (1f - 2f * CenterInset)
-        val rings = ringCount(params.density)
-        // Drawn after the centre, so a stored recipe's rings stay where they were before the knob existed.
-        val harmonics = SeededHarmonics(WobbleWeights, WobbleHarmonics, random)
-        val amplitude = params.irregularity.coerceIn(0f, 1f) * MaxWobble
         // A ring has to be round on the screen rather than in the unit square — see [ringFraction].
         val heightOverWidth = if (width <= 0) 1f else height.toFloat() / width
-        val perUnit = ringsPerUnit(rings, heightOverWidth)
+        val origin = offFrameOrigin(random, params.scale, heightOverWidth)
+        val rings = ringCount(params.density)
+        // Drawn after the origin, so tuning the wobble cannot move where the arcs sweep from.
+        val harmonics = SeededHarmonics(WobbleWeights, WobbleHarmonics, random)
+        val amplitude = params.irregularity.coerceIn(0f, 1f) * MaxWobble
+        val perUnit = ringsPerUnit(rings, origin.distanceSpan)
+        // The harmonics run over the visible fan rather than over the turn — see the class note.
+        val lobeScale = 1f / origin.sectorTurns
 
         val pixels = IntArray(width * height)
         for (y in 0 until height) {
@@ -54,10 +66,10 @@ object RingsGenerator : Generator {
                 val nx = if (width <= 1) 0.5f else x.toFloat() / (width - 1)
                 // The bearing is taken in the same screen metric the distance is, or the lobes would be lopsided
                 // exactly where the rings used to be.
-                val bearing = atan2((ny - cy) * heightOverWidth, nx - cx)
-                val wobble = 1f + amplitude * harmonics.at(bearing)
+                val bearing = atan2((ny - origin.y) * heightOverWidth, nx - origin.x)
+                val wobble = 1f + amplitude * harmonics.at(bearing * lobeScale)
                 pixels[y * width + x] = LinearGradientGenerator.colorLooping(
-                    ringFraction(nx, ny, cx, cy, heightOverWidth, perUnit, wobble),
+                    ringFraction(nx, ny, origin.x, origin.y, heightOverWidth, perUnit, wobble),
                     palette,
                 )
             }
@@ -101,21 +113,19 @@ object RingsGenerator : Generator {
     }
 
     /**
-     * How many ring cycles one unit of the measured distance carries, for [rings] rings on a frame of this
-     * [heightOverWidth] — the scale [ringFraction] multiplies by.
+     * How many ring cycles one unit of the measured distance carries, for [rings] rings over a frame that spans
+     * [distanceSpan] of distance seen from the origin — the scale [ringFraction] multiplies by.
      *
-     * **One derived number rather than the count and the frame's diagonal side by side**, which the first cut passed
-     * as two parameters: a diagonal that disagreed with the aspect it was supposed to come from would draw a ring
-     * pitch quietly off, and there is nothing in a ripple to notice that against. Dividing by the diagonal is what
-     * keeps [rings] meaning "rings out to the far corner" whatever shape the frame is; hoisting it out of the pixel
-     * loop is why it is here rather than inline.
+     * **The span is the origin's, not the frame's diagonal, and that is what keeps the count honest.** With the origin
+     * on screen the diagonal was the right extent, because the near end of the ripple was the center itself; with it
+     * outside, the frame occupies a *slice* of the distance that narrows as the origin moves away — so dividing by the
+     * diagonal would draw ten rings' worth of pitch and show four of them, and the *Rings* slider would read a number
+     * nothing on screen matches. There is nothing in a ripple to notice that against, which is why it is derived here
+     * rather than assumed. Hoisting it out of the pixel loop is why it is a function at all.
      */
-    internal fun ringsPerUnit(rings: Int, heightOverWidth: Float): Float = rings / hypot(1f, heightOverWidth)
+    internal fun ringsPerUnit(rings: Int, distanceSpan: Float): Float = rings / distanceSpan
 
     // Softened toward broad haloes: the default density now opens on a few calm rings rather than a tight ripple (W7).
-
-    /** How far off the edge the center is kept, so the rings sweep across the frame rather than sitting in a corner. */
-    private const val CenterInset = 0.15f
 
     /**
      * How far the radius may swing at [DesignParams.irregularity] `1`, as a share of itself.

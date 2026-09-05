@@ -145,4 +145,49 @@ class RaysGeneratorTest {
             assertTrue("flat at $bearing", abs(lean) > 1e-3f)
         }
     }
+
+    /**
+     * The *Rays* slider counts what the frame **shows**, so the fan it is cut into has to scale with how much of the
+     * turn the frame can see. A count left against the full turn is the failure this exists to stop: an apex far
+     * enough out to see a fifth of the circle would put eight wedges around itself and two of them on screen, with
+     * nothing but a look at the render to say so.
+     */
+    @Test
+    fun `the fan is cut so the frame shows the number of rays that was asked for`() {
+        for (sector in listOf(1f, 0.5f, 0.3f, 0.12f)) {
+            for (visible in listOf(4, 9, 16)) {
+                val fan = RaysGenerator.fanCount(visible, sector)
+                val shown = fan * sector
+                assertEquals("sector $sector, visible $visible", visible.toFloat(), shown, 1f)
+            }
+        }
+    }
+
+    /** A fan never has fewer wedges than the frame is meant to show, and never runs away on a pathological sector. */
+    @Test
+    fun `the fan count stays between the visible count and the cap`() {
+        assertEquals(9, RaysGenerator.fanCount(9, 1f))
+        assertEquals(9, RaysGenerator.fanCount(9, 2f)) // more than a whole turn is still at least the visible count
+        assertTrue(RaysGenerator.fanCount(16, 0.0001f) <= 512)
+        assertEquals(16, RaysGenerator.fanCount(16, 0f)) // no sector at all, rather than a divide by zero
+    }
+
+    /**
+     * The wedge lookup became a binary search when the fan grew from a handful of wedges to a few hundred. It has to
+     * answer exactly what the walk answered — the last edge at or below the bearing — including at an edge itself and
+     * below the first one.
+     */
+    @Test
+    fun `the wedge lookup answers the last edge at or below the bearing`() {
+        for (rays in listOf(1, 2, 5, 16, 257)) {
+            val edges = even(rays)
+            for (i in edges.indices) {
+                assertEquals("on edge $i of $rays", i, RaysGenerator.wedgeAt(edges[i], edges))
+                val inside = edges[i] + 0.5f / rays
+                if (inside < 1f) assertEquals("inside wedge $i of $rays", i, RaysGenerator.wedgeAt(inside, edges))
+            }
+            assertEquals("below the first edge", 0, RaysGenerator.wedgeAt(-0.1f, edges))
+            assertEquals("past the last edge", rays - 1, RaysGenerator.wedgeAt(1.5f, edges))
+        }
+    }
 }
