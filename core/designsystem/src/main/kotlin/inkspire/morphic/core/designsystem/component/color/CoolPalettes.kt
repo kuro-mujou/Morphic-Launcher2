@@ -5,11 +5,10 @@ package inkspire.morphic.core.designsystem.component.color
  * ~175 curated aesthetic palettes (the coolors.co-style sets), each capped at eight colors so a palette stays a
  * cohesive set rather than a swatch dump.
  *
- * **A bulk set, deliberately un-hand-named — the *quantity* half of the color library.** These are the wide bank a
- * user scans for a starting point, where [ColorPalettes]' own dozen are the *featured*, hand-picked ones. The names
- * are positional (`Cool N`) because the picker shows the colors, not the name; a searchable, better-named list is
- * where these would grow labels. The data-viz colormaps (viridis and the like) are deliberately **not** here — they
- * read garish on a launcher surface, being built to map data rather than to decorate.
+ * **A bulk set, deliberately un-hand-named — the largest of the three quantity banks.** These are the wide bank a
+ * user scans for a starting point, where [ColorPalettes]' own dozen are the *featured*, hand-picked ones and
+ * [designerPalettes] and [colormapPalettes] follow behind. The names are positional (`Cool N`) because gart's are
+ * too (`cool_N`) and the picker shows the colors, not the name; a searchable list is where these would grow labels.
  *
  * Built with [palette], `ColorPalettes`' own helper.
  */

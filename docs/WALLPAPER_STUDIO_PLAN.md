@@ -221,7 +221,8 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
   launcher's wallpaper. **Deferred:** the Vertical/Squared **aspect toggle**, and undo. The per-generator interpolated
   morph stays deferred; the crossfade is the motion for now.
 - **W3 — color. ✅ core (2026-08-30)** A color chooser in the studio's bottom bar: a palette toggle flips the chooser
-  between the designs and the **191 palettes** (`ColorPalettes.all` — the featured dozen + the harvested cool bank),
+  between the designs and the palettes (`ColorPalettes.all` — 357 of them since the full gart harvest: the featured
+  dozen, then the cool, designer and colormap banks),
   and tapping a palette recolors the current design with a crossfade (`setPalette` → re-render). Device-verified.
   **Deferred to a later pass:** an editable per-stop strip, color opacity, a palette **lock** across design changes,
   and a palette **shuffle**.

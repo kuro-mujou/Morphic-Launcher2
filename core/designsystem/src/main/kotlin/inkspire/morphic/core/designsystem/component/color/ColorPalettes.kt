@@ -3,35 +3,38 @@ package inkspire.morphic.core.designsystem.component.color
 /**
  * A named set of colors that go together — the unit the color picker offers as a "palette".
  *
- * **Small and cohesive, not a colormap.** These are for *theming an icon* — a plate, a tint, a duotone's two ends —
- * so each is a handful of colors chosen to sit well beside each other, ordered light to dark. That is a different
- * thing from the scientific colormaps (viridis and the like) that dominate the gart study's palette files, which are
- * built for mapping data and read as garish on a launcher surface; those are deliberately not ported.
+ * **Small and cohesive, at most a handful of stops.** A palette here is something to theme *with* — a plate, a tint,
+ * a duotone's two ends, the colors one wallpaper design paints from — so it is a few colors chosen to sit beside each
+ * other, not a sampled curve. That is the shape a continuous colormap has to be reduced to before it can join the
+ * bank; [colormapPalettes] carries the rule.
  *
- * @property name what the picker labels it — short, since it sits under a row of swatches.
- * @property colors the swatches, **opaque ARGB**, light to dark. Any length; the picker lays each out as one pill.
+ * @property name what the picker labels it — short, since it sits under a row of swatches. Unique across the bank:
+ *   the picker keys its list on it.
+ * @property colors the swatches, **opaque ARGB**. Any length; the picker lays each out as one pill.
  */
 data class ColorPalette(val name: String, val colors: List<Int>)
 
 /**
- * Builds a [ColorPalette] from `0xAARRGGBB` longs — shared by the featured set in [ColorPalettes] and the harvested
- * [coolPalettes] bank, which is why it is a top-level helper rather than either file's own.
+ * Builds a [ColorPalette] from `0xAARRGGBB` longs — shared by the featured set in [ColorPalettes] and all three
+ * harvested banks, which is why it is a top-level helper rather than any one file's own.
  */
 internal fun palette(name: String, vararg colors: Long): ColorPalette =
     ColorPalette(name, colors.map { it.toInt() })
 
 /**
- * The palettes the color picker offers — a **featured** dozen, hand-picked and named, then the wider
- * **[coolPalettes]** bank harvested from the gart study.
+ * The palettes the color picker offers — a **featured** dozen, hand-picked and named, then the whole of the gart
+ * study's palette library behind it (BSD-2, © 2022 Igor Spasić).
  *
- * **Two tiers on purpose.** [featured] is a short, opinionated spread across warm/cool/earth/jewel/neutral that a
- * user can scan in one pass — four of them seeded from gart's theming-oriented files (`MidCenturyColors`,
- * `RetroColors`, `CyanotypeColors`, the pink family of `NipponColors`; BSD-2, © 2022 Igor Spasić), the rest curated
- * here. The cool bank is the *quantity* behind it: ~175 more aesthetic sets for when the featured dozen is not
- * enough. Together they are [all], which is what the picker shows.
+ * **Four tiers, and the order is the point.** [featured] is a short, opinionated spread across
+ * warm/cool/earth/jewel/neutral that a user can scan in one pass — four of them seeded from gart's theming-oriented
+ * files (`MidCenturyColors`, `RetroColors`, `CyanotypeColors`, the pink family of `NipponColors`), the rest curated
+ * here. Then the quantity, decorative first: [coolPalettes] (gart's `cool` bank), [designerPalettes] (its `mix`
+ * quads and cyanotype ramps), and last [colormapPalettes] (its 133 scientific and cartographic maps, thinned to eight
+ * stops apiece). A user scrolling the ribbon meets the hand-picked colors long before the data-viz ones, which is the
+ * whole reason the concatenation is ordered rather than sorted.
  *
- * Still no data-viz colormaps (viridis and the like) from gart — built to map data, they read garish on a launcher
- * surface, and neither tier ports them.
+ * Every palette in [all] has a **unique name** — the picker keys its `LazyRow` on it, and the banks drop any set whose
+ * colors exactly repeat one already carried, so no two pills can light up together on the same selection.
  */
 object ColorPalettes {
 
@@ -56,6 +59,6 @@ object ColorPalettes {
         palette("Desert", 0xFFF4E9CD, 0xFFE4C590, 0xFFD9A566, 0xFFB97A56, 0xFF8C5A3C, 0xFF5A3A28),
     )
 
-    /** Every palette the picker offers: the [featured] dozen, then the wider [coolPalettes] bank. */
-    val all: List<ColorPalette> = featured + coolPalettes
+    /** Every palette the picker offers, decorative banks first and the data-viz maps last. */
+    val all: List<ColorPalette> = featured + coolPalettes + designerPalettes + colormapPalettes
 }

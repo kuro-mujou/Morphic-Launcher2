@@ -43,11 +43,23 @@ one quality lift, one content win — all clean ports.
 device-verified.** What remains of the study is the wallpaper-studio engine (below), a separate arc.
 
 The palettes landed as a `ColorPalettes` library (`core:designsystem`) plus a swatch ribbon in `MorphicColorPicker`,
-so every color field across every effect — and the wallpaper studio — gets them. **Two tiers:** a `featured` dozen
-(hand-picked, named; four seeded from gart's theming files, the rest curated) and the wider `coolPalettes` bank of
-~179 aesthetic sets harvested wholesale from gart's `cool.kt` (each capped at eight colors), the two concatenated as
-`ColorPalettes.all`. Still not gart's data-viz colormaps (viridis and the like), which read garish. The ribbon is a
-`LazyRow` to carry the count. A named, filterable list is where community palette-sharing would extend it.
+so every color field across every effect — and the wallpaper studio — gets them. **The whole of gart's palette
+library is now here, in four tiers, ordered decorative-first:** a `featured` dozen (hand-picked, named; four seeded
+from gart's theming files, the rest curated), then `coolPalettes` (~179 aesthetic sets from `cool.kt`),
+`designerPalettes` (its `mix` bank, `PalettesOf4` quads and `CyanotypeColors` ramps), and last `colormapPalettes` —
+the 133 scientific and cartographic maps gart indexes as `colormap001`–`colormap133`. 357 in all.
+
+The colormaps were the tier this doc previously ruled out as garish, and two things changed the answer: they are
+**last** in `ColorPalettes.all`, so a user scrolling the ribbon meets the hand-picked colors first, and each is
+**thinned to eight stops**, which is what makes a 256-sample ramp a palette at all — a generator indexing
+`colorAt(i)` across 256 near-identical neighbors paints flat, and the pill would be a smear. Thinning keeps both
+ends and the midpoint, so a diverging map still reads as one. Two corrections were needed on the way in: gart's own
+`Palette.of(vararg java.awt.Color)` builds each stop as `rgb(it.red, it.blue, it.green)`, so every map it loads from
+float triples is green/blue-swapped inside gart (its viridis starts `#445401`; ours starts `#440154`), and three of
+its sets are byte-identical repeats of another, dropped here because the studio compares selection by color list.
+
+The ribbon is a `LazyRow` to carry the count. A named, filterable list — grouped by family — is where this now wants
+to go, and is where community palette-sharing would extend it.
 
 The perceptual-color item (#4 below) landed as **`Tritone`**, not as a change to `Bloom` or `Duotone`. Tracing the
 real ramp code overturned the premise here: every ramp in `LayerGradient` (Bloom, Gloss, Vignette) is a *single
