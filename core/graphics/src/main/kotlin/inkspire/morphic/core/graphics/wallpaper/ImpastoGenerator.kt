@@ -24,24 +24,25 @@ import kotlin.random.Random
  * overlapping marks whose edges are meant to be seen as brush-work, where the picture comes from what the marks do
  * together rather than from any one of them. Nothing else in the catalog has a mark with a texture of its own.
  *
- * **The construction is gart's and the arithmetic under it is not, because gart's cannot run here.** Its
- * `deformPath` inserts a displaced midpoint into *every* edge, so a round doubles the point count: ten rounds take an
- * octagon to 8,192 points, and fifty of those at each of two hundred places is some eighty million points a frame.
- * That is affordable on a desktop JVM and is not affordable on a phone. The look does not actually need it — what
- * makes a mark read as torn is that its edge is ragged at *several scales at once*, which is a fractal rather than a
- * long random walk. So [dabPoints] subdivides a fixed [DabRounds] times with the displacement **halving each round**:
- * bounded cost, an edge ragged from its silhouette down to its finest wobble, and one thing gart's version could not
- * have — a mark whose *size* is set rather than wherever the walk happened to wander, which is what lets
- * [DesignParams.scale] mean anything at all.
+ * **A layer is a random walk, and the walk is the whole design.** gart's `deformPath` inserts a displaced midpoint
+ * into every edge and is run ten times at a **constant** displacement — the push never decays, so the boundary is
+ * Brownian rather than smooth and each layer sprawls from a ten-pixel octagon out to around a hundred and fifty.
+ * Fifty of those, each landing somewhere else, is what makes a dab: dense where they all overlap, feathered where
+ * only the long excursions reach, with the occasional spike. That soft-cored blot with a ragged corona *is* the
+ * impasto mark, and nothing about it survives if the walk is replaced with something tidier.
  *
- * **A mark's layers differ in *place and size*, not only in edge, and that is the part the port had to add back.**
- * gart gets it for free: its layers are independent random walks from the same octagon, so each one ends up somewhere
- * else and some sizes wander far — the dab comes out dense in the middle and feathered at the rim, which is what
- * reads as paint. A bounded fractal does not do that. The first cut stacked every layer on one center at one radius,
- * and since they then covered almost exactly the same pixels the alpha saturated: each mark came out a single flat
- * shape with a hard torn edge, and the design read as a **paper collage** rather than a painting — handsome, and not
- * what it is for. So each layer takes its own offset ([LayerWander]) and its own radius ([MinLayerSize]), which is
- * the random walk's spread put back deliberately.
+ * **Which the first build did, and it produced a different design.** It read gart's ten rounds as a cost to be
+ * reduced and swapped the constant push for one that **halved** each round — a well-behaved fractal, cheap, and a
+ * compact hard-edged blob. Every mark then came out a flat cut-out and the frame read as a **paper collage**:
+ * handsome, and not a painting. Two further compensations were bolted on (a per-layer offset and a per-layer size)
+ * to fake the spread the walk gives for free, and they are gone with the cause.
+ *
+ * **What is ours is the *bound*, not the shape.** Ten rounds double the point count to 8,192 a layer, which at fifty
+ * layers and two hundred places is some eighty million points a frame — affordable on a desktop JVM with Skija and
+ * not on a phone. [dabPoints] runs [DabRounds] of the same walk instead, and takes the displacement from the brush
+ * (`extent / √rounds`, so the walk's RMS lands on the size asked for) rather than leaving it a constant the extent
+ * falls out of. gart's mark has no size control at all — it is however far the walk went; this one has the walk *and*
+ * a size, which is what lets [DesignParams.scale] mean anything.
  *
  * **The marks are laid along a serpentine**, gart's zig-zag of [Zags] diagonals from one side of the frame to the
  * other and down. It is what gives the palette somewhere to run — the tone is read from how far along that sweep a
@@ -112,13 +113,8 @@ object ImpastoGenerator : Generator {
             paint.color = toneAt(along, palette)
 
             repeat(layers) {
-                // Each layer somewhere else and its own size — see the class note; without it the layers cover one
-                // another exactly, the alpha saturates and the mark is a flat cut-out.
-                val wander = radius * LayerWander
-                val lx = cx + (random.nextFloat() * 2f - 1f) * wander
-                val ly = cy + (random.nextFloat() * 2f - 1f) * wander
-                val lr = radius * (MinLayerSize + (1f - MinLayerSize) * random.nextFloat())
-                val points = dabPoints(lx, ly, lr, roughness, random)
+                // Every layer walks from the same octagon and ends up somewhere else on its own — see the class note.
+                val points = dabPoints(cx, cy, radius, roughness, random)
                 path.rewind()
                 path.moveTo(points[0], points[1])
                 for (p in 2 until points.size step 2) path.lineTo(points[p], points[p + 1])
@@ -172,29 +168,41 @@ object ImpastoGenerator : Generator {
     }
 
     /**
-     * One dab: a closed ring of `x, y` pairs around ([cx], [cy]), an octagon of [radius] torn up by [roughness].
+     * One layer of a dab: a closed ring of `x, y` pairs around ([cx], [cy]), walked out from an octagon to about
+     * [radius] by [roughness].
      *
-     * **Subdivision with a halving displacement, which is the whole of the port** — see the class note for what gart
-     * does instead and why it cannot run here. Each round inserts a point in the middle of every edge and pushes it
-     * off; the push starts at [FirstDisplacement] of the radius and halves each round, so the first round decides the
-     * silhouette and the last only roughens it. The total is bounded by twice the first push whatever the round
-     * count, which is what keeps a mark the size the brush asked for.
+     * **The push does not decay, which is the one thing that has to be right** — see the class note. Each round
+     * inserts a point in the middle of every edge and displaces it by the *same* amount as the round before, so the
+     * boundary is Brownian: as ragged at its finest scale as at its coarsest, sprawling rather than compact, and
+     * different enough from one layer to the next that fifty of them make a soft-cored blot instead of fifty copies
+     * of one blob.
      *
-     * **[roughness] `0` is a clean octagon**, the rigid end [DesignParams.irregularity]'s contract asks for — and a
-     * real second look rather than a degenerate one, since a field of flat translucent octagons is a paper-collage
-     * reading of the same design.
+     * **[roughness] carries the walk *and* shrinks the seed it walks from**, which is what keeps the mark near
+     * [radius] across the whole knob rather than growing with it. At `0` the seed is the full radius and the push is
+     * nothing, so the mark is a **clean octagon** — the rigid end [DesignParams.irregularity]'s contract asks for, and
+     * a real second look rather than a degenerate one, since a field of flat translucent octagons is a paper-collage
+     * reading of this design. At `1` the seed is [SeedShare] of the radius and the walk roughens it from there.
      *
-     * The push is uniform rather than gaussian, unlike gart's. A gaussian's tail would let the occasional vertex fly,
-     * which reads as a splash; at these displacements the difference is otherwise not visible, and a uniform draw is
-     * one call rather than three.
+     * **[PushShare] is small against the radius, and getting that ratio wrong is what makes a blot look like a
+     * star.** A push of a fifth of the radius over 256 boundary points puts each excursion five times taller than its
+     * neighbor is wide, so the corona reads as a ring of coarse triangles; gart's is an eighth of its blot, spread
+     * over 8,192 points, and reads as fuzz. Matching the *ratio* rather than the round count is what gets the fuzz
+     * back at a fortieth of the cost — the seed carries the size and the walk only has to roughen the rim.
+     *
+     * The push is uniform rather than gaussian, unlike gart's. Rendered side by side at these numbers the uniform
+     * draw lands closer to gart's own blot than a gaussian does — its unbounded tail sprawls the walk wider — and it
+     * is one call rather than three.
      */
     internal fun dabPoints(cx: Float, cy: Float, radius: Float, roughness: Float, random: Random): FloatArray {
+        val torn = roughness.coerceIn(0f, 1f)
+        val seed = radius * (1f - torn * (1f - SeedShare))
         var ring = FloatArray(DabSides * 2) { i ->
             val vertex = i / 2
             val angle = vertex * (2f * PI.toFloat() / DabSides)
-            if (i % 2 == 0) cx + radius * cos(angle) else cy + radius * sin(angle)
+            if (i % 2 == 0) cx + seed * cos(angle) else cy + seed * sin(angle)
         }
-        var push = radius * roughness.coerceIn(0f, 1f) * FirstDisplacement
+        // Constant, not decaying — the walk is the design; see the class note.
+        val push = radius * torn * PushShare
 
         repeat(DabRounds) {
             val grown = FloatArray(ring.size * 2)
@@ -208,39 +216,39 @@ object ImpastoGenerator : Generator {
                 grown[out++] = (ring[v * 2 + 1] + ring[next * 2 + 1]) / 2f + (random.nextFloat() * 2f - 1f) * push
             }
             ring = grown
-            push /= 2f
         }
         return ring
     }
 
-    /** The brush's radius as a share of the frame's short side — a fine dab up to a broad loaded one. */
-    private const val MinBrush = 0.025f
-    private const val MaxBrush = 0.10f
+    /**
+     * The brush's reach as a share of the frame's short side — a fine dab up to a broad loaded one.
+     *
+     * It is where the *walk* lands rather than a radius drawn anywhere, so a mark's silhouette runs past it wherever
+     * an excursion did. gart's blot is around `0.15` of its frame, and the top here matches it.
+     */
+    private const val MinBrush = 0.03f
+    private const val MaxBrush = 0.15f
 
     /** How far a mark may sit off the sweep, as a share of its own brush — enough that the sweep is not a ruled line. */
     private const val JitterShare = 0.55f
 
-    /** How many overlapping dabs one mark is built from, at each end of *Thickness* — a thin wash up to loaded paint. */
-    private const val MinLayers = 1
-    private const val MaxLayers = 24
-
     /**
-     * How far a layer sits off its mark's center and how small it may be drawn, as shares of the mark's radius.
+     * How many walks one mark is built from, at each end of *Thickness* — a thin wash up to loaded paint.
      *
-     * Together they are what stops a mark saturating into a cut-out — see the class note. The wander is well under
-     * half, so a mark still reads as one dab rather than as a cluster of several, and the size floor is low enough
-     * that the smallest layers pile into a dense core while the largest reach past it and feather.
+     * The top is gart's own order: fifty is what turns a heap of ragged outlines into a blot with a core, and much
+     * below a dozen the layers read as separate shapes rather than as one mark.
      */
-    private const val LayerWander = 0.45f
-    private const val MinLayerSize = 0.35f
+    private const val MinLayers = 1
+    private const val MaxLayers = 36
 
     /**
      * How opaque one dab is.
      *
      * Low, and it has to be: the design is the *accumulation*, so a dab that covered the ground would make
      * [MaxLayers] of them look exactly like one of them and the thickness knob would do nothing past its first step.
+     * gart's is 20 of 255 over fifty layers, and this is the same trade at a slightly shorter stack.
      */
-    private const val DabAlpha = 30
+    private const val DabAlpha = 22
 
     /**
      * How many times the palette rolls over along the sweep — gart's own, near enough: it lays two hundred marks
@@ -255,14 +263,17 @@ object ImpastoGenerator : Generator {
     private const val DabSides = 8
 
     /**
-     * How many times a dab's edge is subdivided, and how far the first round pushes as a share of the radius.
+     * How many rounds of the walk a layer takes, and how small the octagon it walks from is at full roughness.
      *
-     * Four rounds take the octagon to 128 points, which is where a further round stops being visible at any brush
-     * size this design draws — the fifth would push by a thirty-second of the radius, well under a pixel on a fine
-     * dab. The first push is over half the radius, so a fully rough mark is torn rather than merely wobbly.
+     * Five rounds take the octagon to 256 points. gart runs ten, which is 8,192 — and the difference need not show,
+     * because at a stack of `22`-alpha layers no single outline is legible: what the eye reads is the *density* the
+     * ensemble makes. What has to be matched is not the round count but [PushShare], the excursion's size against the
+     * blot's; rendered side by side against gart's own numbers, these three land on its blot at a fortieth of the
+     * points.
      */
-    private const val DabRounds = 4
-    private const val FirstDisplacement = 0.55f
+    private const val DabRounds = 5
+    private const val SeedShare = 0.70f
+    private const val PushShare = 0.13f
 
     /** Spaces the per-mark streams far apart, so two marks never draw the same numbers in the same order. */
     private const val MarkStride = 0x27BB2EE687B0B0FDL

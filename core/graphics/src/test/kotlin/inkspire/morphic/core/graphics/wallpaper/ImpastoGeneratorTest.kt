@@ -79,15 +79,16 @@ class ImpastoGeneratorTest {
     }
 
     /**
-     * **The bound the port exists for.** gart's version random-walks its edge, so a mark ends up wherever the walk
-     * went; halving the push each round bounds the total at twice the first one, which is what lets *Brush size* mean
-     * a size. Swept over seeds because it is a claim about every draw, not about a lucky one.
+     * **The bound the port exists for.** gart's mark has no size at all — it is however far ten rounds of an
+     * undecaying walk happened to go. Taking the step from the brush instead (`extent / √rounds`) keeps the walk and
+     * gives it a target, and the worst case is the seed plus one push per round. Swept over seeds because it is a
+     * claim about every draw, not about a lucky one.
      */
     @Test
     fun `a fully rough dab stays within the bound its brush sets`() {
         val radius = 50f
-        // The first push is 0.55 of the radius and halves, so the sum is under twice it — plus the radius itself.
-        val bound = radius * (1f + 2f * 0.55f)
+        // The seed is 0.70 of the radius at full roughness, and five rounds each push by 0.13 of it.
+        val bound = radius * (0.70f + 5f * 0.13f)
 
         for (seed in 1L..60L) {
             val points = ImpastoGenerator.dabPoints(0f, 0f, radius, roughness = 1f, random = Random(seed))
