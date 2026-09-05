@@ -320,33 +320,78 @@ Dropping the radial pair left the catalog at 28 and the obvious question of what
 gallery went under the eye at once: 143 pieces, everything not already harvested, as one contact sheet. Two were
 picked by the author and both are built.
 
-**`IMPASTO`, from `arts/monet`** — ragged translucent dabs laid along a serpentine, building into a painted wash. The
-catalog's first **painterly** design: everything else is a *field* (a value per pixel) or a *shape* (an edge you can
-trace), and this is a heap of marks whose torn edges are the texture. It is the family principle 3 above keeps naming
-and we had nothing of. It was also known-unclaimed: W11x deleted our Soft Overlaps' `arts/monet` citation rather than
-re-pointing it, having found the art was this and not that.
+**Both ports were wrong when they first landed, in the same way, and both were corrected only after the author looked
+at the picture.** That is the finding of this whole section and it is worth stating before the detail: *a generative
+art's source does not say what it draws.* Every constant in it is read against something that is not written down —
+a coordinate space, a decay, a draw order — and a plausible misreading produces a design that is coherent, attractive
+and **not the one in the picture beside the code**. Unit tests pass either way. This happened five times across two
+designs.
 
-Three things the port could not take from gart, and two of them only showed on the device:
+#### `SPRAY`, from `flowforce/spring`
 
-| What | Why |
+Particles carried through a wave field and left as a mist of dots. The **fifth** design on a flow field and the first
+that draws no line: the other four render a particle's *path*, this renders the particle, so what accumulates is a
+density. The color runs **along each trail** rather than across the frame.
+
+| Finding | Detail |
 |---|---|
-| **gart's arithmetic does not run here.** `deformPath` inserts a displaced midpoint into *every* edge, so a round doubles the point count — ten rounds take an octagon to 8,192 points, and fifty of those at each of two hundred places is ~80M points a frame | Fine on a desktop JVM with Skija, not on a phone. The look does not need it: an edge reads as torn because it is ragged at several scales at once, which is a **fractal** and not a long random walk. Four subdivisions with the push **halving each round** — and that buys something gart cannot have, a mark whose *size* is set rather than wherever the walk wandered, which is what lets *Brush size* mean anything |
-| **A mark's layers must differ in place and size, not only in edge.** gart gets it free: independent random walks land in different places at wildly different extents, so a dab is dense in the middle and feathered at the rim | A bounded fractal does not do that. The first cut stacked every layer on one center at one radius; they covered the same pixels, the alpha saturated, and every mark came out a flat cut-out — the design read as a **paper collage**. Handsome, and not what it is for |
-| **The tone must advance by a sliver per mark, and cycle.** gart indexes a 48-color palette by the mark's number and its `safe` **wraps**, so consecutive marks are near-neighbors on a long ramp that rolls over ~4× along the sweep | That is the whole reason it mixes — two overlapping marks are almost never the same color, so their translucent edges make a third. The first cut read `RampTones`' handful of flat tones, which put every mark in a band on *one* color and left the overlaps nothing to do: the collage again, now in stripes. `toneAt` reads the ramp continuously above the ground and loops it, so five stops give the gradation gart gets from forty-eight |
+| **The field's coordinates are pixels, not a unit square** — the one that mattered | `FlowField.of(d) { x, y -> … }` hands the function **pixel** coordinates, so `sin(x * 10)` has a period of `0.63` of a pixel against a step of seven. Every step reads the field several periods from the last, the angle is uncorrelated with the previous one, and the particle **random walks**: a trail is not a curve but a compact cloud spreading as `√n`. A thousand overlapping is the mist. Read as normalized, the same two numbers describe a field turning once across the frame whose particles trace long smooth arcs — a *different design*, drawn from the same source. It shipped as feathered plumes and had to be told apart by eye |
+| **`scale` crosses a threshold in the middle of its range** | A dot is placed every `StepShare` of the short side, so a smaller dot leaves a stipple and a larger one laps its neighbor. The KDoc's "nothing is continuous anywhere" was true of half the knob |
+| **The dense end was out of reach** | 600 trails is a quiet drift; gart releases a thousand and keeps replacing them, which over its run is a few hundred thousand dots. The range tops at 1200 so one pass lands in the same place |
+| **The color drift cannot be ported at all** | gart colors purely along the trail and gets Spring's warm-top, cool-bottom drift from *population dynamics* — 620 frames, trails that leave the frame killed and reseeded in the **bottom half**, so the population sorts by age and therefore by color. One pass has no history to sort, and reproducing it means simulating 620 frames to throw away 619. Reading `0.7` of the tone off the trail's **start height** is the same picture from a mechanism a single pass has |
 
-**`SPRAY`, from `flowforce/spring`** — particles carried through a wave field and left as a mist of dots. The **fifth**
-design on a flow field and the first that draws no line: the other four render a particle's *path*, this renders the
-particle, so what accumulates is a density. Two more things separate it — the field is an **analytic wave**
-(`sin(x) + cos(y)` as an angle, turning through several whole revolutions, where the others read Perlin noise) and the
-color runs **along each trail** rather than across the frame. Its `irregularity` `0` is a flat field: every particle
-one way, the mist in parallel lanes.
+Dots are batched by tone into 24 `drawPoints` calls — up to 390,000 `drawCircle`s is seconds rather than
+milliseconds. The rate is expressed **frame-relative** (its period a fraction of one step) rather than in gart's
+pixels, so the grain is the same picture at any render size. A *Plume* variant kept the smooth-field reading for a
+while and is **dropped** by the author's call: the design is the mist.
 
-Two findings on the device, again after the unit tests were green: **`scale` crosses a threshold in the middle of its
-range rather than at an end** — a dot smaller than the step leaves a stipple, a larger one laps its neighbor and the
-trail closes into a continuous plume, so the KDoc's "nothing is continuous anywhere" was true of half the knob — and
-**the dense end was out of reach** at 600 trails, where gart releases a thousand and keeps replacing them. Dots are
-batched by tone into 24 `drawPoints` calls, since up to 390,000 `drawCircle`s is seconds rather than milliseconds;
-the buckets size exactly rather than grow because step `i` always falls in band `i × bands / steps`.
+#### `IMPASTO`, from `arts/monet`
+
+Ragged translucent dabs laid along a serpentine, building into a painted wash. The catalog's only **painterly**
+design — everything else is a field or a shape, and this is a heap of marks whose torn edges are the texture. Also
+known-unclaimed: W11x deleted our Soft Overlaps' `arts/monet` citation rather than re-pointing it, having found the
+art was this and not that.
+
+Two readings checked out and are worth recording as such: `toPoints(200)` really is even **arc-length** resampling,
+and `pal.safe` really does **wrap** — so consecutive marks are near-neighbors on a 48-color ramp that rolls over ~4×
+along the sweep, which is the whole reason the marks mix. Three did not:
+
+| Finding | Detail |
+|---|---|
+| **The push does not decay** | `deformPath` is run ten times at a **constant** displacement, so a layer's boundary is Brownian — as ragged at its finest scale as at its coarsest, sprawling from a 10px octagon to about 150. Fifty of those make a blot with a dense core and a feathered corona. Reading the ten rounds as a cost to be reduced and **halving** the push each round gives a well-behaved fractal: compact, hard-edged, and the frame reads as a **paper collage**. Two compensations were then bolted on (a per-layer offset and size) to fake the spread the walk gives for free |
+| **The excursion's size against the blot's is what must match, not the round count** | gart's push is an eighth of its blot over 8,192 boundary points and reads as fuzz; the same walk as `radius / √rounds` over 128 points is several times taller than its neighbor is wide and reads as a ring of coarse triangles — which is what the *first attempt at this fix* drew. A seed carrying `0.70` of the size and a push of `0.13` roughening the rim puts the fuzz back at a fortieth of the points |
+| **The marks are drawn *interleaved*** — the one that makes it a painting | gart chunks each mark's fifty layers into five groups and draws group `n` of **every** mark before group `n+1` of any of them, so no mark is ever finished before its neighbors are started. Drawing each mark to completion — the obvious way — lets a finished opaque dab cover the one beneath it and the frame comes out as separate blobs however soft each rim is. Interleaved, every mark is translucent while its neighbors are laid over and under it and the colors *mix*. It costs nothing: seed each layer from its own `(mark, layer)` pair and it can be drawn in any order |
+
+**And the geometry has to be derived from the brush**, which is the same finding one level up. Measured off gart's own
+frame: its blot is ~`0.15` of the side, its sweeps sit `0.34` of a blot apart and its marks `0.68` of one along the
+path — so every point of the frame is inside three or four blots and the wash is a *consequence of the spacing*. A
+fixed 20 sweeps and a fixed stroke count hold that on a 1024 square and nowhere else; on a 1080×2400 phone the rows
+stayed visibly separate. `scale` now sets the blot and the sweep count, mark count and spacing follow, with `density`
+a **Coverage** fraction that only loosens the spacing. `taper` was dropped: with that much overlap a per-mark size
+variation is invisible, and a knob that changes pixels without changing the picture is what `DesignStyle` exists to
+prevent.
+
+What stays ours in both is the **bound**, not the shape: ten rounds at fifty layers over four hundred places is ~160M
+points a frame, fine on a desktop JVM with Skija and not on a phone.
+
+#### What this cost, and the method that would have been cheaper
+
+Every one of the five findings was invisible to a unit test — each wrong version was internally consistent, passed its
+own guards, and drew something. Four were found by putting our render beside gart's own output; the fifth (the
+interleave) by rendering **one gart brush stroke beside one of ours** at gart's numbers, which took a minute and
+showed the difference at a glance.
+
+**The tool that should have been reached for first is a full-frame simulation of the reference's algorithm, in
+Python, before any Kotlin is written.** Four variants of the whole Impasto frame rendered against `monet1-0` in one
+pass and found the interleave immediately; the equivalent on the device is a five-minute round trip each. It also
+catches the parameters a still image cannot state — that the *ratio* of blot to spacing is what makes the wash, not
+any single number in the source.
+
+One test earned its place during the fix and is the model for the rest: the mark count goes as the **square** of the
+reciprocal brush, so a fine brush ran into the safety cap — and a cap that bites does not merely cost less, it spaces
+the marks further apart than a blot, they stop overlapping, and the wash is gone. Silent. `MinBrush` is now set where
+the cap cannot be reached, and the bound is asserted across four frame shapes and the whole declared range rather
+than left as a comment.
 
 `VoronoiGenerator.fillCeiling` moved to `RampTones.spanBelowGround` on its second consumer — a dot painted in the
 ground it lies on is the mosaic's cell painted in its own leading.
