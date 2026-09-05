@@ -54,6 +54,25 @@ internal object RampTones {
         IntArray(count) { LinearGradientGenerator.colorAt((it + 1f) / count, palette) }
 
     /**
+     * How far down the ramp a design may read before it reaches the ground, for a palette of [stops] — the scale a
+     * `0..1` position is multiplied by so its darkest result lands one tone short of the last stop.
+     *
+     * **[belowGround]'s arithmetic used continuously.** That function hands back a *set* of tones and stops one short
+     * of the ground; a design reading the ramp as a range needs the same bound as a number, and deriving it twice is
+     * how the two would come to disagree about where the ground begins. [VoronoiGenerator] wrote it first, for cells
+     * that were arriving in the color of their own leading, and [SprayGenerator] is the second consumer — a dot at
+     * the end of its trail painted in the ground it lies on does not read as subtle, it reads as a dot that failed
+     * to draw.
+     *
+     * A palette with no ramp below its ground answers `1`: everything it has *is* the ground, and no scale separates
+     * a mark from it.
+     */
+    fun spanBelowGround(stops: Int): Float {
+        val tones = countFor(stops)
+        return if (tones <= 1) 1f else (tones - 1f) / tones
+    }
+
+    /**
      * The mirror, for a design whose ground is the palette's **last** stop rather than its first — the dark end,
      * since a palette is ordered light-to-dark. [FlowFieldGenerator]'s streaks are the case: they are lit marks on a
      * near-black ground, where a mosaic's tiles sit on a pale one.

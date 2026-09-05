@@ -254,4 +254,13 @@ enum class WallpaperDesign {
      */
     @SerialName("impasto")
     IMPASTO,
+
+    /**
+     * Particles carried through a wave field and left as a mist of translucent dots — the spray. The fifth design on
+     * a flow field and the first that draws no line: [FLOW_FIELD] and its siblings render a particle's *path*, this
+     * renders the particle, so what accumulates is a density rather than a stroke.
+     * [DesignParams.irregularity] is how far the field turns, and at `0` the mist falls into parallel lanes.
+     */
+    @SerialName("spray")
+    SPRAY,
 }

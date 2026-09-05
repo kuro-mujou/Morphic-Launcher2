@@ -164,19 +164,12 @@ object VoronoiGenerator : Generator {
      * How far down the ramp a cell's fill may reach, for a palette of [stops] — the scale a `0..1` position is read
      * through, so the darkest cell lands one tone short of the seam instead of on it.
      *
-     * **The step is [RampTones]', not one of this design's own.** That object already answers "the ramp *below* the
-     * ground" for a design whose ground is the palette's last stop, which is exactly what the seam is here; taking
-     * its tone count and stopping at the last of them is the same arithmetic used continuously, so a mosaic and a
-     * design drawing [RampTones.belowGround] agree about where the ground begins. Inventing a margin here instead
-     * would be a second answer to a question already settled, and one nothing would notice had drifted.
-     *
-     * A palette with no ramp below its ground answers `1`: everything it has *is* the seam color, and there is no
-     * scale that separates a cell from it.
+     * **The step is [RampTones]', not one of this design's own**, and it lives there rather than here now that
+     * [SprayGenerator] wants the same bound: that object already answers "the ramp *below* the ground" for a design
+     * whose ground is the palette's last stop, which is exactly what the seam is. Two designs deriving a margin apart
+     * is how they would come to disagree about where the ground begins, and nothing would notice.
      */
-    internal fun fillCeiling(stops: Int): Float {
-        val tones = RampTones.countFor(stops)
-        return if (tones <= 1) 1f else (tones - 1f) / tones
-    }
+    internal fun fillCeiling(stops: Int): Float = RampTones.spanBelowGround(stops)
 
     /**
      * The index of the seed nearest ([nx], [ny]) — the pixel's cell.
