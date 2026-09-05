@@ -1,18 +1,13 @@
 package inkspire.morphic.feature.settings.wallpaperstudio
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
 import inkspire.morphic.core.designsystem.component.slider.MorphicSliderRow
@@ -44,10 +39,9 @@ import kotlin.math.roundToInt
  * five lambdas would be that value taken apart and handed over in pieces — and the panel would grow another parameter
  * every time a design needs a knob the model does not have yet. It hands back the whole edited value instead.
  *
- * **It sits on its own scrim, which the chip rows below do not.** A slider is a thin track and a small number over an
- * arbitrary picture — including a white one — where a chip carries its own filled pill. The frosted backdrop the design
- * system defers is what would eventually give the whole bottom bar one ground; until then the scrim is where it is
- * actually needed.
+ * **It sits on a scrim, which the chip rows below do not.** A slider is a thin track and a small number over an
+ * arbitrary picture — including a white one — where a chip carries its own filled pill. That ground is
+ * [studioPanelGround], shared with the preset browser, the studio's other floating panel.
  */
 @Composable
 internal fun WallpaperStylePanel(
@@ -68,14 +62,7 @@ internal fun WallpaperStylePanel(
     val selected = if (tab in tabs) tab else tabs.first()
 
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(16.dp))
-            // Heavy enough for white labels over the *lightest* wallpaper a design can produce — the cream
-            // contour paper is the case that sets this number, not the dark fields most designs open on.
-            .background(Color.Black.copy(alpha = 0.6f))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+        modifier = modifier.studioPanelGround(),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(

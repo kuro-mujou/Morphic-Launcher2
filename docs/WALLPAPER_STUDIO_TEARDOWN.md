@@ -171,6 +171,114 @@ rectangles.
 
 ---
 
+## Color: the chooser, the preset browser and the picker
+
+**Captured 2026-09-05** by driving the same emulator build. The parameter inventory above is about *geometry*; this is
+the other half of their studio, and it is the part our 357-palette bank has just made urgent. Measurements are px on
+1080×2400 @ 420dpi (2.625 px/dp); dp figures are rounded.
+
+### The color panel is the *current palette*, not a bank of palettes
+
+Tapping the palette icon in their bottom bar does **not** open a list of palettes. It replaces the bar with two rows:
+
+- a wide **`Suggested palettes`** button, plus a **shuffle** and a **lock** as two circular buttons beside it;
+- the **current palette as individually editable stops** — one large circle per color (**120px ≈ 46dp**, pitch
+  **147px ≈ 56dp**), then a **`+`** circle that appends one. The row scrolls sideways once the stops overflow.
+
+**Stop 0 is separated from the rest by a thin vertical rule.** That is the ground, and the teardown notes above keep
+finding it from the other end ("the ground is stop 0, whatever stop 0 is" — Confetti, Diagonal Bands). Their UI says
+so *before* you render anything: the divider is the only chrome in the row.
+
+Ours is the exact inverse: our chooser is a `LazyRow` of whole palettes and there is no way to touch a single color.
+The two are not alternatives — theirs has both, one behind the other.
+
+### `Suggested palettes` — named rows, filtered by color
+
+A bottom sheet over the live preview, frosted, titled **Presets**:
+
+- a **vertically scrolling list**, one palette per row, each row a pill;
+- **the name is in the row**, left-aligned in a fixed ~118dp column, wrapping to two lines — and the names are written,
+  not generated: *Nordic Matchbox*, *Streetwear Citrus*, *Black Tea Cyclades*, *Deep Sea Disco*, *Tron Arcade Grid*,
+  *Polenta Blue Note*. Two evocative words, no numbering, no family prefix;
+- the colors sit to the right as circles (**89px ≈ 34dp**, pitch **106px ≈ 40dp**), left-packed, so a 3-stop palette
+  leaves visible empty track and the row still reads as a row;
+- pinned to the bottom, a **`Filter by`** ribbon of color chips (**75px ≈ 29dp**, pitch ~46dp) — neutrals then each hue
+  family in three tones. **Single-select**: tapping one rings it, scrolls the list back to the top, and shows only the
+  palettes that carry that color, **ordered by how much they carry it** (pick red and *Coral Scale*, an all-red ramp,
+  is first; *Canyon Comics*, one red among four, is far down). Tapping a second chip replaces the first.
+- Tapping a row **applies the palette immediately and closes the sheet**. There is no confirm step and no preview
+  state — the wallpaper behind the sheet is already the answer.
+
+**This is the answer to "what do you do with hundreds of palettes".** Not one long ribbon of unlabeled pills: a named
+list you scroll, plus one axis of filtering that matches how a person actually arrives ("something green"). Our bank is
+now bigger than theirs looked and our picker is the ribbon.
+
+### The lock and the shuffle
+
+- **Shuffle** replaces the whole palette with another one, immediately, re-rendering the wallpaper — and the stop
+  *count* changes with it (4 → 5 → 7 across three taps), so it is a pick from the bank rather than a re-roll of the
+  current colors.
+- **Lock** auto-engages the moment you choose or edit a palette deliberately (it was open on first entry, closed after
+  `+` added a stop, closed again after a preset was applied). **Its exact effect was not isolated**: the palette
+  survived a design change with the lock closed *and* with it open, and shuffle overrode it while closed. Do not copy
+  the mechanic on this evidence — copy the observation that a hand-made palette is treated as something to protect.
+
+### Changing design previews *through* the palette
+
+Their **Choose design** grid renders every design's thumbnail in the **user's current palette**, live. So the palette
+is the constant and the design is what varies — the opposite of a static catalog of sample images, and a much better
+answer than our labeled chips. It also means the palette panel and the design panel are two views of one recipe.
+
+### Their color picker (`Edit color`)
+
+Tapping any stop opens a bottom sheet with a **`Picker` | `Palette` segmented control** top-left and **trash** +
+**confirm** buttons top-right. The trash deletes that stop from the palette, which is the only way to remove one.
+
+**Picker tab** — the conventional stack, with three things ours lacks:
+- an **SV panel** whose handle is a filled circle of the current color, drawn **half outside** the panel's corner so it
+  never hides the color it is picking (ours draws two concentric rings *inside* the panel);
+- a **hex field** showing 8 digits (`#FFFFB703` — ARGB, alpha first) with **copy** and **paste** buttons beside it;
+- **`HUE`** and **`OPACITY`** sliders, row-labeled in caps, the opacity track a checkerboard under a
+  transparent→opaque ramp of the current color. Both thumbs are filled circles in the current color.
+
+**Palette tab** — a browser of *sources* to pick a color from, not a color space:
+- **`WALLPAPER COLORS`** — the stops of the palette being edited, so one stop can be set to another's color;
+- **`MATERIAL YOU`** — the system's dynamic tonal palettes as a grid of rounded squares, **one row per tonal palette,
+  each row scrolling horizontally on its own** (light → dark, ~13 tones). Five rows visible.
+
+That second tab is the interesting one for us. Alpha is the other: our `MorphicColorPicker` drops it on purpose and
+documents why, and that reasoning holds for an *icon* layer — but a wallpaper palette already carries alpha
+(`core:model.wallpaper.Palette`'s KDoc says so, and Soft Overlaps blends discs by it), so the wallpaper studio is the
+consumer that would need the slider our icon path must not have.
+
+### Not covered
+
+Smart Launcher itself is not installed on this emulator — only `net.smartlauncher.wallpaperstudio` — so their
+*launcher-side* theme color picker is not in this teardown, and no APK was fetched to get at it.
+
+### What was built from this (2026-09-06)
+
+The **preset browser** — the named, filterable list — landed as `PalettePresetBrowser` (`core:designsystem`), opened
+from a *Presets* chip that now leads the studio's colors chooser, over `PaletteColorFilter`'s ranked color filter.
+Device-verified. Three departures from what they do, each for a reason:
+
+- **The ribbon stays under it.** Their bottom row is the palette's *stops*; ours is still the bank as pills, and the
+  browser opens above it rather than replacing it. Two ways into one bank — "the next one" in a tap, "something green"
+  in the list.
+- **The filter ranks rather than buckets.** A chip is a target color, a palette qualifies when a stop is within a
+  distance of it, and the order is by what *share* of the palette is that near. Bucketing by hue would make a palette
+  whose only green leans teal vanish with nothing on screen to say why.
+- **The panel's scrim is `0.86`, not the Style panel's `0.6`.** A thin strip of slider survives at `0.6`; two thirds of
+  the screen filled with small text and small swatches does not — the wallpaper's own shapes run through the list and
+  read as rows that are not there. Both panels now share `studioPanelGround` at the higher number.
+
+Still theirs and not ours, in the order the teardown values them: **the stop row** (the current palette as individually
+editable circles, ground divided off as stop 0, `+` to append, tap to edit, trash to remove), **design thumbnails
+rendered in the current palette**, and the **`Edit color` sheet** (hex with copy/paste, an opacity slider, and the
+Material You tonal grid as a pick source). The stop row is the one that unlocks the rest.
+
+---
+
 ## Design-by-design: their 22, our 16, the verdict
 
 ### W11 checklist — which designs have actually been driven

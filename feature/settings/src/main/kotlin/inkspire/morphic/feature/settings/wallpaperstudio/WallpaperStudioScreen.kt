@@ -1,5 +1,6 @@
 package inkspire.morphic.feature.settings.wallpaperstudio
 
+import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Image
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -48,6 +50,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.component.color.ColorPalettes
+import inkspire.morphic.core.designsystem.component.color.PalettePresetBrowser
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.model.wallpaper.WallpaperColorMode
 import inkspire.morphic.core.model.wallpaper.WallpaperDesign
@@ -82,6 +85,10 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
     // position, not recipe, so it is remembered across rotation but never stored. The Style tab likewise.
     var mode by rememberSaveable { mutableStateOf(ChooserMode.DESIGNS) }
     var styleTab by rememberSaveable { mutableStateOf(StyleTab.AMOUNT) }
+    // Whether the colors chooser has its browser open above the bar. Not a fourth [ChooserMode]: the browser is a
+    // second view of the palettes the bar is already showing, and leaving the ribbon under it is what lets a pick made
+    // in the list be nudged along by the ribbon without a trip back through the toggles.
+    var browsingPresets by rememberSaveable { mutableStateOf(false) }
 
     BackHandler(onBack = onBack)
 
@@ -104,24 +111,7 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
                     ) { _, amount -> travelled += amount }
                 },
         ) {
-            // The preview measures itself and hands its pixel size to the model, so the render is exactly the resolution
-            // it is shown at. `onGloballyPositioned` would do, but the size is all that is wanted.
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .onSizeChanged { viewModel.setViewport(it.width, it.height) },
-            ) {
-                Crossfade(targetState = state.bitmap, label = "wallpaperPreview") { bitmap ->
-                    if (bitmap != null) {
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
-                            contentDescription = "Wallpaper preview",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                }
-            }
+            WallpaperPreview(bitmap = state.bitmap, onViewport = viewModel::setViewport)
 
             StudioIconButton(
                 icon = Icons.AutoMirrored.Filled.ArrowBack,
@@ -163,15 +153,44 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
                     )
                 }
 
+                if (mode == ChooserMode.COLORS && browsingPresets) {
+                    PalettePresetBrowser(
+                        palettes = ColorPalettes.all,
+                        selected = state.recipe.palette.colors,
+                        // Applies and closes, the reference studio's behavior and the honest one: the wallpaper behind
+                        // the panel is already the tapped palette, so a confirm step would ask the user to agree with
+                        // what they can see. The ribbon below is left showing that same pick.
+                        onPick = {
+                            viewModel.setPalette(it.colors)
+                            browsingPresets = false
+                        },
+                        // Most of the screen, because a list of two-line rows is useless at chip height — and not all
+                        // of it, because the picture it is filtering has to stay visible to filter against.
+                        modifier = Modifier
+                            .fillMaxHeight(0.62f)
+                            .studioPanelGround(),
+                    )
+                }
+
                 BottomChooser(
                     mode = mode,
-                    onModeToggle = { tapped -> mode = if (mode == tapped) ChooserMode.DESIGNS else tapped },
-                    recipe = state.recipe,
-                    onPickDesign = viewModel::pickDesign,
-                    onSetPalette = viewModel::setPalette,
-                    onToggleFilter = viewModel::toggleFilter,
+                    onModeToggle = { tapped ->
+                        mode = if (mode == tapped) ChooserMode.DESIGNS else tapped
+                        // The browser belongs to the colors chooser; leaving it must not leave a panel behind.
+                        if (mode != ChooserMode.COLORS) browsingPresets = false
+                    },
                     onShuffle = viewModel::shuffle,
-                )
+                ) {
+                    Chooser(
+                        mode = mode,
+                        recipe = state.recipe,
+                        presetsOpen = browsingPresets,
+                        onTogglePresets = { browsingPresets = !browsingPresets },
+                        onPickDesign = viewModel::pickDesign,
+                        onSetPalette = viewModel::setPalette,
+                        onToggleFilter = viewModel::toggleFilter,
+                    )
+                }
             }
         }
     }
@@ -186,24 +205,24 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
 private enum class ChooserMode { DESIGNS, COLORS, FILTERS, STYLE }
 
 /**
- * The bottom bar: the three chooser toggles, the chooser they flip between (designs, palettes or filters), and the
- * shuffle.
+ * The bottom bar: the three chooser toggles, whatever [chooser] fills the middle with, and the shuffle.
  *
- * **One chooser slot, three contents.** The palette and filter toggles swap the middle rather than stacking, so the
- * bar stays one row over the wallpaper; either toggle flips back to the designs when it is already on. The style
- * toggle is the exception and opens a panel above instead, leaving the designs here. The shuffle re-seeds whichever
- * design is showing — a new variation, the same whatever the chooser.
+ * **The bar does not know what it is showing.** It owns the toggles, the one middle slot and the shuffle; which
+ * chooser goes in the slot is [Chooser]'s business, decided from the same `mode` the toggles here set. Keeping the
+ * two apart is what stops this growing a parameter for every control any chooser might need — it had reached ten.
+ *
+ * **One slot, not a stack.** The palette and filter toggles swap the middle rather than stacking, so the bar stays one
+ * row over the wallpaper; either toggle flips back to the designs when it is already on. The style toggle is the
+ * exception and opens a panel above instead, leaving the designs here. The shuffle re-seeds whichever design is
+ * showing — a new variation, the same whatever the chooser.
  */
 @Composable
 private fun BottomChooser(
     mode: ChooserMode,
     onModeToggle: (ChooserMode) -> Unit,
-    recipe: WallpaperRecipe,
-    onPickDesign: (WallpaperDesign) -> Unit,
-    onSetPalette: (List<Int>) -> Unit,
-    onToggleFilter: (WallpaperFilter) -> Unit,
     onShuffle: () -> Unit,
     modifier: Modifier = Modifier,
+    chooser: @Composable () -> Unit,
 ) {
     Row(
         modifier = modifier
@@ -230,53 +249,7 @@ private fun BottomChooser(
             onClick = { onModeToggle(ChooserMode.FILTERS) },
             selected = mode == ChooserMode.FILTERS,
         )
-        Box(modifier = Modifier.weight(1f)) {
-            when (mode) {
-                ChooserMode.COLORS ->
-                    // Lazy, because the bank runs to a couple of hundred palettes — the picker ribbon's reason.
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        items(ColorPalettes.all, key = { it.name }) { palette ->
-                            PalettePill(
-                                colors = palette.colors,
-                                selected = palette.colors == recipe.palette.colors,
-                                onClick = { onSetPalette(palette.colors) },
-                            )
-                        }
-                    }
-
-                ChooserMode.FILTERS ->
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        WallpaperFilter.entries.forEach { filter ->
-                            ChooserChip(
-                                label = filter.label,
-                                selected = filter in recipe.filters,
-                                onClick = { onToggleFilter(filter) },
-                            )
-                        }
-                    }
-
-                // Style keeps the designs here, its own panel being above the bar.
-                ChooserMode.DESIGNS, ChooserMode.STYLE ->
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        WallpaperDesign.entries.forEach { design ->
-                            ChooserChip(
-                                label = design.label,
-                                selected = design == recipe.design,
-                                onClick = { onPickDesign(design) },
-                            )
-                        }
-                    }
-            }
-        }
+        Box(modifier = Modifier.weight(1f)) { chooser() }
         StudioIconButton(
             icon = Icons.Default.Casino,
             contentDescription = "Shuffle",
@@ -284,6 +257,121 @@ private fun BottomChooser(
         )
     }
 }
+
+/**
+ * What fills the bar's middle slot: the designs, the palettes or the filters, whichever [mode] names.
+ *
+ * Split from [BottomChooser] so the bar carries no knowledge of any one chooser's controls — see its KDoc.
+ */
+@Composable
+private fun Chooser(
+    mode: ChooserMode,
+    recipe: WallpaperRecipe,
+    presetsOpen: Boolean,
+    onTogglePresets: () -> Unit,
+    onPickDesign: (WallpaperDesign) -> Unit,
+    onSetPalette: (List<Int>) -> Unit,
+    onToggleFilter: (WallpaperFilter) -> Unit,
+) {
+    when (mode) {
+        // Two ways into one bank: the chip opens the named, filterable browser for "something green", the ribbon
+        // beside it answers "show me the next one" in a tap. Neither replaces the other.
+        ChooserMode.COLORS ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ChooserChip(label = "Presets", selected = presetsOpen, onClick = onTogglePresets)
+                // Lazy, because the bank runs to several hundred palettes — the picker ribbon's reason.
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    items(ColorPalettes.all, key = { it.name }) { palette ->
+                        PalettePill(
+                            colors = palette.colors,
+                            selected = palette.colors == recipe.palette.colors,
+                            onClick = { onSetPalette(palette.colors) },
+                        )
+                    }
+                }
+            }
+
+        ChooserMode.FILTERS ->
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                WallpaperFilter.entries.forEach { filter ->
+                    ChooserChip(
+                        label = filter.label,
+                        selected = filter in recipe.filters,
+                        onClick = { onToggleFilter(filter) },
+                    )
+                }
+            }
+
+        // Style keeps the designs here, its own panel being above the bar.
+        ChooserMode.DESIGNS, ChooserMode.STYLE ->
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                WallpaperDesign.entries.forEach { design ->
+                    ChooserChip(
+                        label = design.label,
+                        selected = design == recipe.design,
+                        onClick = { onPickDesign(design) },
+                    )
+                }
+            }
+    }
+}
+
+/**
+ * The render, full-bleed, dissolving into whatever replaces it.
+ *
+ * **It measures itself and reports its pixel size**, so the generator paints exactly the resolution being shown rather
+ * than a fixed guess scaled to fit. `onGloballyPositioned` would do, but the size is all that is wanted.
+ */
+@Composable
+private fun WallpaperPreview(bitmap: Bitmap?, onViewport: (Int, Int) -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onSizeChanged { onViewport(it.width, it.height) },
+    ) {
+        Crossfade(targetState = bitmap, label = "wallpaperPreview") { shown ->
+            if (shown != null) {
+                Image(
+                    bitmap = shown.asImageBitmap(),
+                    contentDescription = "Wallpaper preview",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The ground the studio's floating panels sit on — the Style panel and the preset browser.
+ *
+ * **Shared because they are the same surface, not because the numbers happen to match.** Both are a panel of chrome
+ * over an arbitrary wallpaper, and two panels drifting to two scrims would read as two surfaces on one screen. The
+ * frosted backdrop the design system defers is what would eventually replace this.
+ *
+ * **The alpha is set by the browser, not by the Style panel** — and it is most of the way to opaque. A thin strip of
+ * slider over a picture stays readable at `0.6`; two thirds of the screen filled with rows of small text and small
+ * swatches does not, because the wallpaper's own shapes run *through* the list and read as rows that are not there.
+ * The number is the one a reading surface needs, and the strip only gets darker for it.
+ */
+internal fun Modifier.studioPanelGround(): Modifier = this
+    .fillMaxWidth()
+    .padding(horizontal = 16.dp)
+    .clip(RoundedCornerShape(16.dp))
+    .background(Color.Black.copy(alpha = 0.86f))
+    .padding(horizontal = 12.dp, vertical = 10.dp)
 
 /** One labelled chip in the picker row — a design, a filter or a Style tab, lit when it is the one showing. */
 @Composable
