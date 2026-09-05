@@ -17,12 +17,48 @@ class ImpastoGeneratorTest {
 
     private val width = 1080f
 
+    /**
+     * **The geometry that makes the wash, and the one the design first got wrong.** gart's sweeps sit about a third
+     * of a blot apart and its marks about two thirds of one along the path, so every point of the frame falls inside
+     * three or four blots. A fixed sweep count holds that on one aspect at one brush size and nowhere else — on a
+     * phone it left the rows visibly separate.
+     */
     @Test
-    fun `density maps to the stroke count range`() {
-        assertEquals(60, ImpastoGenerator.strokeCount(0f))
-        assertEquals(420, ImpastoGenerator.strokeCount(1f))
-        assertEquals(60, ImpastoGenerator.strokeCount(-1f)) // clamped
-        assertEquals(420, ImpastoGenerator.strokeCount(2f)) // clamped
+    fun `the sweeps and the marks are spaced against the brush, not the frame`() {
+        // Every frame the studio composes for, at both ends of the declared brush range and in between.
+        val frames = listOf(1080 to 2400, 2400 to 1080, 1080 to 1080, 1600 to 2560)
+        for ((w, h) in frames) {
+            for (share in listOf(0.11f, 0.18f, 0.26f)) {
+                val brush = minOf(w, h) * share
+                val sweeps = ImpastoGenerator.sweepCount(brush, h)
+                val marks = ImpastoGenerator.markCount(brush, 1f, w, h, sweeps)
+                val where = "${w}x$h at $share"
+
+                assertTrue("sweeps must sit inside a blot, $where", h.toFloat() / sweeps < brush)
+                val path = sweeps * hypot(w.toFloat(), h.toFloat() / sweeps)
+                assertTrue("marks must overlap, $where", path / marks < brush)
+            }
+        }
+    }
+
+    /** Coverage loosens that spacing and never tightens past gart's, so the marks always overlap. */
+    @Test
+    fun `coverage only loosens the spacing`() {
+        val sweeps = ImpastoGenerator.sweepCount(120f, 2400)
+        val dense = ImpastoGenerator.markCount(120f, 1f, 1080, 2400, sweeps)
+        val sparse = ImpastoGenerator.markCount(120f, 0f, 1080, 2400, sweeps)
+
+        assertTrue("sparse should lay fewer marks: $sparse against $dense", sparse < dense)
+        assertEquals("out of range clamps", dense, ImpastoGenerator.markCount(120f, 2f, 1080, 2400, sweeps))
+        assertEquals("out of range clamps", sparse, ImpastoGenerator.markCount(120f, -1f, 1080, 2400, sweeps))
+    }
+
+    /** And neither runs away on a degenerate frame or a fine brush, since every mark costs a stack of layers. */
+    @Test
+    fun `the counts stay within their bounds`() {
+        assertTrue(ImpastoGenerator.sweepCount(1e6f, 2400) >= 3)
+        assertTrue(ImpastoGenerator.markCount(0.01f, 1f, 1080, 2400, 900) <= 900)
+        assertTrue(ImpastoGenerator.markCount(1e6f, 0f, 1080, 2400, 3) >= 8)
     }
 
     /** The sweep has to reach both edges on every pass, or the design paints a band and leaves the sides bare. */
@@ -30,8 +66,8 @@ class ImpastoGeneratorTest {
     fun `the serpentine touches both edges and turns over at each band`() {
         val bands = 20
         for (band in 0 until bands) {
-            val start = ImpastoGenerator.serpentineAt(band.toFloat() / bands, width)
-            val end = ImpastoGenerator.serpentineAt((band + 0.999f) / bands, width)
+            val start = ImpastoGenerator.serpentineAt(band.toFloat() / bands, width, bands)
+            val end = ImpastoGenerator.serpentineAt((band + 0.999f) / bands, width, bands)
             val far = if (band % 2 == 0) width else 0f
             val near = if (band % 2 == 0) 0f else width
 
@@ -45,12 +81,12 @@ class ImpastoGeneratorTest {
     fun `the serpentine stays inside the frame`() {
         var along = 0f
         while (along <= 1f) {
-            val x = ImpastoGenerator.serpentineAt(along, width)
+            val x = ImpastoGenerator.serpentineAt(along, width, 20)
             assertTrue("ran off the frame at $along: $x", x in 0f..width)
             along += 0.005f
         }
-        assertEquals(0f, ImpastoGenerator.serpentineAt(-1f, width), 0f) // clamped
-        assertTrue(ImpastoGenerator.serpentineAt(2f, width) in 0f..width) // clamped
+        assertEquals(0f, ImpastoGenerator.serpentineAt(-1f, width, 20), 0f) // clamped
+        assertTrue(ImpastoGenerator.serpentineAt(2f, width, 20) in 0f..width) // clamped
     }
 
     /**
@@ -87,8 +123,8 @@ class ImpastoGeneratorTest {
     @Test
     fun `a fully rough dab stays within the bound its brush sets`() {
         val radius = 50f
-        // The seed is 0.70 of the radius at full roughness, and five rounds each push by 0.13 of it.
-        val bound = radius * (0.70f + 5f * 0.13f)
+        // The seed is 0.70 of the radius at full roughness, and four rounds each push by 0.13 of it.
+        val bound = radius * (0.70f + 4f * 0.13f)
 
         for (seed in 1L..60L) {
             val points = ImpastoGenerator.dabPoints(0f, 0f, radius, roughness = 1f, random = Random(seed))
