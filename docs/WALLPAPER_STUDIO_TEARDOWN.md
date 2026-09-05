@@ -212,7 +212,7 @@ counts as **not driven**, because what built it was a one-line note rather than 
 it rather than reworking it), `HALFTONE` (split out of Dot Grid by W11e), `GRADIENT_COLUMNS` (split from theirs by W11m
 the same way), and `VORONOI`, which turns out to be neither of the two designs it was named for (W11j), and `TRUCHET`,
 which W11y left alone for the same reason. `RINGS` and `RAYS` were here too and are **dropped** — see finding 11 of
-the pass below. Catalog is **28**.
+the pass below. `IMPASTO` and `SPRAY` join them from the gart harvest that followed it. Catalog is **30**.
 
 They were skipped by every W11 slice for exactly that reason, and have since had a pass of their own — see
 **The ours-only quality pass** below.
@@ -313,6 +313,48 @@ angle** — where `irregularity` can honor both because *rigid* and *shipped* ar
 to give, catalog-wide. Centering each sweep on the shipped direction (so `0.5` draws it, `0` is a quarter turn one
 way) fixes both defaults and every stored recipe at the cost of the contract's `0` clause; leaving it fixes the
 contract at the cost of two designs opening on something they are not called. See **Open questions**.
+
+### The gart harvest — what to build once two designs came out
+
+Dropping the radial pair left the catalog at 28 and the obvious question of what should replace them, so gart's whole
+gallery went under the eye at once: 143 pieces, everything not already harvested, as one contact sheet. Two were
+picked by the author and both are built.
+
+**`IMPASTO`, from `arts/monet`** — ragged translucent dabs laid along a serpentine, building into a painted wash. The
+catalog's first **painterly** design: everything else is a *field* (a value per pixel) or a *shape* (an edge you can
+trace), and this is a heap of marks whose torn edges are the texture. It is the family principle 3 above keeps naming
+and we had nothing of. It was also known-unclaimed: W11x deleted our Soft Overlaps' `arts/monet` citation rather than
+re-pointing it, having found the art was this and not that.
+
+Three things the port could not take from gart, and two of them only showed on the device:
+
+| What | Why |
+|---|---|
+| **gart's arithmetic does not run here.** `deformPath` inserts a displaced midpoint into *every* edge, so a round doubles the point count — ten rounds take an octagon to 8,192 points, and fifty of those at each of two hundred places is ~80M points a frame | Fine on a desktop JVM with Skija, not on a phone. The look does not need it: an edge reads as torn because it is ragged at several scales at once, which is a **fractal** and not a long random walk. Four subdivisions with the push **halving each round** — and that buys something gart cannot have, a mark whose *size* is set rather than wherever the walk wandered, which is what lets *Brush size* mean anything |
+| **A mark's layers must differ in place and size, not only in edge.** gart gets it free: independent random walks land in different places at wildly different extents, so a dab is dense in the middle and feathered at the rim | A bounded fractal does not do that. The first cut stacked every layer on one center at one radius; they covered the same pixels, the alpha saturated, and every mark came out a flat cut-out — the design read as a **paper collage**. Handsome, and not what it is for |
+| **The tone must advance by a sliver per mark, and cycle.** gart indexes a 48-color palette by the mark's number and its `safe` **wraps**, so consecutive marks are near-neighbors on a long ramp that rolls over ~4× along the sweep | That is the whole reason it mixes — two overlapping marks are almost never the same color, so their translucent edges make a third. The first cut read `RampTones`' handful of flat tones, which put every mark in a band on *one* color and left the overlaps nothing to do: the collage again, now in stripes. `toneAt` reads the ramp continuously above the ground and loops it, so five stops give the gradation gart gets from forty-eight |
+
+**`SPRAY`, from `flowforce/spring`** — particles carried through a wave field and left as a mist of dots. The **fifth**
+design on a flow field and the first that draws no line: the other four render a particle's *path*, this renders the
+particle, so what accumulates is a density. Two more things separate it — the field is an **analytic wave**
+(`sin(x) + cos(y)` as an angle, turning through several whole revolutions, where the others read Perlin noise) and the
+color runs **along each trail** rather than across the frame. Its `irregularity` `0` is a flat field: every particle
+one way, the mist in parallel lanes.
+
+Two findings on the device, again after the unit tests were green: **`scale` crosses a threshold in the middle of its
+range rather than at an end** — a dot smaller than the step leaves a stipple, a larger one laps its neighbor and the
+trail closes into a continuous plume, so the KDoc's "nothing is continuous anywhere" was true of half the knob — and
+**the dense end was out of reach** at 600 trails, where gart releases a thousand and keeps replacing them. Dots are
+batched by tone into 24 `drawPoints` calls, since up to 390,000 `drawCircle`s is seconds rather than milliseconds;
+the buckets size exactly rather than grow because step `i` always falls in band `i × bands / steps`.
+
+`VoronoiGenerator.fillCeiling` moved to `RampTones.spanBelowGround` on its second consumer — a dot painted in the
+ground it lies on is the mosaic's cell painted in its own leading.
+
+**Six others were shortlisted and not built**: `sea/unda` (dense hatched ridges — the handsomest thin-line piece in
+the gallery, but its closest neighbor is `RIBBON_FLOW` and its source is unread), `layers/strata`, `fluid/fluid-pack`,
+`shad/earth2`, `pixelmania/rastersin`, and `layers/tabulum`. The gallery sheet is worth rebuilding rather than
+recording here — it is a hundred and forty images and one script over `arts/*/*_thumb.png`.
 
 ---
 
