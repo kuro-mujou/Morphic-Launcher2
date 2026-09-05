@@ -11,15 +11,11 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * The three fields and the ramp between the disc and the ground. The fields fail the way every gart port here has
+ * The three fields and the pigment laid over the disc. The fields fail the way every gart port here has
  * failed — read at the wrong rate they draw a coherent picture that is simply not the reference — so what is pinned
  * is the *cycle count against the frame*, which is the thing the source does not state.
  */
 class PlanetGeneratorTest {
-
-    private val palette = Palette(
-        listOf(0xFFF2E2C4.toInt(), 0xFFE6A15C.toInt(), 0xFF2C6E6B.toInt(), 0xFF121E2B.toInt()),
-    )
 
     /**
      * Twelve vortices as the generator builds them — `x, y, spin` triples, the spin `±1`.
@@ -36,13 +32,34 @@ class PlanetGeneratorTest {
     fun `the knobs map to their ranges`() {
         assertEquals(0.26f * 1080f, PlanetGenerator.discRadius(0f, 1080f), 1e-3f)
         assertEquals(0.46f * 1080f, PlanetGenerator.discRadius(1f, 1080f), 1e-3f)
-        assertEquals(300, PlanetGenerator.particleCount(0f))
-        assertEquals(2500, PlanetGenerator.particleCount(1f))
-        assertEquals(20, PlanetGenerator.trailSteps(0f))
-        assertEquals(160, PlanetGenerator.trailSteps(1f))
+        assertEquals(4, PlanetGenerator.slabCount(0f))
+        assertEquals(28, PlanetGenerator.slabCount(1f))
         // Out of range clamps rather than running off the ends.
-        assertEquals(300, PlanetGenerator.particleCount(-1f))
-        assertEquals(160, PlanetGenerator.trailSteps(2f))
+        assertEquals(4, PlanetGenerator.slabCount(-1f))
+    }
+
+
+    /**
+     * **The stir is a distance in radii, not a step count** — the unit that collapsed this design once. The walk
+     * stops at the rim, so a drag longer than the disc traces nearly every pixel out through the upstream edge and
+     * the whole face takes its color from the slab function along that one arc: two or three enormous flat lobes,
+     * whatever the field or the palette. So what is pinned is the *distance*, at both ends and against two disc
+     * sizes, and that even the top of the knob stays inside a radius.
+     */
+    @Test
+    fun `the stir is a fraction of the disc, not a fixed number of steps`() {
+        for (radius in listOf(200f, 800f)) {
+            val stride = radius * 0.011f // the generator's own step, as a share of a disc this size
+            val shortest = PlanetGenerator.stirSteps(0f, radius, stride) * stride / radius
+            val longest = PlanetGenerator.stirSteps(1f, radius, stride) * stride / radius
+            assertTrue("radius $radius barely stirs at the top: $longest", longest > 0.6f)
+            assertTrue("radius $radius drags past the rim at the top: $longest", longest < 1f)
+            assertTrue("radius $radius already stirs at the bottom: $shortest", shortest < 0.15f)
+        }
+        // And the same fraction whatever the disc, which a step count cannot be.
+        val small = PlanetGenerator.stirSteps(0.5f, 200f, 2f) * 2f / 200f
+        val large = PlanetGenerator.stirSteps(0.5f, 800f, 8f) * 8f / 800f
+        assertEquals("the stir depends on the disc's size", small, large, 0.02f)
     }
 
     /** `0` is a flat field on every look — the rigid end the field's contract asks for, and a picture of its own. */
@@ -154,43 +171,97 @@ class PlanetGeneratorTest {
     }
 
     /**
-     * A mark has to avoid **both** ends of the palette here, where every other design avoids one: the ground it is
-     * drawn over is the last stop and the disc it is drawn on is the first, and a mark in either is a mark that
-     * failed to draw.
+     * A mark has to avoid the **disc's** color, which is the inversion this design makes of the usual rule: every
+     * other design here paints on the ground and must not vanish into it, and this one paints on the disc. The
+     * ground's own color is deliberately *not* excluded — gart's `Orb3` swirls its clear color through the disc, and
+     * on the default two-stop palette holding it back leaves nothing to stir with.
      */
     @Test
-    fun `no mark takes the disc's color or the ground's`() {
+    fun `no mark takes the disc's color`() {
         for (stops in 2..6) {
             val reduced = Palette(List(stops) { 0xFF000000.toInt() or (it * 0x2A2A2A) })
-            var at = 0f
-            while (at <= 1f) {
-                val tone = PlanetGenerator.toneAt(at, reduced)
-                assertNotEquals("a mark took the disc at $stops stops, $at", reduced.colorAt(0), tone)
-                assertNotEquals("a mark took the ground at $stops stops, $at", reduced.colorAt(stops - 1), tone)
-                at += 0.01f
+            val tones = RampTones.aboveGround(reduced)
+            assertTrue("$stops stops leave the disc nothing to be stirred with", tones.size >= 3)
+            for (tone in tones) {
+                assertNotEquals("a mark took the disc at $stops stops", reduced.colorAt(0), tone)
             }
         }
     }
 
-    /** The ramp still travels, or every current is the same tone and the disc reads flat. */
+    /**
+     * **Neighbouring slabs have to be neighbouring *stops*, never neighbouring points on a ramp.** That is the whole
+     * of the design's color, and it is the thing whose absence is a coherent picture rather than a broken one: the
+     * first build sampled a continuous gradient at each particle's birth, so two strands running past each other
+     * differed by a percent of a ramp and the disc drew as one hairy wash. What this pins is that walking down the
+     * disc changes tone a handful of times rather than continuously.
+     */
     @Test
-    fun `the ramp spans what is left between them`() {
-        val start = PlanetGenerator.toneAt(0f, palette)
-        val end = PlanetGenerator.toneAt(1f, palette)
-        val apart = (0..2).sumOf { c -> abs((start shr (c * 8) and 0xFF) - (end shr (c * 8) and 0xFF)) }
-
-        assertTrue("the ramp barely changes color: $apart", apart > 60)
+    fun `the pigment is laid in slabs of one stop`() {
+        for (look in 0..2) {
+            val seen = mutableSetOf<Int>()
+            var changes = 0
+            var previous = -1
+            var v = -1f
+            while (v <= 1f) {
+                val index = PlanetGenerator.toneIndex(0f, v, look, slabs = 6, tones = 5)
+                assertTrue("look $look indexed outside the tones: $index", index in 0..4)
+                if (previous != -1 && index != previous) changes++
+                seen += index
+                previous = index
+                v += 0.002f
+            }
+            assertTrue("look $look paints the disc in one tone", seen.size >= 3)
+            // One change per slab boundary, and nothing near the thousand samples a continuous index would give.
+            assertTrue("look $look reads as a ramp rather than slabs: $changes", changes in 2..15)
+        }
     }
 
-    /** A particle's tone comes off where it was born, and stays on the ramp whatever it is handed. */
+    /** The run turns back on itself at the palette's end rather than wrapping onto its opposite stop. */
     @Test
-    fun `the birth tone runs the diagonal and stays in range`() {
-        assertTrue(PlanetGenerator.bandAt(0.1f, 0.1f) < PlanetGenerator.bandAt(0.8f, 0.8f))
-        for (nx in listOf(-1f, 0f, 0.5f, 1f, 2f)) {
-            for (ny in listOf(-1f, 0f, 0.5f, 1f, 2f)) {
-                assertTrue(PlanetGenerator.bandAt(nx, ny) in 0f..1f)
-            }
+    fun `the slab run mirrors instead of jumping the palette's ends`() {
+        // Four tones over the vortex field's four slabs: 0,1,2,3 walking down, with no 3-to-0 seam anywhere.
+        val walk = (0..3).map { slab ->
+            PlanetGenerator.toneIndex(0f, -1f + (slab + 0.5f) / 4f * 2f, look = 2, slabs = 4, tones = 4)
         }
+        assertEquals(listOf(0, 1, 2, 3), walk)
+        // And with fewer tones than slabs the run comes back down rather than snapping to the other end.
+        val short = (0..5).map { slab ->
+            PlanetGenerator.toneIndex(0f, -1f + (slab + 0.5f) / 6f * 2f, look = 0, slabs = 6, tones = 3)
+        }
+        assertEquals(listOf(0, 1, 2, 2, 1, 0), short)
+    }
+
+
+    /**
+     * **The sphere is the refraction, not the shading.** A lit flat disc is a coin; what makes a poured field read as
+     * round is gart's Snell displacement pulling the pattern inward, hard at the limb and barely at all in the middle.
+     * So what is pinned is the *shape* of that curve — monotone inward, and an order of magnitude more squeeze at the
+     * edge than at the center — plus the flat disc `Orb2` and `Orb3` are, which is what depth `0` has to give back.
+     */
+    @Test
+    fun `the sphere squeezes the limb and leaves the middle alone`() {
+        for (nd in listOf(0f, 0.25f, 0.5f, 0.75f, 1f)) {
+            assertEquals("depth 0 warps at $nd", 1f, PlanetGenerator.refraction(nd, 0f), 1e-5f)
+        }
+
+        val middle = PlanetGenerator.refraction(0f, 1f)
+        val limb = PlanetGenerator.refraction(1f, 1f)
+        assertTrue("the middle is not magnified: $middle", middle in 0.6f..0.95f)
+        assertTrue("the limb is not squeezed: $limb", limb < 0.35f)
+
+        // Monotone inward from the middle to the edge, or the pattern folds over itself somewhere in between.
+        var previous = middle
+        var nd = 0.02f
+        while (nd <= 1f) {
+            val here = PlanetGenerator.refraction(nd, 1f)
+            assertTrue("the warp turns back out at $nd", here <= previous + 1e-4f)
+            previous = here
+            nd += 0.02f
+        }
+
+        // And it scales with the knob rather than switching on, so the middle of the slider is half a sphere.
+        val half = PlanetGenerator.refraction(1f, 0.5f)
+        assertTrue("depth does not scale the warp: $half", half > limb && half < 1f)
     }
 
     /** The three fields have to be three pictures, which a variant chooser cannot check for itself. */

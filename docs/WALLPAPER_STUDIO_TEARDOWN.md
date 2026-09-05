@@ -420,6 +420,72 @@ A note on fixtures, since it cost a run: `FloatArray(36) { Random(4).nextFloat()
 element**, so all twelve vortices landed on one point — a fixture that quietly tests one vortex, which is the exact
 field it was there to check.
 
+**Second pass (2026-09-05) — the design was rebuilt, twice, against the reference renders side by side.** The first
+build shipped a *coherent* picture that was nowhere near `orb1`/`orb2`/`orb3`, and the first attempt to fix it fixed
+the wrong half.
+
+**Attempt one fixed the color and kept the mechanism, and the result still read as cheap.** Four findings landed, and
+three of them are keepers:
+
+| Finding | Detail |
+|---|---|
+| **gart's color is an integer palette index, not a ramp position — and that is most of the picture** | `plt.safe(x * 0.01 + y * 0.01)` is `colors[abs(i) % size]`: a **slab of one stop**, so a boundary between two of them survives being stirred *as a boundary*. The port sampled a continuous 24-tone gradient at the same positions, so neighbouring pigment differed by a percent of a ramp and the disc collapsed into one wash. Now `toneIndex` — slabs across the disc, **ping-ponged** rather than wrapped, which is gart's own `expandReversed()` and keeps the palette's two ends off each other at the seam |
+| **A design that does not fill the frame must read everything from where it *is*** | Two constants were normalized against the frame and both broke on 1080×2400. The color ramp ran the frame's diagonal, so over half the disc clamped at `1` and the palette's whole warm end never appeared. The twelve vortices were scattered over the frame's unit square, so they landed almost entirely *above* a disc occupying a third of its height — leaving it in their far field, where the sum is near uniform, so *Vortices* drew the same combed streaks as *Bands*. Both now sit against the disc's own center and radius |
+| **The pigment must avoid the disc's color, not the ground's — the usual rule inverts here** | Excluding both ends left the *default* bichromatic palette painting in a sliver of ramp between `1/3` and `2/3`: a flat wash, at the setting most people see first. Pigment is poured *onto* the disc, so the disc's stop is the one it must not vanish into and the ground's is free to be pigment — gart's `Orb3` pours its own clear color for exactly that reason. `RampTones.aboveGround`'s stop-`0` exclusion lands on the disc, so the helper is right as it stands |
+| **More strokes and more opacity — the one that was wrong** | It is the lever that looks obvious from the numbers (gart is two hundred marks deep, the port was four) and it does not work. See below |
+
+**Attempt two replaced the mechanism, and that is what the design was actually missing.** Two things, either of which
+alone leaves it looking like a scratchy coin:
+
+- **gart's picture is solid poured color, and a pile of strokes does not approach it from below.** `orb2` lays eight
+  million marks over a half-million-pixel disc — two hundred deep — so every mark is *buried* and what survives is
+  flat opaque color with an organic boundary. Drawing a few hundred thousand translucent strokes instead is a
+  different picture, not a coarser one: the stroke edges and the alpha stacking are the whole visible texture, and no
+  reachable count or opacity removes them before the render takes seconds. The field is now resolved **per pixel,
+  backwards** — for each point, walk the flow upstream until it leaves the disc or runs out of stir, and take the
+  slab it came from. Same picture the forward pool converges to, no gaps, no stroke edges, and the cost stops
+  depending on how thickly it is covered. The flow is precomputed into a table for gart's own reason — `FlowField.of(d)`
+  is evaluated once per pixel before a single particle moves — since the walk is tens of millions of steps and
+  `fieldAngle` costs up to twelve divisions each.
+- **The sphere is the refraction, not the shading.** `drawGlassBall` re-samples through Snell's law before it lights
+  anything, compressing the pattern toward the limb and magnifying the middle — *that* is what makes a flat marbled
+  field read as round, and a lit flat disc without it is a coin. Folded into the coordinate the field is resolved at
+  rather than applied as a second pass, so it costs nothing and has no finished pixels to resample. On
+  `DesignParams.depth`, with gart's Fresnel rim and diffuse highlight, so `0` is `Orb3`'s flat poured disc and `1` is
+  `Orb1`'s ball. Its small hard specular spot is left out — off by default in the source, and it reads as a ball
+  bearing rather than a planet.
+
+Three more, each found only by looking at the render:
+
+| Finding | Detail |
+|---|---|
+| **The stir is a distance in radii; a step count collapses the design** | The walk stops at the rim, so a drag longer than the disc traces nearly every pixel out through the upstream edge — the whole face then takes its color from the slab function along that one arc, and the planet draws two or three enormous flat lobes whatever the field or palette. gart's `Orb3` drags a hundred pixels across an eight-hundred-pixel disc: a quarter of a radius. In radii it is also the same picture at any `discRadius`, where a fixed count stirs a small planet to mush and barely touches a large one |
+| **A walk that stops at the *last point inside* draws a sawtooth** | Ending a whole step early moves the answer by a full step between one pixel and the next, and a step is several pixels of pigment — so every boundary the flow runs off the edge came out serrated, the one artifact here that reads as a bug rather than as weather. `rimCrossing` ends the walk *on* the rim instead |
+| **The rim's shadow has to be darker than the ground, or the planet stops being a shape** | The ground's stop is also pigment, so a region poured in it runs to the rim and merges with the page: the disc reads as having a bite out of it. gart's drop shadow is `Color.BLACK` against a ground that is not black for exactly this reason — the shadow, not the ring, traces the silhouette wherever the ring is invisible. Taken as a *shade* of the ground rather than as black, so a light palette gets a shadow instead of an outline |
+
+**Two things tried and rejected, both by measurement rather than by argument.** A four-times finer integration step,
+on the theory that the marbled field's angular frequency was being under-sampled: the renders were indistinguishable
+and it cost double, so the step stayed at gart's scale. And `MaxSlabs` at `44`: the picture stops gaining past about
+thirty, because the stretched regions wash the extra subdivision out — a knob whose top half does nothing, which is
+the failure `DesignStyle` exists to prevent, so it went back to `28`.
+
+**What is still not gart, and why it is structural.** `Orb2`'s feathering is out of reach of a single backward walk.
+Its pool is refilled every frame, so the finished image superimposes *every particle age at once* — fresh crisp slab
+color stamped over paint that has been stretched two hundred steps — and one drag distance cannot express a
+superposition of two hundred of them. Our *Marbled* is a coarser poured marbling in the `Orb3` family rather than
+`Orb2`'s feathers. *Bands* and *Vortices* are comparable to their references.
+
+The knobs were re-cut around the new mechanism, since particles were what the old ones described: *Detail* is how
+finely the pigment is divided (`density`, which has no other meaning once there is nothing to count), *Stir* how far
+the flow drags it, and *Sphere* the refraction. Cost is 300–800 ms at 1080×2400 on the emulator, flat in the disc's
+size — the field is resolved into a 640-square and stretched, which a solid picture upsamples cleanly because there
+is no grain in it for the filter to smear.
+
+**The method lesson, and it is the whole of this pass.** Every one of these was invisible to the tests and to the
+source read: the generator was tested, documented, and drawing a picture internally consistent at every point.
+Nothing but `orb2.png` open beside the render said so, and the *second* rebuild only happened because a human looked
+at the first. Rendering the reference and the port side by side is the first step of a port, not the last.
+
 Catalog is **31**.
 
 **Six others were shortlisted and not built**: `sea/unda` (dense hatched ridges — the handsomest thin-line piece in
