@@ -212,7 +212,7 @@ counts as **not driven**, because what built it was a one-line note rather than 
 it rather than reworking it), `HALFTONE` (split out of Dot Grid by W11e), `GRADIENT_COLUMNS` (split from theirs by W11m
 the same way), and `VORONOI`, which turns out to be neither of the two designs it was named for (W11j), and `TRUCHET`,
 which W11y left alone for the same reason. `RINGS` and `RAYS` were here too and are **dropped** — see finding 11 of
-the pass below. `IMPASTO` and `SPRAY` join them from the gart harvest that followed it. Catalog is **30**.
+the pass below. `IMPASTO`, `SPRAY` and `PLANET` join them from the gart harvest that followed it. Catalog is **31**.
 
 They were skipped by every W11 slice for exactly that reason, and have since had a pass of their own — see
 **The ours-only quality pass** below.
@@ -395,6 +395,32 @@ than left as a comment.
 
 `VoronoiGenerator.fillCeiling` moved to `RampTones.spanBelowGround` on its second consumer — a dot painted in the
 ground it lies on is the mosaic's cell painted in its own leading.
+
+#### `PLANET`, from `flowforce/Orb1`, `Orb2`, `Orb3`
+
+A disc of stirred pigment on a dark ground, ringed and shadowed. The catalog's **first design that is an object
+rather than a surface** — everything else fills the frame, this draws one thing with air around it, which is
+principle 1 above and the catalog had no design of. Mechanically it is `SPRAY` with a **clip**: the same particles
+leaving the same translucent dots, but confined to a disc they pile against the rim and the currents turn back on
+themselves, which is what reads as weather on a sphere. gart's three orbs are one program with three fields, so they
+are `variant` here rather than three designs — *Bands*, *Marbled*, *Vortices*.
+
+**Simulated in Python before any Kotlin**, per the method above; all three fields were right first time and the whole
+composition was settled in one pass. The one thing the sim did not catch, and the render did:
+
+| Finding | Detail |
+|---|---|
+| **A constant has to be sized against what it is summed with, not converted from what it looks like** | gart's vortex strength is `2000` in a velocity sum with **no drift term**, so its magnitude cancels in the `atan2` and only the field's *shape* survives. Converted as though it were a length it came out fifty times smaller than the uniform drift this port adds for its rigid end — so at the **default** turbulence the drift won and the disc drew straight streaks. A coherent picture, and not this one. Sized against the drift instead, the field turns 1.16 radians across the disc at `0.5` where the old number managed `0.03` |
+
+**That is a fourth shape of the same mistake** and it moves the lesson on: a knob whose *middle* is its own rigid end
+is invisible to a guard that only asks whether its two **ends** differ, which is all `GeneratorKnobTest` does. The
+test written for it asserts every field turns at `0.5`, not merely between `0` and `1`.
+
+A note on fixtures, since it cost a run: `FloatArray(36) { Random(4).nextFloat() }` makes a **new generator per
+element**, so all twelve vortices landed on one point — a fixture that quietly tests one vortex, which is the exact
+field it was there to check.
+
+Catalog is **31**.
 
 **Six others were shortlisted and not built**: `sea/unda` (dense hatched ridges — the handsomest thin-line piece in
 the gallery, but its closest neighbor is `RIBBON_FLOW` and its source is unread), `layers/strata`, `fluid/fluid-pack`,

@@ -358,6 +358,7 @@ private val WallpaperDesign.label: String
         WallpaperDesign.ROUNDED_TILES -> "Bars"
         WallpaperDesign.IMPASTO -> "Impasto"
         WallpaperDesign.SPRAY -> "Spray"
+        WallpaperDesign.PLANET -> "Planet"
     }
 
 /** A short, human name for the color-mode segment — the enum name is a code identifier, not a label. */

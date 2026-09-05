@@ -116,5 +116,6 @@ object Generators {
         WallpaperDesign.ROUNDED_TILES -> RoundedTilesGenerator
         WallpaperDesign.IMPASTO -> ImpastoGenerator
         WallpaperDesign.SPRAY -> SprayGenerator
+        WallpaperDesign.PLANET -> PlanetGenerator
     }
 }

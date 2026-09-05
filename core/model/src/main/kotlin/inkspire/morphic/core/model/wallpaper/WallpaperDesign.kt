@@ -263,4 +263,13 @@ enum class WallpaperDesign {
      */
     @SerialName("spray")
     SPRAY,
+
+    /**
+     * A disc of stirred pigment on a dark ground, ringed and shadowed so it sits in the page — the planet. The
+     * catalog's first design that is an **object** rather than a surface: everything else fills the frame, this draws
+     * one thing with air around it. [SPRAY]'s particles under a clip, which is what turns a mist into weather on a
+     * sphere; [DesignParams.variant] picks which field stirs it.
+     */
+    @SerialName("planet")
+    PLANET,
 }
