@@ -19,9 +19,8 @@ class SprayGeneratorTest {
     /** A tall phone: 1080×2400. Every aspect-sensitive case is measured on one, since a square frame hides the bug. */
     private val phone = 2400f / 1080f
 
-    /** The two looks' field rates, as the generator's own constants. */
-    private val spray = 3000f
-    private val plume = 10f
+    /** The field's rate, as the generator's own constant — what a step has to be judged against. */
+    private val rate = 3000f
 
     /** One step, as a share of the frame's width — what the field's rate has to be judged against. */
     private val step = 0.006f
@@ -49,8 +48,8 @@ class SprayGeneratorTest {
     /** `0` is a flat field — every particle runs the same way, which is the rigid end and a picture of its own. */
     @Test
     fun `no turbulence leaves one direction everywhere`() {
-        val here = SprayGenerator.flowAngle(0.1f, 0.3f, turbulence = 0f, frequency = spray)
-        val there = SprayGenerator.flowAngle(0.9f, 1.8f, turbulence = 0f, frequency = spray)
+        val here = SprayGenerator.flowAngle(0.1f, 0.3f, turbulence = 0f)
+        val there = SprayGenerator.flowAngle(0.9f, 1.8f, turbulence = 0f)
 
         assertEquals(here, there, 0f)
     }
@@ -62,7 +61,7 @@ class SprayGeneratorTest {
         var highest = -Float.MAX_VALUE
         var nx = 0f
         while (nx <= 1f) {
-            val angle = SprayGenerator.flowAngle(nx, nx * phone, turbulence = 1f, frequency = plume)
+            val angle = SprayGenerator.flowAngle(nx, nx * phone, turbulence = 1f)
             lowest = minOf(lowest, angle)
             highest = maxOf(highest, angle)
             nx += 0.001f
@@ -74,63 +73,49 @@ class SprayGeneratorTest {
      * **The finding this design was rebuilt on.** gart's field is `sin(x * 10)` over *pixel* coordinates, so its
      * period is a fraction of one step and consecutive positions read it several periods apart — which is what makes
      * a particle random walk and the picture a mist. Read as though those coordinates were normalized, the same two
-     * numbers describe a field that turns once across the whole frame and the particles trace arcs instead.
-     *
-     * Both are drawable and only one is Spring, so the two rates are pinned against the step they are judged by.
+     * numbers describe a field that turns once across the whole frame and the particles trace arcs instead: a
+     * different design, drawn from the same source, and only one of them is Spring.
      */
     @Test
-    fun `a spray step crosses several of the field's periods and a plume step stays inside one`() {
-        val sprayPeriods = step / (2f * Math.PI.toFloat() / spray)
-        val plumePeriods = step / (2f * Math.PI.toFloat() / plume)
+    fun `a step crosses several of the field's periods`() {
+        val periods = step / (2f * Math.PI.toFloat() / rate)
 
-        assertTrue("a spray step must cross several periods, was $sprayPeriods", sprayPeriods > 2f)
-        assertTrue("a plume step must stay inside one, was $plumePeriods", plumePeriods < 0.05f)
+        assertTrue("a step must cross several periods, was $periods", periods > 2f)
     }
 
-    /** Which is the property that actually matters: on a spray, one step is enough to forget the last direction. */
+    /** Which is the property that actually matters: one step is enough to forget the last direction. */
     @Test
-    fun `a spray step decorrelates the direction and a plume step does not`() {
-        var sprayApart = 0f
-        var plumeApart = 0f
+    fun `a step decorrelates the direction`() {
+        var apart = 0f
         var nx = 0.1f
         while (nx <= 0.9f) {
-            val sprayHere = SprayGenerator.flowAngle(nx, 0.4f, 1f, spray)
-            val sprayNext = SprayGenerator.flowAngle(nx + step, 0.4f, 1f, spray)
-            sprayApart = maxOf(sprayApart, abs(sprayNext - sprayHere))
-
-            val plumeHere = SprayGenerator.flowAngle(nx, 0.4f, 1f, plume)
-            val plumeNext = SprayGenerator.flowAngle(nx + step, 0.4f, 1f, plume)
-            plumeApart = maxOf(plumeApart, abs(plumeNext - plumeHere))
+            val here = SprayGenerator.flowAngle(nx, 0.4f, 1f)
+            val next = SprayGenerator.flowAngle(nx + step, 0.4f, 1f)
+            apart = maxOf(apart, abs(next - here))
             nx += 0.0013f
         }
 
-        assertTrue("a spray step should swing the angle past a right angle, was $sprayApart", sprayApart > 2.5f)
-        assertTrue("a plume step should barely move it, was $plumeApart", plumeApart < 0.5f)
+        assertTrue("a step should swing the angle past a right angle, was $apart", apart > 2.5f)
     }
 
     /**
-     * A particle carried by the spray field has to spread as a **cloud**, not travel as a line — the random walk is
-     * the whole design, and it is what a smooth field cannot produce.
+     * A particle carried by the field has to spread as a **cloud**, not travel as a line — the random walk is the
+     * whole design, and it is what a smooth field cannot produce.
      */
     @Test
-    fun `a spray particle walks and a plume particle travels`() {
-        fun reach(frequency: Float): Float {
-            var x = 0.5f
-            var y = 0.5f
-            repeat(400) {
-                val angle = SprayGenerator.flowAngle(x, y, 1f, frequency)
-                x += cos(angle) * step
-                y += sin(angle) * step
-            }
-            return abs(x - 0.5f) + abs(y - 0.5f)
+    fun `a particle walks rather than travels`() {
+        var x = 0.5f
+        var y = 0.5f
+        repeat(400) {
+            val angle = SprayGenerator.flowAngle(x, y, 1f)
+            x += cos(angle) * step
+            y += sin(angle) * step
         }
 
-        val walked = reach(spray)
-        val travelled = reach(plume)
+        val walked = abs(x - 0.5f) + abs(y - 0.5f)
         val straight = 400 * step
 
         assertTrue("a walk should stay near where it started, went $walked of $straight", walked < straight / 4f)
-        assertTrue("an arc should get somewhere, went $travelled", travelled > straight / 4f)
     }
 
     /** A dot must never be painted in the ground it lies on, at any palette length. */

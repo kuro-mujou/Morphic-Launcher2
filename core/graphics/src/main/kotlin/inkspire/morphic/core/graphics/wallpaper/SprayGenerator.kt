@@ -24,22 +24,19 @@ import kotlin.random.Random
  * slightly wider than its own step, so the marks of a *Plume* just touch and close into a line while the marks of a
  * *Spray*, going a different way each time, stay legible as grain however much they overlap.
  *
- * **The field is `sin(x) + cos(y)` read as an angle, and the only thing that decides what the design looks like is
- * how fast it turns compared to how far a particle steps.** That is [DesignParams.variant], and it is a difference of
- * one number:
+ * **The field is `sin(x) + cos(y)` read as an angle, and what makes it a mist is how fast it turns compared to how
+ * far a particle steps.** [WaveFrequency]'s period is a *fraction of a step*, so two consecutive positions read the
+ * field several periods apart, the angle a particle gets is uncorrelated with the last one, and it **random walks**:
+ * a trail is not a curve at all but a compact cloud spreading as the square root of its length. A thousand of those
+ * overlapping is the granular mist.
  *
- * - **Spray** reads the field at [SprayFrequency], whose period is a *fraction of a step*. Two consecutive positions
- *   are then several periods apart, so the angle a particle gets is uncorrelated with the last one and it **random
- *   walks**: a trail is not a curve at all but a compact cloud that spreads as the square root of its length. A
- *   thousand of those overlapping is the granular mist gart draws, and it is the default.
- * - **Plume** reads it at [PlumeFrequency], slow enough that neighbouring steps agree, so the same particles trace
- *   long smooth arcs that fold back on themselves and the frame fills with feathered plumes.
- *
- * **The first build of this design had only the second, by mistake, and the mistake is worth recording.** gart builds
- * its field with `FlowField.of(d) { x, y -> … }`, which hands the function **pixel** coordinates — so `sin(x * 10)`
- * has a period of `0.63` of a pixel against a step of seven. Read as though the coordinates were normalized, the same
- * two numbers describe a field that turns once or twice across the whole frame. Both draw something; only one of them
- * is Spring, and nothing in the source says which reading is meant except the picture.
+ * **The first build of this design got that one number wrong, and the mistake is worth recording.** gart builds its
+ * field with `FlowField.of(d) { x, y -> … }`, which hands the function **pixel** coordinates — so `sin(x * 10)` has a
+ * period of `0.63` of a pixel against a step of seven. Read as though the coordinates were normalized, the same two
+ * numbers describe a field that turns once or twice across the whole frame, whose particles trace long smooth arcs
+ * and fill the frame with feathered plumes. Both draw something; only one of them is Spring, and nothing in the
+ * source says which reading is meant except the picture. The plume was kept for a while as a second look and is gone
+ * by the author's call — this design is the mist.
  *
  * **[DesignParams.irregularity] is how far the field turns**, gart's own two amplitudes. `0` is the rigid end the
  * field's contract asks for — no turn at all, so every particle runs one way and the mist falls into parallel dotted
@@ -80,7 +77,6 @@ object SprayGenerator : Generator {
         scale = "Dot size",
         irregularity = "Turbulence",
         roundness = "Trail length",
-        variant = VariantKnob("Look", listOf("Spray", "Plume")),
     )
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
@@ -94,7 +90,6 @@ object SprayGenerator : Generator {
         val shortSide = min(width, height)
         val dot = shortSide * (MinDot + (MaxDot - MinDot) * params.scale.coerceIn(0f, 1f))
         val turbulence = params.irregularity.coerceIn(0f, 1f)
-        val frequency = if (params.variant.coerceIn(0, 1) == LookPlume) PlumeFrequency else SprayFrequency
         val stride = shortSide * StepShare
         // The field is read in width-shares on both axes, so its arcs are the same shape across the frame as down it.
         val perWidth = 1f / width
@@ -124,7 +119,7 @@ object SprayGenerator : Generator {
                 buckets[band][at + 1] = y
                 counts[band]++
 
-                val angle = flowAngle(x * perWidth, y * perWidth, turbulence, frequency)
+                val angle = flowAngle(x * perWidth, y * perWidth, turbulence)
                 x += cos(angle) * stride
                 y += sin(angle) * stride
             }
@@ -173,8 +168,8 @@ object SprayGenerator : Generator {
      * turns the angle through several whole revolutions across the frame, which is what folds the trails into arcs
      * that come back on themselves rather than merely bending them.
      */
-    internal fun flowAngle(nx: Float, ny: Float, turbulence: Float, frequency: Float): Float =
-        turbulence * WaveAmplitude * (sin(nx * frequency) + cos(ny * frequency))
+    internal fun flowAngle(nx: Float, ny: Float, turbulence: Float): Float =
+        turbulence * WaveAmplitude * (sin(nx * WaveFrequency) + cos(ny * WaveFrequency))
 
     /**
      * Where on the ramp a dot sits: mostly the height its trail started [from], partly how far [along] the trail it
@@ -228,22 +223,17 @@ object SprayGenerator : Generator {
     private const val DotAlpha = 52
 
     /**
-     * How fast the field turns, for each look — the one number that separates a mist from a plume.
+     * How fast the field turns — the one number that makes this a mist rather than a set of arcs.
      *
-     * [SprayFrequency] puts the field's period at a fraction of one [StepShare], so consecutive steps read it several
-     * periods apart and the particle random walks. That is gart's own regime expressed in a **frame-relative** unit
-     * rather than its pixel one: reading `sin(x * 10)` off pixel coordinates ties the grain to the render's
-     * resolution, where this keeps the same picture at any size. [PlumeFrequency] is slow enough that a step barely
-     * moves the angle, so the walk straightens into an arc.
+     * Its period is a fraction of one [StepShare], so consecutive steps read the field several periods apart and the
+     * particle random walks. That is gart's own regime expressed in a **frame-relative** unit rather than its pixel
+     * one: reading `sin(x * 10)` off pixel coordinates ties the grain to the render's resolution, where this keeps
+     * the same picture at any size.
      */
-    private const val SprayFrequency = 3000f
-    private const val PlumeFrequency = 10f
+    private const val WaveFrequency = 3000f
 
-    /** How far the field turns at full *Turbulence*, per axis — gart's own, and more than a whole revolution over the two. */
+    /** How far the field turns at full *Turbulence*, per axis — gart's own, and over a whole revolution across the two. */
     private const val WaveAmplitude = 4f
-
-    /** [DesignParams.variant] selecting the smooth field, whose particles trace arcs instead of walking. */
-    private const val LookPlume = 1
 
     /** How much of a dot's tone is the height its trail started at rather than its distance along it — see [bandAt]. */
     private const val DriftShare = 0.7f
