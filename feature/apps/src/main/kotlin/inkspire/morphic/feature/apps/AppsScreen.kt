@@ -5,8 +5,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.text.input.clearText
@@ -20,7 +23,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
@@ -183,7 +188,17 @@ fun AppsScreen(
     }
     // A query is about *this* visit to the surface. Left behind, it would make the next open show a filtered surface
     // with the field emptied by nothing the user did — and the field is not always on screen to explain itself.
-    LaunchedEffect(presented) { if (!presented) searchState.clearText() }
+    //
+    // **The focus goes with it, and that is what takes the keyboard down.** Clearing the text alone leaves the field
+    // focused, so a surface panned away — or the home button pressed mid-search — leaves a keyboard standing over
+    // whatever replaced it, with nothing on screen it belongs to.
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(presented) {
+        if (!presented) {
+            searchState.clearText()
+            focusManager.clearFocus()
+        }
+    }
 
     val placement = state.searchOn(layout)
     val search = searchChrome(placement)
@@ -234,7 +249,12 @@ fun AppsScreen(
             // The field itself, wherever it goes: pinned to an edge here, or handed to the category pager to sit
             // beside its tabs. One call site either way, so the two placements cannot drift into two fields.
             val field: @Composable () -> Unit = {
-                AppsSearchField(state = searchState, modifier = Modifier.windowInsetsPadding(search.fieldInsets))
+                AppsSearchField(
+                    state = searchState,
+                    modifier = Modifier
+                        .offset { IntOffset(0, -(search.keyboardLift?.getBottom(this) ?: 0)) }
+                        .windowInsetsPadding(search.fieldInsets),
+                )
             }
 
             Column(Modifier.fillMaxSize()) {
@@ -280,21 +300,32 @@ fun AppsScreen(
  * @property consumed the same fact for every other layout, which pads *itself* with `windowInsetsPadding` and so
  *   respects consumption. Written out rather than derived from [contentSides] because "no sides at all" is not a
  *   `WindowInsetsSides` value.
+ * @property keyboardLift how far a field on the bottom edge must translate to clear the keyboard, or null for a field
+ *   the keyboard cannot reach. **A translation and not padding, which is the whole point**: this surface must not be
+ *   resized by an IME. Four of the five layouts divide a fixed `rows × cols` out of the height they are given, so
+ *   height taken for a keyboard comes out of the cells — the arrangement cramps and its icons shrink, where being
+ *   covered by the keys costs nothing (the user is about to type, and typing replaces the arrangement with results).
+ *   `exclude` is what makes it an *overlap* rather than the keyboard's height: the field already reserves the bottom
+ *   bar, and the keys start where that reservation ends.
  */
 private class SearchChrome(
     val pinnedEdge: VerticalEdge?,
     val fieldInsets: WindowInsets,
     val contentSides: WindowInsetsSides,
     val consumed: WindowInsets,
+    val keyboardLift: WindowInsets?,
 )
 
 /** Resolves [placement] into the inset bookkeeping a field on an edge forces on everything below it. */
 @Composable
 private fun searchChrome(placement: SearchPlacement): SearchChrome {
     val edge = (placement as? SearchPlacement.Pinned)?.edge
+    // Read once and shared by the three fields below — both because it is a fresh `union` on every read, and because
+    // hoisting it keeps the composable read out of the branches that would otherwise call it conditionally.
+    val bars = uiInsets
     return SearchChrome(
         pinnedEdge = edge,
-        fieldInsets = uiInsets.only(
+        fieldInsets = bars.only(
             when (edge) {
                 VerticalEdge.TOP -> WindowInsetsSides.Horizontal + WindowInsetsSides.Top
                 VerticalEdge.BOTTOM -> WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
@@ -307,9 +338,14 @@ private fun searchChrome(placement: SearchPlacement): SearchChrome {
             null -> WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical
         },
         consumed = when (edge) {
-            VerticalEdge.TOP -> uiInsets.only(WindowInsetsSides.Top)
-            VerticalEdge.BOTTOM -> uiInsets.only(WindowInsetsSides.Bottom)
+            VerticalEdge.TOP -> bars.only(WindowInsetsSides.Top)
+            VerticalEdge.BOTTOM -> bars.only(WindowInsetsSides.Bottom)
             null -> WindowInsets(0)
+        },
+        keyboardLift = if (edge == VerticalEdge.BOTTOM) {
+            WindowInsets.ime.exclude(bars.only(WindowInsetsSides.Bottom))
+        } else {
+            null
         },
     )
 }

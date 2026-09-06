@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -87,6 +88,10 @@ internal fun GestureActionScreen(
         modifier = modifier
             .fillMaxSize()
             .background(colors.background)
+            // A search field over a scrolling list of actions: this screen *should* give up height to the keyboard,
+            // and has to say so itself — the window is edge-to-edge under `adjustResize`, so the IME arrives as an
+            // inset that only the surface reading it answers.
+            .imePadding()
             .uiInsetsPadding(),
     ) {
         Text(

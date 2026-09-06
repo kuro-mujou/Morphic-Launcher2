@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -72,6 +73,11 @@ fun AppMultiPicker(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                // The picker's own search field raises a keyboard, and this is a bounded list between a title and a
+                // button row — so it gives up height to the keys rather than being covered by them, which would put
+                // Add underneath. Said here because the window is edge-to-edge under `adjustResize`: the IME is an
+                // inset, and only the surface that reads it moves.
+                .imePadding()
                 .uiInsetsPadding()
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),

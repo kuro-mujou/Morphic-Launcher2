@@ -39,9 +39,23 @@
           on the filter, so a plain MAIN/LAUNCHER query already matches this filter's superset. `LAUNCHER` stays here
           so the launcher is reachable from its own app list like any other app.
 
-          Deliberately **no `android:windowSoftInputMode`**: nothing on a launcher surface takes text yet (search is
-          unbuilt), and the same reasoning keeps the IME out of `uiInsets`. It belongs here the day a surface asks
-          for a keyboard, not before.
+          **`windowSoftInputMode="adjustResize"`, and the point of it is that it stops the system panning.** The
+          attribute was absent while nothing on a launcher surface took text; the APPS search field asks for a
+          keyboard now, and an absent attribute means `adjustUnspecified`, which the system resolved to *pan* — it
+          slid the whole window up by the keyboard's height, taking the top row of icons off the screen and the
+          status bar with it. It also broke the frost, and not visibly-as-a-consequence: `wallpaperBackdrop` samples
+          the wallpaper by **screen** position, so a window panned up by 500px asks for a crop 500px above the
+          picture, and `drawBlurredCrop` clamps to the bitmap and leaves that band of the film empty — a hole
+          through to the sharp wallpaper across the top half of the surface.
+
+          `adjustResize` on an edge-to-edge window (API 30+, which `enableEdgeToEdge` puts us on) resizes nothing
+          either: it makes the IME arrive as `WindowInsets.ime`, for **each surface** to answer. Deliberately not
+          answered once around the whole nav host, which is the obvious thing and is wrong here: "does the keyboard
+          resize me?" is a real per-surface question, and a launcher grid's answer is no. A page of the APPS pager
+          is `rows × cols` divided out of its box, so shrinking the box shrinks the cells and the icons in them —
+          the arrangement cramps rather than being covered. A sheet, a picker or the icon studio wants the opposite.
+          The IME still stays out of `uiInsets`, which is a different question: that is what a surface reserves
+          *permanently*.
         -->
         <activity
             android:name=".MainActivity"
@@ -49,7 +63,8 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:resumeWhilePausing="true"
-            android:stateNotNeeded="true">
+            android:stateNotNeeded="true"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />

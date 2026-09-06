@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -83,6 +84,14 @@ internal fun LauncherBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // **A sheet is the one launcher surface a keyboard should resize**, and the widget picker's search
+                // field is why it needs saying: the window declares `adjustResize` but is edge-to-edge, so the IME
+                // arrives as an inset and nothing moves until something answers it. A sheet is a bounded panel of
+                // rows, so giving up height to the keys is exactly right — where the surfaces behind it are grids
+                // whose cells are divided out of their height, and would cramp instead. First in the chain, so the
+                // height fraction below is a fraction of what the keyboard leaves and the panel itself rides above the
+                // keys — applied lower down it would pad the content of a panel still drawn behind them.
+                .imePadding()
                 // **Null wraps to the content**, for a sheet whose rows are countable. A fraction is right for the
                 // pickers, which are lists of unknown length and want a predictable window — but imposed on a short
                 // sheet it is a fixed box that silently clips whatever does not fit, and does so only at the font
