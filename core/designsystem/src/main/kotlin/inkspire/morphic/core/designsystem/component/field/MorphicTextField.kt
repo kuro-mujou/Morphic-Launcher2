@@ -24,7 +24,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,6 +37,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import kotlinx.coroutines.flow.drop
 
 /**
  * Text input for our controlled surfaces (Settings), on the monochrome [MorphicColors].
@@ -74,10 +77,20 @@ fun MorphicTextField(
     var focused by remember { mutableStateOf(false) }
 
     // Drop focus when the keyboard is dismissed (back / swipe / system hide) so the field isn't left focused.
+    //
+    // **`drop(1)` because only a *transition* is a dismissal.** Keyed on the value instead, the effect runs once at
+    // first composition with the keyboard down — which is not "the user dismissed it" but "it was never up" — and
+    // any field that takes focus as it appears is defocused in the same frame it asks, with no keyboard to show for
+    // it. The value-keyed form was harmless only while nothing auto-focused; the APPS search does. Same idiom the
+    // sliders in this package use to ignore their own initial emission.
+    // Through `rememberUpdatedState` because `isImeVisible` is a composable read: captured as a plain `Boolean`, the
+    // flow below would republish the value this field was born with and nothing else.
     val focusManager = LocalFocusManager.current
-    val imeVisible = WindowInsets.isImeVisible
-    LaunchedEffect(imeVisible) {
-        if (!imeVisible && focused) focusManager.clearFocus()
+    val imeVisible = rememberUpdatedState(WindowInsets.isImeVisible)
+    LaunchedEffect(Unit) {
+        snapshotFlow { imeVisible.value }
+            .drop(1)
+            .collect { visible -> if (!visible && focused) focusManager.clearFocus() }
     }
 
     val ring = when {

@@ -5,11 +5,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -80,6 +86,11 @@ import inkspire.morphic.feature.apps.AppsCategory
  *   edges for the surface swipe. Published up rather than reported from here for the reason the geometry is: only
  *   the surface knows which page is current, and asking it in composition would subscribe this whole layout to the
  *   pager's animated position — so the surface reads it later, from a pointer callback.
+ * @param onSearch opens the surface's search, from a button beside the title. **Null draws no button**, which is
+ *   what `SearchPlacement.Hidden` means here — a verb with nothing behind it does not appear. A callback rather
+ *   than the field itself, and that is the whole shape of this placement: the field belongs to `AppsScreen`, which
+ *   swaps this arrangement out for the results the moment there is a query, so a field drawn here would be disposed
+ *   by the first keystroke.
  */
 @Composable
 internal fun CategoryPage(
@@ -97,6 +108,7 @@ internal fun CategoryPage(
     onRelease: () -> Unit,
     onGeometry: (GridGeometry) -> Unit,
     onScrollState: (ScrollState) -> Unit,
+    onSearch: (() -> Unit)?,
 ) = BoxWithConstraints(Modifier.fillMaxSize()) {
     val colors = LocalMorphicColors.current
     // **The stored column count, clamped to what this page's width can draw at this icon size** — and everything below
@@ -186,14 +198,30 @@ internal fun CategoryPage(
         Modifier.fillMaxSize(),
         verticalArrangement = if (alignBottom) Arrangement.Bottom else Arrangement.Top,
     ) {
-        Text(
-            text = category.category.name,
-            style = MaterialTheme.typography.titleMedium,
-            color = colors.content,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp / 2),
-        )
+        // The page's own header: its name, and the actions that belong to the page being looked at rather than to the
+        // strip. The vertical padding is halved against the horizontal so the title sits closer to its grid than to
+        // the page above it — and the button's own touch padding is why the row is not padded vertically at all when
+        // it carries one.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = if (onSearch == null) 8.dp else 0.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = category.category.name,
+                style = MaterialTheme.typography.titleMedium,
+                color = colors.content,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (onSearch != null) {
+                IconButton(onClick = onSearch) {
+                    Icon(Icons.Filled.Search, contentDescription = "Search apps", tint = colors.content)
+                }
+            }
+        }
         // The scroll host: the grid inside reports its *content* height, which grows past this box and scrolls. Its
         // own `remember` sits inside the pager's per-page `key`, so each category keeps its own scroll position.
         // Scrolling is disabled during a drag — otherwise the scroll and the drag fight over the same vertical

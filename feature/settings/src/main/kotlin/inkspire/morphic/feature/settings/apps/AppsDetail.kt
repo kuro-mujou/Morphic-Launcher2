@@ -508,8 +508,9 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
  * The search placements this [AppsLayout] can offer, as label → value.
  *
  * **Layout-dependent, which is `SearchPlacement`'s whole shape.** A standalone layout pins the field to an edge; the
- * category pager embeds it in the header beside the tabs, so it has no edge to choose. Offering all three everywhere
- * would let a user pick a state their layout cannot draw, which is what a flat placement enum allows.
+ * category pager puts a *button* in each page's header, which opens a field over the whole surface — so it has no
+ * edge to choose. Offering all three everywhere would let a user pick a state their layout cannot draw, which is
+ * what a flat placement enum allows.
  */
 private fun searchOptionsFor(layout: AppsLayout): List<Pair<String, SearchPlacement>> =
     if (layout == AppsLayout.PAGER_WITH_CATEGORY) {

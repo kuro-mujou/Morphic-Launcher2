@@ -1,16 +1,27 @@
 package inkspire.morphic.feature.apps
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.component.field.MorphicTextField
+import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 
 /**
  * The APPS surface's search field, wherever `SearchPlacement` puts it.
@@ -27,17 +38,54 @@ import inkspire.morphic.core.designsystem.component.field.MorphicTextField
  *
  * The IME's action key clears focus, which takes the keyboard down: results update on every keystroke, so there is
  * nothing for "Search" to submit, and a key that did nothing would be the disabled-control smell one layer down.
+ *
+ * @param onClose non-null for a field the user **opened**, which is the category pager's — the one placement that is
+ *   a mode rather than a fixture. It buys two things that are really one fact: a close button, since a mode needs a
+ *   way out, and focus on first composition, since a field you asked for is one you meant to type in. A pinned field
+ *   gets neither — it has nothing to close back to, and grabbing focus would raise the keyboard every time the
+ *   surface is opened.
  */
 @Composable
-internal fun AppsSearchField(state: TextFieldState, modifier: Modifier = Modifier) {
+internal fun AppsSearchField(
+    state: TextFieldState,
+    modifier: Modifier = Modifier,
+    onClose: (() -> Unit)? = null,
+) {
     val focusManager = LocalFocusManager.current
-    Box(modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+    val keyboard = LocalSoftwareKeyboardController.current
+    val colors = LocalMorphicColors.current
+    val focusRequester = remember { FocusRequester() }
+    if (onClose != null) {
+        // **Focus and the keyboard, as the field appears** — pressing a search button is the request, so nothing
+        // else should have to be tapped. Safe unkeyed and unguarded: this composes only while the search is open, so
+        // the effect runs once per opening, and a `LaunchedEffect` body runs after the node it targets is attached.
+        //
+        // `show()` as well as the focus, because focusing normally raises the keyboard and "normally" is not a
+        // promise: the system suppresses the automatic raise in cases nothing here can see. Redundant in the common
+        // path and a no-op when there is no input session yet, which is the cheap half of the trade.
+        LaunchedEffect(Unit) {
+            focusRequester.requestFocus()
+            keyboard?.show()
+        }
+    }
+    Row(
+        modifier = modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
         MorphicTextField(
             state = state,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .weight(1f)
+                .focusRequester(focusRequester),
             placeholder = "Search apps",
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             onKeyboardAction = { focusManager.clearFocus() },
         )
+        if (onClose != null) {
+            IconButton(onClick = onClose) {
+                Icon(Icons.Filled.Close, contentDescription = "Close search", tint = colors.content)
+            }
+        }
     }
 }

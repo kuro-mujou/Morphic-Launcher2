@@ -1,5 +1,6 @@
 package inkspire.morphic.feature.apps
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -12,17 +13,22 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -179,29 +185,16 @@ fun AppsScreen(
     // it), and to take its content color from the *film* rather than from the wallpaper the film is made of. `OnFilm`
     // is both. Declared once at the root rather than per layout, for the surface menu's reason — five arrangements,
     // and a new one must not be able to forget.
-    // **The field's text is owned here**, which is `MorphicTextField`'s one deliberate exception to hiding state: what
-    // it survives a configuration change for is that the caller holds it. The query is reported to the ViewModel,
-    // which does the matching off the main thread.
-    val searchState = rememberTextFieldState()
-    LaunchedEffect(searchState) {
-        snapshotFlow { searchState.text.toString() }.collect(viewModel::setQuery)
-    }
-    // A query is about *this* visit to the surface. Left behind, it would make the next open show a filtered surface
-    // with the field emptied by nothing the user did — and the field is not always on screen to explain itself.
-    //
-    // **The focus goes with it, and that is what takes the keyboard down.** Clearing the text alone leaves the field
-    // focused, so a surface panned away — or the home button pressed mid-search — leaves a keyboard standing over
-    // whatever replaced it, with nothing on screen it belongs to.
-    val focusManager = LocalFocusManager.current
-    LaunchedEffect(presented) {
-        if (!presented) {
-            searchState.clearText()
-            focusManager.clearFocus()
-        }
-    }
-
+    val query = rememberAppsSearch(viewModel, presented)
     val placement = state.searchOn(layout)
-    val search = searchChrome(placement)
+    val search = searchChrome(placement, query.opened)
+    // **The category pager's search is a mode, and the other four placements are fixtures.** A mode is opened from a
+    // button on the page header, closed from the field, and shows results from the moment it opens; a fixture keeps
+    // its field on screen always, so for it "show results" is exactly "is there a query".
+    val asMode = placement is SearchPlacement.InHeader
+    val showResults = search.edge != null && (asMode || state.searching)
+    // Back closes the search before it closes the surface, which is the order the user pressed them in.
+    BackHandler(enabled = asMode && query.opened) { query.close() }
 
     OnFilm {
         Box(
@@ -220,45 +213,20 @@ fun AppsScreen(
                     )
                 },
         ) {
-            // The results view a query replaces the arrangement with: this surface's **derived** shape, filtered.
-            // A list layout narrows its rows; the four that arrange something show the A–Z grid instead of their
-            // arrangement, because a filtered arrangement is neither — L1 narrowed its pages in place and left the
-            // matches scattered across pages the user then had to swipe through to find them.
-            val results: @Composable () -> Unit = {
-                when {
-                    state.results.isEmpty() -> NoMatches()
-                    layout == AppsLayout.VERTICAL_LIST -> AppsVerticalList(
-                        apps = state.results,
-                        onLaunch = viewModel::launch,
-                        metrics = state.metricsFor(GridSlot.APPS_LIST),
-                        rowHeight = state.rowHeight,
-                        horizontalPadding = state.paddingFor(GridSlot.APPS_LIST).dp,
-                        insetSides = search.contentSides,
-                    )
-
-                    else -> AppsVerticalGrid(
-                        apps = state.results,
-                        onLaunch = viewModel::launch,
-                        metrics = state.metricsFor(GridSlot.APPS_SCROLL),
-                        cols = state.colsFor(GridSlot.APPS_SCROLL, device),
-                        horizontalPadding = state.paddingFor(GridSlot.APPS_SCROLL).dp,
-                        insetSides = search.contentSides,
-                    )
-                }
-            }
-            // The field itself, wherever it goes: pinned to an edge here, or handed to the category pager to sit
-            // beside its tabs. One call site either way, so the two placements cannot drift into two fields.
+            // The field itself, on whichever edge [SearchChrome.edge] resolved — one call site for every placement,
+            // so they cannot drift into two fields. Closable only where it is a mode; see [AppsSearchField].
             val field: @Composable () -> Unit = {
                 AppsSearchField(
-                    state = searchState,
+                    state = query.text,
                     modifier = Modifier
                         .offset { IntOffset(0, -(search.keyboardLift?.getBottom(this) ?: 0)) }
                         .windowInsetsPadding(search.fieldInsets),
+                    onClose = query::close.takeIf { asMode },
                 )
             }
 
             Column(Modifier.fillMaxSize()) {
-                if (search.pinnedEdge == VerticalEdge.TOP) field()
+                if (search.edge == VerticalEdge.TOP) field()
                 Box(
                     Modifier
                         .fillMaxWidth()
@@ -268,8 +236,11 @@ fun AppsScreen(
                         // layouts are told the same thing through `insetSides` instead.
                         .consumeWindowInsets(search.consumed),
                 ) {
-                    if (state.searching) {
-                        results()
+                    // A mode shows results before a single letter is typed, which is what an empty query already
+                    // resolves to (`AppsState.results` is the whole list while it is blank) and what Smart Launcher
+                    // shows there too.
+                    if (showResults) {
+                        AppsResults(layout, state, viewModel, device, search.contentSides)
                     } else {
                         AppsArrangement(
                             layout = layout,
@@ -278,20 +249,82 @@ fun AppsScreen(
                             device = device,
                             geometry = AppsGeometry(card, pagerFit, pagerPadding, search.contentSides),
                             additions = additions,
-                            searchHeader = field.takeIf { placement is SearchPlacement.InHeader },
+                            onSearch = query::open.takeIf { asMode },
                         )
                     }
                 }
-                if (search.pinnedEdge == VerticalEdge.BOTTOM) field()
+                if (search.edge == VerticalEdge.BOTTOM) field()
             }
         }
     }
 }
 
 /**
- * Everything a pinned search field decides about insets, resolved once.
+ * What the user is searching for, and whether they have asked to search at all.
  *
- * @property pinnedEdge the edge the field took, or null when it is in the tab header or absent.
+ * **The text is owned out here**, which is `MorphicTextField`'s one deliberate exception to hiding state: what it
+ * survives a configuration change for is that the caller holds it. The matching itself happens off the main thread,
+ * in the ViewModel.
+ *
+ * @property opened whether the field has been *opened*. Only the category pager's placement can be closed, so this
+ *   is only ever false there — a pinned field is on screen whatever this says, and `searchChrome` is where the two
+ *   meet.
+ */
+@Stable
+private class AppsSearch(val text: TextFieldState, private val focus: FocusManager) {
+
+    var opened by mutableStateOf(false)
+        private set
+
+    fun open() {
+        opened = true
+    }
+
+    /**
+     * Leaves the search: the mode, the query and the keyboard together.
+     *
+     * All three, because a half-closed search is what each of them alone leaves behind — a filtered surface with no
+     * field to clear it, or a keyboard standing over a page that has no text on it. Also the one exit the surface
+     * itself takes when it stops being presented, which is why it is a method rather than three lines at a button.
+     */
+    fun close() {
+        opened = false
+        text.clearText()
+        focus.clearFocus()
+    }
+}
+
+/**
+ * [AppsSearch] for this surface, reporting the query to [viewModel] and closing itself when the surface leaves.
+ *
+ * A query is about *this* visit to the surface. Left behind, it would make the next open show a filtered surface with
+ * the field emptied by nothing the user did — and the field is not always on screen to explain itself.
+ *
+ * @param presented whether this surface is the one in front. False is "the user has gone somewhere else", which is
+ *   the moment a query stops meaning anything.
+ */
+@Composable
+private fun rememberAppsSearch(viewModel: AppsViewModel, presented: Boolean): AppsSearch {
+    val text = rememberTextFieldState()
+    val focus = LocalFocusManager.current
+    val search = remember(text, focus) { AppsSearch(text, focus) }
+    LaunchedEffect(text) {
+        snapshotFlow { text.text.toString() }.collect(viewModel::setQuery)
+    }
+    LaunchedEffect(presented) { if (!presented) search.close() }
+    return search
+}
+
+/**
+ * Everything the search field decides about insets, resolved once.
+ *
+ * @property edge the edge the field sits on, or null when there is no field on screen — which for `InHeader` is
+ *   most of the time, that being a mode rather than a fixture. **An opened one goes to the *top*, and does not
+ *   follow the tabs it was named after**: the tab strip can be on the bottom, and a field there would sit under the
+ *   keyboard filtering results the keyboard covers. Smart Launcher puts it at the top from a bottom strip for the
+ *   same reason. Either way it is drawn *here* and never by the category pager, because the arrangement is precisely
+ *   what a query replaces — a field inside it would be disposed by the first keystroke, dropping its focus and
+ *   shutting the keyboard mid-word.
  * @property fieldInsets what the field pads itself by: its edge's bar inset, plus the horizontal one in every case,
  *   since a landscape cutout crosses a field on any edge.
  * @property contentSides which bars the **scrolling** layouts still owe their content — everything but the edge the
@@ -309,22 +342,31 @@ fun AppsScreen(
  *   bar, and the keys start where that reservation ends.
  */
 private class SearchChrome(
-    val pinnedEdge: VerticalEdge?,
+    val edge: VerticalEdge?,
     val fieldInsets: WindowInsets,
     val contentSides: WindowInsetsSides,
     val consumed: WindowInsets,
     val keyboardLift: WindowInsets?,
 )
 
-/** Resolves [placement] into the inset bookkeeping a field on an edge forces on everything below it. */
+/**
+ * Resolves [placement] into the inset bookkeeping a field on an edge forces on everything below it.
+ *
+ * @param opened whether the user has opened a search, which decides whether the *mode* placement has a field on
+ *   screen at all. A pinned field ignores it, being there either way.
+ */
 @Composable
-private fun searchChrome(placement: SearchPlacement): SearchChrome {
-    val edge = (placement as? SearchPlacement.Pinned)?.edge
+private fun searchChrome(placement: SearchPlacement, opened: Boolean): SearchChrome {
+    val edge = when (placement) {
+        is SearchPlacement.Pinned -> placement.edge
+        SearchPlacement.InHeader -> VerticalEdge.TOP.takeIf { opened }
+        SearchPlacement.Hidden -> null
+    }
     // Read once and shared by the three fields below — both because it is a fresh `union` on every read, and because
     // hoisting it keeps the composable read out of the branches that would otherwise call it conditionally.
     val bars = uiInsets
     return SearchChrome(
-        pinnedEdge = edge,
+        edge = edge,
         fieldInsets = bars.only(
             when (edge) {
                 VerticalEdge.TOP -> WindowInsetsSides.Horizontal + WindowInsetsSides.Top
@@ -365,6 +407,46 @@ private class AppsGeometry(
 )
 
 /**
+ * What the surface draws while a search is open: its **derived** shape, filtered.
+ *
+ * A list layout narrows its rows; the four that arrange something show the A–Z grid instead of their arrangement,
+ * because a filtered arrangement is neither — L1 narrowed its pages in place and left the matches scattered across
+ * pages the user then had to swipe through to find them.
+ *
+ * The sibling of [AppsArrangement], and named for the same reason: this screen has two things to draw, and only one
+ * of them is an arrangement.
+ */
+@Composable
+private fun AppsResults(
+    layout: AppsLayout,
+    state: AppsState,
+    viewModel: AppsViewModel,
+    device: DeviceConfiguration,
+    insetSides: WindowInsetsSides,
+) {
+    when {
+        state.results.isEmpty() -> NoMatches()
+        layout == AppsLayout.VERTICAL_LIST -> AppsVerticalList(
+            apps = state.results,
+            onLaunch = viewModel::launch,
+            metrics = state.metricsFor(GridSlot.APPS_LIST),
+            rowHeight = state.rowHeight,
+            horizontalPadding = state.paddingFor(GridSlot.APPS_LIST).dp,
+            insetSides = insetSides,
+        )
+
+        else -> AppsVerticalGrid(
+            apps = state.results,
+            onLaunch = viewModel::launch,
+            metrics = state.metricsFor(GridSlot.APPS_SCROLL),
+            cols = state.colsFor(GridSlot.APPS_SCROLL, device),
+            horizontalPadding = state.paddingFor(GridSlot.APPS_SCROLL).dp,
+            insetSides = insetSides,
+        )
+    }
+}
+
+/**
  * What the surface draws when nothing is being searched for: the chosen [layout], and **the one place a layout is
  * chosen**.
  *
@@ -381,7 +463,7 @@ private fun AppsArrangement(
     device: DeviceConfiguration,
     geometry: AppsGeometry,
     additions: CollectionAdditions,
-    searchHeader: (@Composable () -> Unit)?,
+    onSearch: (() -> Unit)?,
 ) {
     when (layout) {
         AppsLayout.VERTICAL_LIST -> AppsVerticalList(
@@ -440,9 +522,7 @@ private fun AppsArrangement(
             onRenameCategory = viewModel::renameCategory,
             // The one piece of chrome any of these five layouts reads: which edge its tab strip sits on.
             tabEdge = state.categoryTabEdge,
-            // The one layout whose field is not pinned to an edge of its own: it sits with the tabs, on whichever
-            // edge they are on. Null for every other placement.
-            header = searchHeader,
+            onSearch = onSearch,
         )
         // The fifth and last layout, sharing the category store the one above uses. Named rather than folded
         // into an `else`, like every arm here: adding a value to [AppsLayout] must fail to compile until it

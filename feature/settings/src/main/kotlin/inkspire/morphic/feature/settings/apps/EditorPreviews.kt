@@ -144,7 +144,13 @@ private fun SearchBar() {
     )
 }
 
-/** The category pager's compact header: a title, and the actions beside it — search only when it lives here. */
+/**
+ * The category pager's page header: the category's name, and the search button when it lives here.
+ *
+ * **One square, not two.** The mockup drew a second, unconditional one for a manage action the surface has never
+ * had — renaming a category is on its tab's own menu — and a preview showing a control that is not there is the
+ * failure this pair exists to prevent, in the direction that is hardest to notice.
+ */
 @Composable
 private fun HeaderRow(searchInHeader: Boolean) {
     Row(
@@ -160,7 +166,6 @@ private fun HeaderRow(searchInHeader: Boolean) {
                 .background(previewInk()),
         )
         if (searchInHeader) ActionSquare()
-        ActionSquare()
     }
 }
 

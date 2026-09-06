@@ -141,6 +141,11 @@ private class PendingReorder(val ids: List<String>, val keep: String?)
  * category. It sits on whichever edge [tabEdge] names. The two zones are disjoint: the strip takes its height out of
  * the pager, so the viewport this surface measures is what is left, and nothing overlaps.
  *
+ * **The search field is not this surface's**, though `SearchPlacement.InHeader` reads as though it were. What lives
+ * here is the *button* — one per page, beside the title in [CategoryPage]'s header — and pressing it opens a field
+ * `AppsScreen` draws at the top of the screen, over results, with this pager gone. Smart Launcher's shape, and L1's
+ * `CompactSearchHeader` before it: search on this layout is a mode you enter, not a bar that is always there.
+ *
  * A page itself is [CategoryPage], beside this file — a leaf that takes everything it draws as a parameter. What
  * stays here is the drag state, the planner that writes it, and the drop that reads it.
  *
@@ -148,12 +153,9 @@ private class PendingReorder(val ids: List<String>, val keep: String?)
  * @param metrics a page's icon sizing, resolved from `GridSlot.APPS_CATEGORY`'s blueprint and the user's overrides.
  * @param cols how many columns a page is across, resolved from the same slot — passed rather than read here for the
  *   reason [metrics] is: the surface resolves every grid's configuration in one place.
+ * @param onSearch opens the surface's search from a page's header button. Null draws no button.
  * @param onReorderCategories commits a dropped tab: the category ids in the order the strip now shows them.
  * @param onRenameCategory commits a rename from a tab's menu.
- * @param header drawn **outside the strip, on the strip's own edge** — the search field, when
- *   `SearchPlacement.InHeader` puts it here. Null draws nothing. A slot rather than a `SearchPlacement` parameter
- *   because this surface has no business knowing what the thing is: it knows only that the tabs share their edge
- *   with it, and that the order is field-then-tabs reading inward from the screen edge.
  * @param tabEdge which edge the tab strip sits on, from `AppsChrome.categoryTabEdge`. **Honored here and previewed in
  *   the APPS settings section**, which is the pair the shared-derivation rule is about: the editor's mockup draws a
  *   row on the edge this reads, so a surface ignoring it would make that control a lie.
@@ -171,8 +173,8 @@ fun AppsCategoryPager(
     wraps: Boolean,
     rememberPage: Boolean,
     tabEdge: VerticalEdge,
+    onSearch: (() -> Unit)?,
     modifier: Modifier = Modifier,
-    header: (@Composable () -> Unit)? = null,
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -465,10 +467,7 @@ fun AppsCategoryPager(
                     .fillMaxSize()
                     .windowInsetsPadding(uiInsets),
             ) {
-                if (tabEdge == VerticalEdge.TOP) {
-                    header?.invoke()
-                    strip()
-                }
+                if (tabEdge == VerticalEdge.TOP) strip()
                 LauncherPager(
                     state = pagerState,
                     modifier = Modifier
@@ -507,13 +506,11 @@ fun AppsCategoryPager(
                             onRelease = { coordinator.drop() },
                             onGeometry = { geometries[pageIndex] = it },
                             onScrollState = { pageScrolls[pageIndex] = it },
+                            onSearch = onSearch,
                         )
                     }
                 }
-                if (tabEdge == VerticalEdge.BOTTOM) {
-                    strip()
-                    header?.invoke()
-                }
+                if (tabEdge == VerticalEdge.BOTTOM) strip()
             }
 
             // The floating proxy — the only thing the user sees moving, since `LauncherDragCell` draws the lifted cell

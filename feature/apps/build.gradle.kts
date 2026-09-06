@@ -15,6 +15,11 @@ dependencies {
     implementation(projects.data.layout)
     // Resolved per-grid icon sizing: a blueprint's default with the user's overrides merged in.
     implementation(projects.data.settings)
+    // BackHandler: the category pager's search is a mode, and back has to leave it before it leaves the surface.
+    implementation(libs.androidx.activity.compose)
+    // Two vectors, both the search mode's: the button that opens it and the one that closes it. The extended set for
+    // `feature:settings`' reason — it is the artifact this project already ships, and R8 keeps only what is used.
+    implementation(libs.androidx.compose.material.icons.extended)
 
     testImplementation(libs.junit)
 }
