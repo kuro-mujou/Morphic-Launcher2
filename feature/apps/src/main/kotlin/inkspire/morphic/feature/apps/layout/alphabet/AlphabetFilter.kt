@@ -1,7 +1,6 @@
 package inkspire.morphic.feature.apps.layout.alphabet
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -39,6 +38,12 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
  * strip that scrolls needs an A–Z list under it to scroll; the category pager has categories, in an order the user
  * chose, so the only thing "go to M" can mean there is *show me M*. The two share their buckets ([LetterBucket]) and
  * nothing else.
+ *
+ * **It paints nothing, and replaces the arrangement rather than covering it.** A scrim over a live surface leaves the
+ * page's header, its grid and its tab strip legible behind the letters, which is a page of text over a page of icons;
+ * and it dims a surface that is *already* a sheet of blurred wallpaper, which is what this launcher puts a side
+ * surface on. Drawing no background at all means the letters land on that film — the same one the grid's labels are
+ * read against — and the caller not drawing the arrangement is what makes the film the thing behind them.
  */
 @Composable
 internal fun AlphabetPicker(
@@ -52,8 +57,7 @@ internal fun AlphabetPicker(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(colors.scrim)
-            // Silent, like every other full-screen tap-catcher here: no ripple and no click semantics on a scrim.
+            // Silent, like every other full-screen tap-catcher here: no ripple and no click semantics.
             .pointerInput(Unit) { detectTapGestures { onDismiss() } }
             .uiInsetsPadding(),
         contentAlignment = Alignment.Center,

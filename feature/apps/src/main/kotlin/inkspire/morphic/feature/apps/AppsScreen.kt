@@ -47,6 +47,7 @@ import inkspire.morphic.core.designsystem.grid.fitCols
 import inkspire.morphic.core.designsystem.grid.fitGridConfig
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.insets.uiInsets
+import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.menu.LocalMenuHost
 import inkspire.morphic.core.designsystem.menu.MenuAction
 import inkspire.morphic.core.designsystem.menu.surfaceMenuGestures
@@ -130,37 +131,12 @@ fun AppsScreen(
     val device = currentDeviceConfiguration()
     LaunchedEffect(device) { viewModel.setDevice(device) }
 
-    // **The pager's page capacity, fitted here and reported down** — the one grid on this surface whose stored size
-    // cannot simply be clamped where it is drawn, because it is also what the *store* is paginated against (see
-    // `AppsViewModel.setPagerFit`). The area is the window minus the insets the pager itself pads its pages by, so the
-    // capacity describes the space a page really has.
-    //
-    // **Reported from here rather than from the pager's arm**, so it does not depend on which layout is showing: the
-    // pager's arrangement is kept in step with what is installed whatever the user is looking at, which is the
-    // invariant that makes switching layout reload nothing.
-    // **The pager's margin comes off before its capacity is fitted**, which is the one place on this surface where
-    // padding is more than a visual inset: `rows × cols` is what the *store* is paginated against, so a capacity
-    // computed against the full width would put entries on pages the drawn grid has no room for. Every other layout
-    // clamps where it draws; this one reports.
     val pagerPadding = state.paddingFor(GridSlot.APPS_PAGER).dp
-    val pagerArea = usableWindowArea(uiInsets).let {
-        GridArea(widthDp = (it.widthDp - pagerPadding.value * 2).coerceAtLeast(1f), heightDp = it.heightDp)
-    }
-    // The card grid's own margin and the width left for its lanes, computed here beside the pager's because the
+    val pagerFit = pagerCapacity(state, device, viewModel, pagerPadding)
+    // The card grid's own margin and the width left for its lanes, resolved here beside the pager's because the
     // settings section bounds its lane buttons against exactly this expression. Two derivations of "how wide is the
     // grid" that could disagree is the thing `usableWindowArea` exists to prevent.
     val card = rememberCardGeometry(state, device)
-    // The blueprint stands in for the frame before the store answers — the same fallback every other grid here uses —
-    // but the *report* below is gated on the store having answered. Paginating against a placeholder would write pages
-    // nobody chose and then rewrite them, which is the trap home's settle effects are guarded against too.
-    val storedPager = state.pagerConfig ?: AppsPagerGrid.toGridConfig(device)
-    val pagerFit = AppsPagerGrid.fitGridConfig(
-        area = pagerArea,
-        cols = storedPager.visualCols,
-        rows = storedPager.visualRows,
-        metrics = state.metricsFor(GridSlot.APPS_PAGER),
-    )
-    if (state.pagerConfig != null) LaunchedEffect(pagerFit) { viewModel.setPagerFit(pagerFit) }
 
     // No `LauncherTheme` here: the launcher **zone** is themed once by `feature:shell`'s `LauncherShell`, as home's
     // Settings keeps its own boundary, so the two can disagree about dark/light — the launcher follows wallpaper
@@ -195,6 +171,7 @@ fun AppsScreen(
     val placement = state.searchOn(layout)
     val search = searchChrome(placement, query.opened, state.searching)
     val asMode = placement is SearchPlacement.InHeader
+    val letteredSides = WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
     // Back closes the search before it closes the surface, which is the order the user pressed them in.
     BackHandler(enabled = asMode && query.opened) { query.close() }
 
@@ -260,9 +237,28 @@ fun AppsScreen(
                     val lettered = alphabet.apps
                     when {
                         search.showResults -> AppsResults(layout, state.results, state, viewModel, device, search.contentSides)
+                        // Ahead of the letter it may replace, so re-picking from the bar shows the picker rather than
+                        // the letter still underneath it.
+                        alphabet.picking -> AlphabetPicker(
+                            labels = state.alphabetBuckets.map(LetterBucket::label),
+                            onPick = alphabet::choose,
+                            onDismiss = alphabet::dismiss,
+                        )
+
                         lettered != null -> Column(Modifier.fillMaxSize()) {
-                            AlphabetFilterBar(alphabet.label, alphabet::pick, alphabet::clear)
-                            AppsResults(layout, lettered, state, viewModel, device, search.contentSides)
+                            // The bar takes the status bar for the pair, exactly as a top-pinned field does, and the
+                            // grid is handed sides of its own rather than `search.contentSides` because of it.
+                            // `uiInsetsPadding` respects what a field above has already consumed, so of the bar and
+                            // that field only one ever takes the top.
+                            AlphabetFilterBar(
+                                label = alphabet.label,
+                                onPick = alphabet::pick,
+                                onClose = alphabet::clear,
+                                modifier = Modifier.uiInsetsPadding(
+                                    WindowInsetsSides.Horizontal + WindowInsetsSides.Top,
+                                ),
+                            )
+                            AppsResults(layout, lettered, state, viewModel, device, letteredSides)
                         }
 
                         else -> AppsArrangement(
@@ -280,7 +276,6 @@ fun AppsScreen(
                         )
                     }
                     AppsIndexStrip(state, layout, drawn = !search.showResults, onLetter = { held = it })
-                    AppsLetterPicker(state, alphabet)
                 }
                 if (search.edge == VerticalEdge.BOTTOM) field()
             }
@@ -391,6 +386,46 @@ private class SearchChrome(
  * @param hasQuery whether anything is typed — what a pinned field's results turn on, where a mode's turn on being
  *   open.
  */
+/**
+ * **The pager's page capacity, fitted here and reported down** — the one grid on this surface whose stored size cannot
+ * simply be clamped where it is drawn, because it is also what the *store* is paginated against (see
+ * `AppsViewModel.setPagerFit`). The area is the window minus the insets the pager itself pads its pages by, so the
+ * capacity describes the space a page really has.
+ *
+ * **Resolved for the surface rather than inside the pager's arm**, so it does not depend on which layout is showing:
+ * the pager's arrangement is kept in step with what is installed whatever the user is looking at, which is the
+ * invariant that makes switching layout reload nothing.
+ *
+ * **[padding] comes off before the capacity is fitted**, which is the one place on this surface where a margin is more
+ * than a visual inset: `rows × cols` is what the store is paginated against, so a capacity computed against the full
+ * width would put entries on pages the drawn grid has no room for. Every other layout clamps where it draws; this one
+ * reports.
+ *
+ * The blueprint stands in for the stored grid until the store answers — the same fallback every other grid here uses —
+ * but the *report* is gated on it having answered. Paginating against a placeholder would write pages nobody chose and
+ * then rewrite them, which is the trap home's settle effects are guarded against too.
+ */
+@Composable
+private fun pagerCapacity(
+    state: AppsState,
+    device: DeviceConfiguration,
+    viewModel: AppsViewModel,
+    padding: Dp,
+): GridConfig {
+    val area = usableWindowArea(uiInsets).let {
+        GridArea(widthDp = (it.widthDp - padding.value * 2).coerceAtLeast(1f), heightDp = it.heightDp)
+    }
+    val stored = state.pagerConfig ?: AppsPagerGrid.toGridConfig(device)
+    val fitted = AppsPagerGrid.fitGridConfig(
+        area = area,
+        cols = stored.visualCols,
+        rows = stored.visualRows,
+        metrics = state.metricsFor(GridSlot.APPS_PAGER),
+    )
+    if (state.pagerConfig != null) LaunchedEffect(fitted) { viewModel.setPagerFit(fitted) }
+    return fitted
+}
+
 /**
  * Whether the query's matches replace the arrangement, given where the field ended up.
  *
@@ -518,25 +553,6 @@ private fun rememberAlphabetFilter(state: AppsState, layout: AppsLayout, present
     val filter = remember(buckets, state.apps) { AlphabetFilter(buckets, state.apps) }
     LaunchedEffect(presented) { if (!presented) filter.clear() }
     return filter
-}
-
-/**
- * The A–Z letter picker, while one is being asked for.
- *
- * Above the surface's own content and below the shell's menu, like a collection overlay: it is a choice being made
- * *about* what is underneath, so what is underneath stays visible behind it.
- *
- * **Whether it is on screen is decided here**, not by the caller — the same division `AppsIndexStrip` keeps, and for
- * the same reason: an `if` at a call site is one a later call site can forget.
- */
-@Composable
-private fun AppsLetterPicker(state: AppsState, filter: AlphabetFilter) {
-    if (!filter.picking) return
-    AlphabetPicker(
-        labels = state.alphabetBuckets.map(LetterBucket::label),
-        onPick = filter::choose,
-        onDismiss = filter::dismiss,
-    )
 }
 
 /**
