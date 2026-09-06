@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
+import inkspire.morphic.core.model.AlphabetStripStyle
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.BackdropEffect
 import inkspire.morphic.core.model.CardChrome
@@ -27,6 +28,7 @@ import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.icon.IconAppearance
 import inkspire.morphic.core.model.icon.PreviewBackground
 import inkspire.morphic.core.model.toGridConfig
+import inkspire.morphic.data.settings.AlphabetStrip
 import inkspire.morphic.data.settings.AppsChrome
 import inkspire.morphic.data.settings.CardOverride
 import inkspire.morphic.data.settings.GridOverride
@@ -160,6 +162,13 @@ private val AppsChromeSlice = SettingsSlice(
     default = AppsChrome.Default,
 )
 
+/** The A–Z index strip: one key, one blob. Not part of `apps_chrome`, for the reason [AlphabetStrip] gives. */
+private val AlphabetStripSlice = SettingsSlice(
+    name = "alphabet_strip",
+    serializer = serializer<AlphabetStrip>(),
+    default = AlphabetStrip.Default,
+)
+
 /** Which swipe directions each home item has taken for itself: one key, one blob, sparse inside. */
 private val HomeItemGesturesSlice = SettingsSlice(
     name = "home_item_gestures",
@@ -238,6 +247,14 @@ internal class SettingsRepositoryImpl(
 
     override suspend fun setSearchPlacement(layout: AppsLayout, placement: SearchPlacement) =
         update(AppsChromeSlice) { withSearch(layout, placement) }
+
+    override val alphabetStrip: Flow<AlphabetStrip> = dataStore.read(AlphabetStripSlice) { it }
+
+    override suspend fun setAlphabetStripEnabled(enabled: Boolean) =
+        update(AlphabetStripSlice) { copy(enabled = enabled) }
+
+    override suspend fun setAlphabetStripStyle(style: AlphabetStripStyle) =
+        update(AlphabetStripSlice) { copy(style = style) }
 
     override val homeItemGestures: Flow<HomeItemGestures> = dataStore.read(HomeItemGesturesSlice) { it }
 

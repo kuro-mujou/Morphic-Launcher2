@@ -51,6 +51,7 @@ import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.feature.settings.apps.AppsDetail
 import inkspire.morphic.feature.settings.dock.DockDetail
 import inkspire.morphic.feature.settings.effects.EffectsDetail
+import inkspire.morphic.feature.settings.extras.ExtrasDetail
 import inkspire.morphic.feature.settings.folder.FolderDetail
 import inkspire.morphic.feature.settings.grid.GridSizeDetail
 import inkspire.morphic.feature.settings.home.HomeDetail
@@ -310,6 +311,7 @@ private fun SettingsDetail(
         SettingsSection.DOCK -> DockDetail()
         SettingsSection.APPS -> AppsDetail(initialLayout = appsLayout)
         SettingsSection.FOLDER -> FolderDetail()
+        SettingsSection.EXTRAS -> ExtrasDetail()
     }
 }
 

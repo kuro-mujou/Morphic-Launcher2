@@ -1,5 +1,6 @@
 package inkspire.morphic.feature.apps
 
+import inkspire.morphic.core.model.AlphabetStripStyle
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.CardChrome
@@ -11,6 +12,7 @@ import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.VerticalEdge
+import inkspire.morphic.feature.apps.layout.alphabet.LetterBucket
 import inkspire.morphic.core.model.Folder as FolderModel
 
 /**
@@ -112,7 +114,22 @@ data class AppsState(
     val searchByLayout: Map<AppsLayout, SearchPlacement> = emptyMap(),
     val query: String = "",
     val results: List<AppInfo> = emptyList(),
+    val letterBuckets: List<LetterBucket> = emptyList(),
+    val alphabetStrip: AlphabetStripStyle? = null,
 )
+
+/**
+ * The buckets the A–Z strip should offer on this surface — empty whenever it should not be drawn at all.
+ *
+ * **Three conditions in one answer**, so no caller can honor two of them: the user has turned the strip on, the
+ * content is ordered A–Z (which is the two derived layouts and nothing else — an index over an arrangement the
+ * user placed by hand indexes nothing), and there is at least one app to index.
+ */
+fun AppsState.alphabetLettersFor(layout: AppsLayout): List<LetterBucket> = when {
+    alphabetStrip == null -> emptyList()
+    layout != AppsLayout.VERTICAL_LIST && layout != AppsLayout.VERTICAL_GRID -> emptyList()
+    else -> letterBuckets
+}
 
 /**
  * Where [layout]'s search field sits — [SearchPlacement.Hidden] until the store answers, which is also the default an

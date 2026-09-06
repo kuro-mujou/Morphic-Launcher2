@@ -2,6 +2,7 @@ package inkspire.morphic.feature.apps
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -68,6 +69,8 @@ import inkspire.morphic.core.model.colsFor
 import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.feature.apps.layout.AppsVerticalGrid
 import inkspire.morphic.feature.apps.layout.AppsVerticalList
+import inkspire.morphic.feature.apps.layout.alphabet.AlphabetStrip
+import inkspire.morphic.feature.apps.layout.alphabet.LetterBucket
 import inkspire.morphic.feature.apps.layout.categorycard.AppsCategoryCard
 import inkspire.morphic.feature.apps.layout.categorypager.AppsCategoryPager
 import inkspire.morphic.feature.apps.layout.pager.AppsPager
@@ -196,6 +199,13 @@ fun AppsScreen(
     // Back closes the search before it closes the surface, which is the order the user pressed them in.
     BackHandler(enabled = asMode && query.opened) { query.close() }
 
+    // **Which bucket a finger is holding on the A–Z strip**, and the run of apps it points at. Held by the screen
+    // rather than by the strip because it is the *content* that answers for it: two layouts read the same range, and
+    // neither of them is the thing being touched. A *position* rather than a label, because an alphabetic index
+    // labels both its ends `…` and a label would not say which end was being held.
+    var held by remember { mutableStateOf<Int?>(null) }
+    val indexed = held?.let { state.alphabetLettersFor(layout).getOrNull(it)?.range }
+
     OnFilm {
         Box(
             modifier
@@ -251,9 +261,10 @@ fun AppsScreen(
                             device = device,
                             geometry = AppsGeometry(card, pagerFit, pagerPadding, search.contentSides),
                             additions = additions,
-                            onSearch = query::open.takeIf { asMode },
+                            chrome = AppsChromeReach(query::open.takeIf { asMode }, indexed),
                         )
                     }
+                    AppsIndexStrip(state, layout, drawn = !showResults, onLetter = { held = it })
                 }
                 if (search.edge == VerticalEdge.BOTTOM) field()
             }
@@ -395,6 +406,57 @@ private fun searchChrome(placement: SearchPlacement, opened: Boolean): SearchChr
 }
 
 /**
+ * The A–Z index strip on the trailing edge, when this layout and these settings have one.
+ *
+ * **Over the content rather than beside it**, which is what lets the curved style work at all: its letters swing a
+ * long way inward, and a rail with a column of its own would either clip them or reserve at rest the width they only
+ * need under a finger. What it costs is the last column running beneath the rail.
+ *
+ * **Whether there is a strip at all is decided here**, not by the caller: `alphabetLettersFor` folds three conditions
+ * into one list, and drawing nothing for an empty one is this composable's own business rather than an `if` every
+ * later call site has to remember.
+ *
+ * @param drawn false while a search is open — an index over an arrangement that is not on screen would scroll
+ *   something the user cannot see.
+ */
+@Composable
+private fun BoxScope.AppsIndexStrip(
+    state: AppsState,
+    layout: AppsLayout,
+    drawn: Boolean,
+    onLetter: (Int?) -> Unit,
+) {
+    val buckets = state.alphabetLettersFor(layout)
+    if (!drawn || buckets.isEmpty()) return
+    AlphabetStrip(
+        labels = buckets.map(LetterBucket::label),
+        style = state.alphabetStrip ?: return,
+        onLetter = onLetter,
+        modifier = Modifier
+            .align(Alignment.CenterEnd)
+            .windowInsetsPadding(uiInsets.only(WindowInsetsSides.Vertical + WindowInsetsSides.End)),
+    )
+}
+
+/**
+ * What the surface's **chrome** reaches into the arrangement to do — the two things an arrangement must cooperate
+ * with that are not its own.
+ *
+ * Grouped because they arrive together and are read apart, exactly as [AppsGeometry]'s measurements are, and kept
+ * apart *from* those measurements because neither of these is one: a search button is a verb, and an index range is a
+ * position in a list.
+ *
+ * @property onSearch opens the surface's search from a button the arrangement hosts. Only the category pager has one;
+ *   null everywhere else, which is what draws no button.
+ * @property indexed the run of apps the A–Z strip is pointing at, or null when nothing is being scrubbed. Only the
+ *   two derived layouts read it, being the only two ordered A–Z.
+ */
+private class AppsChromeReach(
+    val onSearch: (() -> Unit)?,
+    val indexed: IntRange?,
+)
+
+/**
  * The measurements [AppsScreen] resolves once and hands to whichever arrangement draws.
  *
  * Grouped rather than passed one by one because they arrive together and are read apart: each arrangement takes the
@@ -465,7 +527,7 @@ private fun AppsArrangement(
     device: DeviceConfiguration,
     geometry: AppsGeometry,
     additions: CollectionAdditions,
-    onSearch: (() -> Unit)?,
+    chrome: AppsChromeReach,
 ) {
     when (layout) {
         AppsLayout.VERTICAL_LIST -> AppsVerticalList(
@@ -475,6 +537,7 @@ private fun AppsArrangement(
             rowHeight = state.rowHeight,
             horizontalPadding = state.paddingFor(GridSlot.APPS_LIST).dp,
             insetSides = geometry.contentSides,
+            indexed = chrome.indexed,
         )
 
         AppsLayout.VERTICAL_GRID -> AppsVerticalGrid(
@@ -484,6 +547,7 @@ private fun AppsArrangement(
             cols = state.colsFor(GridSlot.APPS_SCROLL, device),
             horizontalPadding = state.paddingFor(GridSlot.APPS_SCROLL).dp,
             insetSides = geometry.contentSides,
+            indexed = chrome.indexed,
         )
 
         AppsLayout.PAGER -> AppsPager(
@@ -524,7 +588,7 @@ private fun AppsArrangement(
             onRenameCategory = viewModel::renameCategory,
             // The one piece of chrome any of these five layouts reads: which edge its tab strip sits on.
             tabEdge = state.categoryTabEdge,
-            onSearch = onSearch,
+            onSearch = chrome.onSearch,
         )
         // The fifth and last layout, sharing the category store the one above uses. Named rather than folded
         // into an `else`, like every arm here: adding a value to [AppsLayout] must fail to compile until it

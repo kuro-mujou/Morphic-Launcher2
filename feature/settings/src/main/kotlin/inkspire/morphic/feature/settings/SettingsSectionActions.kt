@@ -26,6 +26,7 @@ internal fun SettingsSectionActions(section: SettingsSection?) {
         SettingsSection.HOME_GRID,
         SettingsSection.DOCK,
         SettingsSection.FOLDER,
+        SettingsSection.EXTRAS,
         null,
             -> Unit
     }

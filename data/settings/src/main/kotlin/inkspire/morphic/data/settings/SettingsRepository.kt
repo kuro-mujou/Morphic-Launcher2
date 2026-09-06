@@ -1,5 +1,6 @@
 package inkspire.morphic.data.settings
 
+import inkspire.morphic.core.model.AlphabetStripStyle
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.BackdropEffect
 import inkspire.morphic.core.model.CardChrome
@@ -72,6 +73,18 @@ interface SettingsRepository {
 
     /** Sets where the APPS search field sits on [layout]; the other arrangements keep theirs. */
     suspend fun setSearchPlacement(layout: AppsLayout, placement: SearchPlacement)
+
+    /**
+     * The A–Z index strip, for every surface whose content is ordered A–Z — see [AlphabetStrip] for why that is
+     * the thing it belongs to rather than a surface.
+     */
+    val alphabetStrip: Flow<AlphabetStrip>
+
+    /** Draws the A–Z strip, or stops drawing it. */
+    suspend fun setAlphabetStripEnabled(enabled: Boolean)
+
+    /** Switches the A–Z strip's look; whether it is drawn at all is [setAlphabetStripEnabled]'s. */
+    suspend fun setAlphabetStripStyle(style: AlphabetStripStyle)
 
     /**
      * Which swipe directions each home item has taken for itself.

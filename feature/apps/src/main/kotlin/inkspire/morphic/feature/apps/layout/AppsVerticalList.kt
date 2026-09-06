@@ -5,10 +5,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import inkspire.morphic.core.designsystem.cell.AppRowCell
@@ -19,6 +20,7 @@ import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
 import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.feature.apps.layout.alphabet.alphabetDim
 
 /**
  * The **vertical list** layout of the APPS surface: every app A–Z in one scrolling column, one row each.
@@ -56,6 +58,10 @@ import inkspire.morphic.core.model.ComponentKey
  *
  * @param insetSides which bars this layout reserves room for. Everything but the edge a pinned search field took —
  *   the field pads itself there, and content that reserved it too would leave a phantom band under it.
+ * @param indexed the A–Z run the index strip is pointing at, or null when nothing is being scrubbed. The list is
+ *   scrolled to its first item and every row outside it is dimmed — which together is what makes an arrival
+ *   legible, since scrolling alone lands on a list that looks exactly like it did a moment ago. See
+ *   `layout/alphabet/AlphabetStrip`.
  */
 @Composable
 fun AppsVerticalList(
@@ -65,6 +71,7 @@ fun AppsVerticalList(
     rowHeight: Dp,
     horizontalPadding: Dp,
     insetSides: WindowInsetsSides = WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical,
+    indexed: IntRange? = null,
     modifier: Modifier = Modifier,
 ) {
     val gestureConfig = rememberAppsGestureConfig()
@@ -88,14 +95,19 @@ fun AppsVerticalList(
         ScrollEdges(atTop = !listState.canScrollBackward, atBottom = !listState.canScrollForward)
     }
 
+    // Keyed on the range rather than on its start, so re-entering a letter the finger has already visited scrolls
+    // again — the user may have flung away from it in between.
+    LaunchedEffect(indexed) { indexed?.let { listState.scrollToItem(it.first) } }
+
     CompositionLocalProvider(LocalIconMetrics provides metrics) {
         LazyColumn(state = listState, modifier = modifier.fillMaxSize(), contentPadding = contentPadding) {
-            items(items = apps, key = { it.componentKey.flatten() }) { app ->
+            itemsIndexed(items = apps, key = { _, app -> app.componentKey.flatten() }) { index, app ->
                 AppRowCell(
                     app = app,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(drawnRowHeight),
+                        .height(drawnRowHeight)
+                        .alphabetDim(dimmed = indexed != null && index !in indexed),
                     itemGestures = Modifier.appsItemGestures(gestureConfig, app) {
                         onLaunch(app.componentKey)
                     },

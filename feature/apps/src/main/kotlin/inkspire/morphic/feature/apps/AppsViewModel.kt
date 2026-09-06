@@ -3,6 +3,7 @@ package inkspire.morphic.feature.apps
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
+import inkspire.morphic.core.model.AlphabetStripStyle
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.CardChrome
@@ -15,6 +16,7 @@ import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.VerticalEdge
+import inkspire.morphic.core.model.indexRanges
 import inkspire.morphic.core.model.labelCollator
 import inkspire.morphic.core.model.matchesLabel
 import inkspire.morphic.data.apps.AppLauncher
@@ -26,6 +28,8 @@ import inkspire.morphic.data.layout.AppsPagerChange
 import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.layout.reconcileReportedOrder
 import inkspire.morphic.data.settings.SettingsRepository
+import inkspire.morphic.feature.apps.layout.alphabet.LetterBucket
+import inkspire.morphic.feature.apps.layout.alphabet.LetterIndex
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,6 +45,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.Collator
+import java.util.Locale
 
 /**
  * The settings-resolved half of [AppsState], assembled before it joins the content half.
@@ -59,6 +64,7 @@ private data class AppsSizing(
     val card: CardChrome?,
     val categoryTabEdge: VerticalEdge,
     val searchByLayout: Map<AppsLayout, SearchPlacement>,
+    val alphabetStrip: AlphabetStripStyle?,
 )
 
 /**
@@ -87,6 +93,7 @@ private data class PerSurface(
     val wraps: Map<GridSlot, Boolean>,
     val remembersPage: Map<GridSlot, Boolean>,
     val chrome: ResolvedChrome,
+    val alphabetStrip: AlphabetStripStyle?,
 )
 
 /**
@@ -113,6 +120,16 @@ private data class Searched(
     val apps: List<AppInfo>,
     val query: String,
     val results: List<AppInfo>,
+    val letters: List<LetterBucket>,
+)
+
+/**
+ * The sorted collection and its A–Z index, which are one fact: the ranges are positions *in* that list, and paired
+ * with a different one they point at the wrong apps.
+ */
+private data class Indexed(
+    val apps: List<AppInfo>,
+    val letters: List<LetterBucket>,
 )
 
 /**
@@ -177,6 +194,29 @@ class AppsViewModel(
             .shareIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), replay = 1)
 
     /**
+     * The sorted collection with each A–Z letter's run in it — what the index strip draws and scrolls by.
+     *
+     * **Off [query], deliberately.** Bucketing is a collator comparison per letter per label, the same order of work
+     * as the sort itself; folded into the search combine it would run again on every keystroke, to produce a map
+     * nothing looks at while a search is open. Here it is recomputed when the *collection* changes and never
+     * otherwise — a finger running down the strip reads this map and writes nothing.
+     */
+    private val indexed: Flow<Indexed> =
+        sortedApps
+            .map { apps ->
+                // Rebuilt per emission rather than held, because the locale can change under a running launcher and
+                // an index built for the old one would file letters the list no longer sorts that way. It is a few
+                // hundred microseconds beside the sort that just ran.
+                val index = LetterIndex(Locale.getDefault())
+                val ranges = apps.indexRanges { index.bucketOf(it.label) }
+                Indexed(
+                    apps = apps,
+                    letters = ranges.map { (bucket, range) -> LetterBucket(index.labels[bucket], range) },
+                )
+            }
+            .flowOn(dispatchers.default)
+
+    /**
      * What the user has typed into the search field, or empty when they have not — the one piece of this surface's
      * state that is neither settings nor store.
      */
@@ -195,16 +235,17 @@ class AppsViewModel(
      * launcher.
      */
     private val searched: Flow<Searched> =
-        combine(sortedApps, query) { apps, text ->
+        combine(indexed, query) { indexed, text ->
             val trimmed = text.trim()
             val results = if (trimmed.isEmpty()) {
-                apps
+                indexed.apps
             } else {
                 val collator = labelCollator()
-                apps.filter { it.label.matchesLabel(trimmed, collator) }
+                indexed.apps.filter { it.label.matchesLabel(trimmed, collator) }
             }
-            Searched(apps = apps, query = trimmed, results = results)
+            Searched(apps = indexed.apps, query = trimmed, results = results, letters = indexed.letters)
         }.flowOn(dispatchers.default)
+
 
     /**
      * The APPS pager's **stored** grid for the reported device — the user's size, resolved from its blueprint with any
@@ -368,6 +409,10 @@ class AppsViewModel(
                         searchByLayout = AppsLayout.entries.associateWith(chrome::searchOn),
                     )
                 },
+                // **Null is "no strip", so the disabled state cannot be mistaken for a style.** The stored record
+                // has both a flag and a look; a surface only ever needs to know which look to draw or that there is
+                // nothing to draw, and collapsing the pair here is what stops every reader repeating the test.
+                settingsRepository.alphabetStrip.map { strip -> strip.style.takeIf { strip.enabled } },
                 ::PerSurface,
             ),
             pagerConfig,
@@ -382,6 +427,7 @@ class AppsViewModel(
                 wraps = perSurface.wraps,
                 remembersPage = perSurface.remembersPage,
                 card = perDevice.card,
+                alphabetStrip = perSurface.alphabetStrip,
                 categoryTabEdge = perSurface.chrome.categoryTabEdge,
                 searchByLayout = perSurface.chrome.searchByLayout,
             )
@@ -429,6 +475,8 @@ class AppsViewModel(
                 searchByLayout = configured.searchByLayout,
                 query = searched.query,
                 results = searched.results,
+                letterBuckets = searched.letters,
+                alphabetStrip = configured.alphabetStrip,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), AppsState())
 

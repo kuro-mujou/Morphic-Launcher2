@@ -6,10 +6,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import inkspire.morphic.core.designsystem.cell.AppCell
@@ -22,6 +23,7 @@ import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.AppsScrollGrid
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.feature.apps.layout.alphabet.alphabetDim
 
 /**
  * The **vertical grid** layout of the APPS surface: every app A–Z, icon over label, in a scrolling grid.
@@ -59,6 +61,10 @@ import inkspire.morphic.core.model.ComponentKey
  *   cannot end up drawing a size nobody configured. It is the count the user *chose*, so it is clamped below to what
  *   the measured width can hold at this icon size — the one part of resolving a grid that cannot happen before the
  *   measurement, which is why it happens here and not in `AppsScreen`.
+ * @param indexed the A–Z run the index strip is pointing at, or null when nothing is being scrubbed. The grid is
+ *   scrolled to its first cell and every cell outside it is dimmed — which together is what makes an arrival
+ *   legible, since scrolling alone lands on a grid that looks exactly like it did a moment ago. See
+ *   `layout/alphabet/AlphabetStrip`.
  */
 @Composable
 fun AppsVerticalGrid(
@@ -68,6 +74,7 @@ fun AppsVerticalGrid(
     cols: Int,
     horizontalPadding: Dp,
     insetSides: WindowInsetsSides = WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical,
+    indexed: IntRange? = null,
     modifier: Modifier = Modifier,
 ) {
     val gestureConfig = rememberAppsGestureConfig()
@@ -103,19 +110,25 @@ fun AppsVerticalGrid(
             // something bigger. `derivedCell` returns the pair so the two cannot be separated.
             val cell = derivedCell(cellWidth = usableWidth / drawnCols, metrics = metrics)
 
+            // Keyed on the range rather than on its start, so re-entering a letter the finger has already visited
+            // scrolls again — the user may have flung away from it in between.
+            LaunchedEffect(indexed) { indexed?.let { gridState.scrollToItem(it.first) } }
+
             LazyVerticalGrid(
                 state = gridState,
                 columns = GridCells.Fixed(drawnCols),
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = contentPadding,
             ) {
-                items(items = apps, key = { it.componentKey.flatten() }) { app ->
+                itemsIndexed(items = apps, key = { _, app -> app.componentKey.flatten() }) { index, app ->
                     // Only the height is set: the width is the column's, and `AppCell` sizes the icon from the cell
                     // it is given (via `IconLabelCell`), so the two metrics meet without either being computed here.
                     AppCell(
                         app = app,
                         metrics = cell.metrics,
-                        modifier = Modifier.height(cell.height),
+                        modifier = Modifier
+                            .height(cell.height)
+                            .alphabetDim(dimmed = indexed != null && index !in indexed),
                         itemGestures = Modifier.appsItemGestures(gestureConfig, app) {
                             onLaunch(app.componentKey)
                         },

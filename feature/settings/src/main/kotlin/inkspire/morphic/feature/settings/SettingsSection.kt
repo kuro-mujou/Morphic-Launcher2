@@ -10,6 +10,7 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -79,6 +80,21 @@ enum class SettingsSection {
      * folder grid housed, it had nothing left to show.
      */
     FOLDER,
+
+    /**
+     * **Extras**: what belongs to more than one surface and sizes none of them.
+     *
+     * The A–Z index strip is the first and, today, the only one. It is not the [APPS] section's because what it
+     * attaches to is *content ordered A–Z* — the APPS derived layouts have that now and HOME's vertical list will
+     * have it next — and a setting filed under one surface is one the other has to reach across for or lose to a
+     * rename.
+     *
+     * **A bucket, and named as one on purpose.** Every other row here names a surface or a material; this one names
+     * what it is, which is the honest label for a place things are put. The risk it carries is the one every bucket
+     * carries — that it becomes where anything goes rather than where cross-surface things go — and the guard is
+     * this sentence rather than the name.
+     */
+    EXTRAS,
 }
 
 /**
@@ -145,6 +161,10 @@ internal fun SettingsSection.meta(homeLayout: HomeLayout): SettingsSectionMeta {
         SettingsSection.FOLDER -> SettingsSectionMeta(
             "Folders", Icons.Outlined.Folder,
         )
+
+        SettingsSection.EXTRAS -> SettingsSectionMeta(
+            "Extras", Icons.Outlined.Tune,
+        )
     }
 }
 
@@ -170,6 +190,7 @@ internal val SettingsSection.parent: SettingsSection?
         SettingsSection.HOME,
         SettingsSection.APPS,
         SettingsSection.FOLDER,
+        SettingsSection.EXTRAS,
             -> null
     }
 
@@ -207,4 +228,8 @@ internal val settingsGroups: List<SettingsGroup> = listOf(
             SettingsSection.FOLDER,
         ),
     ),
+    // **Its own group, unheaded, and last.** A bucket under "Layout" would claim to arrange something, and under
+    // "Personalization" it would claim to be a look; what it holds is neither, and a third heading over a single row
+    // would be a label longer than the thing it labels.
+    SettingsGroup(null, listOf(SettingsSection.EXTRAS)),
 )

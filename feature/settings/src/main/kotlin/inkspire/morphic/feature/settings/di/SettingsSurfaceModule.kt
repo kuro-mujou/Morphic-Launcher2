@@ -4,6 +4,7 @@ import inkspire.morphic.feature.settings.SettingsShellViewModel
 import inkspire.morphic.feature.settings.apps.AppsSectionViewModel
 import inkspire.morphic.feature.settings.dock.DockViewModel
 import inkspire.morphic.feature.settings.effects.EffectsViewModel
+import inkspire.morphic.feature.settings.extras.ExtrasViewModel
 import inkspire.morphic.feature.settings.folder.FolderViewModel
 import inkspire.morphic.feature.settings.grid.GridSizeViewModel
 import inkspire.morphic.feature.settings.home.HomeHubViewModel
@@ -35,6 +36,7 @@ val settingsSurfaceModule = module {
     viewModel { HomeHubViewModel(get()) }
     viewModel { AppsSectionViewModel(get(), get()) }
     viewModel { FolderViewModel(get(), get()) }
+    viewModel { ExtrasViewModel(get()) }
     viewModel { EffectsViewModel(get(), get()) }
     viewModel { IconsViewModel(get(), get()) }
 
