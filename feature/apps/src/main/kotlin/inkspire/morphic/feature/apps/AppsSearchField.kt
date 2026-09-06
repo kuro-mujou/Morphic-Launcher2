@@ -11,11 +11,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
@@ -39,23 +44,33 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
  * The IME's action key clears focus, which takes the keyboard down: results update on every keystroke, so there is
  * nothing for "Search" to submit, and a key that did nothing would be the disabled-control smell one layer down.
  *
- * @param onClose non-null for a field the user **opened**, which is the category pager's — the one placement that is
- *   a mode rather than a fixture. It buys two things that are really one fact: a close button, since a mode needs a
- *   way out, and focus on first composition, since a field you asked for is one you meant to type in. A pinned field
- *   gets neither — it has nothing to close back to, and grabbing focus would raise the keyboard every time the
- *   surface is opened.
+ * **Every placement can be closed; only one of them is *opened*.** Closing empties the query and drops the keyboard,
+ * which is what leaves a surface with no half-finished search on it — a filtered arrangement, or a keyboard standing
+ * over a page with nothing typed. The button that does it is always there on a mode, since a mode needs a way out,
+ * and appears on a pinned field once there is a search to close: it is focused, or it has text in it. Back does the
+ * same thing and is what an experienced user reaches for, which is exactly why it cannot be the only way — nothing on
+ * screen says so.
+ *
+ * @param asMode true for the category pager's placement, the one that is a mode rather than a fixture. It buys the
+ *   close button unconditionally, and focus on first composition — a field you pressed a button to get is one you
+ *   meant to type in. A pinned field must not take focus, or opening APPS would raise the keyboard every time.
  */
 @Composable
 internal fun AppsSearchField(
     state: TextFieldState,
+    onClose: () -> Unit,
     modifier: Modifier = Modifier,
-    onClose: (() -> Unit)? = null,
+    asMode: Boolean = false,
 ) {
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val colors = LocalMorphicColors.current
     val focusRequester = remember { FocusRequester() }
-    if (onClose != null) {
+    var focused by remember { mutableStateOf(false) }
+    // Through `derivedStateOf` so this row invalidates when the query becomes empty or stops being empty, rather than
+    // on every keystroke — the text itself is `BasicTextField`'s to redraw, and nothing here reads it otherwise.
+    val hasQuery by remember(state) { derivedStateOf { state.text.isNotEmpty() } }
+    if (asMode) {
         // **Focus and the keyboard, as the field appears** — pressing a search button is the request, so nothing
         // else should have to be tapped. Safe unkeyed and unguarded: this composes only while the search is open, so
         // the effect runs once per opening, and a `LaunchedEffect` body runs after the node it targets is attached.
@@ -77,12 +92,16 @@ internal fun AppsSearchField(
             state = state,
             modifier = Modifier
                 .weight(1f)
-                .focusRequester(focusRequester),
+                .focusRequester(focusRequester)
+                // Observed from out here rather than asked of the field: `MorphicTextField` tracks focus for its own
+                // ring, and a second reading of the same focus target costs nothing and adds no parameter to a
+                // component every settings screen shares.
+                .onFocusChanged { focused = it.isFocused },
             placeholder = "Search apps",
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             onKeyboardAction = { focusManager.clearFocus() },
         )
-        if (onClose != null) {
+        if (asMode || focused || hasQuery) {
             IconButton(onClick = onClose) {
                 Icon(Icons.Filled.Close, contentDescription = "Close search", tint = colors.content)
             }

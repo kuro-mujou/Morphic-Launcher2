@@ -214,14 +214,16 @@ fun AppsScreen(
                 },
         ) {
             // The field itself, on whichever edge [SearchChrome.edge] resolved — one call site for every placement,
-            // so they cannot drift into two fields. Closable only where it is a mode; see [AppsSearchField].
+            // so they cannot drift into two fields. Every one of them closes the same way; what the mode changes is
+            // whether the button is always on show and whether the field takes focus as it appears.
             val field: @Composable () -> Unit = {
                 AppsSearchField(
                     state = query.text,
+                    onClose = query::close,
                     modifier = Modifier
                         .offset { IntOffset(0, -(search.keyboardLift?.getBottom(this) ?: 0)) }
                         .windowInsetsPadding(search.fieldInsets),
-                    onClose = query::close.takeIf { asMode },
+                    asMode = asMode,
                 )
             }
 
