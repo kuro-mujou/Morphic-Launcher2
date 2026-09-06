@@ -119,17 +119,24 @@ data class AppsState(
 )
 
 /**
- * The buckets the A–Z strip should offer on this surface — empty whenever it should not be drawn at all.
+ * The A–Z buckets this surface can offer — empty when the user has A–Z navigation off, or there is nothing to
+ * index.
  *
- * **Three conditions in one answer**, so no caller can honor two of them: the user has turned the strip on, the
- * content is ordered A–Z (which is the two derived layouts and nothing else — an index over an arrangement the
- * user placed by hand indexes nothing), and there is at least one app to index.
+ * **Which *affordance* those buckets get is [indexesAlphabetically]'s answer, not this one.** One switch turns the
+ * alphabet on; what it becomes is a property of the layout looking at it.
  */
-fun AppsState.alphabetLettersFor(layout: AppsLayout): List<LetterBucket> = when {
-    alphabetStrip == null -> emptyList()
-    layout != AppsLayout.VERTICAL_LIST && layout != AppsLayout.VERTICAL_GRID -> emptyList()
-    else -> letterBuckets
-}
+val AppsState.alphabetBuckets: List<LetterBucket>
+    get() = if (alphabetStrip == null) emptyList() else letterBuckets
+
+/**
+ * Whether [layout] indexes itself with a strip, or filters itself from a picker — the two things an alphabet can do
+ * for a surface, decided by whether that surface is *in* alphabetical order.
+ *
+ * A strip that scrolls needs an A–Z list under it; the two derived layouts are that list, and the three arranged
+ * ones are an order the user chose, where the only thing "go to M" can mean is *show me M*.
+ */
+val AppsLayout.indexesAlphabetically: Boolean
+    get() = this == AppsLayout.VERTICAL_LIST || this == AppsLayout.VERTICAL_GRID
 
 /**
  * Where [layout]'s search field sits — [SearchPlacement.Hidden] until the store answers, which is also the default an

@@ -154,6 +154,7 @@ private class PendingReorder(val ids: List<String>, val keep: String?)
  * @param cols how many columns a page is across, resolved from the same slot — passed rather than read here for the
  *   reason [metrics] is: the surface resolves every grid's configuration in one place.
  * @param onSearch opens the surface's search from a page's header button. Null draws no button.
+ * @param onAlphabet opens the A–Z letter picker from the button beside it. Null draws no button.
  * @param onReorderCategories commits a dropped tab: the category ids in the order the strip now shows them.
  * @param onRenameCategory commits a rename from a tab's menu.
  * @param tabEdge which edge the tab strip sits on, from `AppsChrome.categoryTabEdge`. **Honored here and previewed in
@@ -174,6 +175,7 @@ fun AppsCategoryPager(
     rememberPage: Boolean,
     tabEdge: VerticalEdge,
     onSearch: (() -> Unit)?,
+    onAlphabet: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
@@ -507,6 +509,7 @@ fun AppsCategoryPager(
                             onGeometry = { geometries[pageIndex] = it },
                             onScrollState = { pageScrolls[pageIndex] = it },
                             onSearch = onSearch,
+                            onAlphabet = onAlphabet,
                         )
                     }
                 }

@@ -21,15 +21,19 @@ import org.koin.androidx.compose.koinViewModel
 /**
  * **Extras**: the launcher-wide additions that belong to no single surface.
  *
- * The A–Z index strip is the first, and the reason the section exists rather than the reason it is called this: the
- * strip attaches to *content ordered A–Z*, which the APPS derived layouts have now and HOME's vertical list will
- * have next, so it is not the APPS section's to own. What lands here later is whatever else answers to more than one
- * surface and sizes nothing — which is why this pane has no preview and no device to report, alone among the
- * sections.
+ * A–Z navigation is the first, and the reason the section exists rather than the reason it is called this: what it
+ * attaches to is *the app collection*, not a surface — the APPS derived layouts index themselves with a strip, the
+ * category pager filters itself from a picker, and HOME's vertical list is next. What lands here later is whatever
+ * else answers to more than one surface and sizes nothing, which is why this pane has no preview and no device to
+ * report, alone among the sections.
  *
- * **The style chooser is absent while the strip is off, not disabled.** It is the standing rule, and this is the case
- * it is clearest on: a look for something that is not drawn is a control whose effect nobody can see. It animates in
- * rather than appearing, since the switch above it is what the finger is still on.
+ * **One switch for both affordances**, because they are one feature seen from two surfaces: a strip needs an
+ * alphabetical list under it to scroll, and a surface arranged by hand can only be *filtered* by a letter. Splitting
+ * them would be two switches for one question.
+ *
+ * **The style chooser is absent while it is off, not disabled.** It is the standing rule, and this is the case it is
+ * clearest on: a look for something that is not drawn is a control whose effect nobody can see. It animates in rather
+ * than appearing, since the switch above it is what the finger is still on.
  */
 @Composable
 internal fun ExtrasDetail(modifier: Modifier = Modifier) {
@@ -43,20 +47,23 @@ internal fun ExtrasDetail(modifier: Modifier = Modifier) {
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
     ) {
-        SettingsSectionHeader("A–Z strip", spaceAbove = false)
+        SettingsSectionHeader("A–Z", spaceAbove = false)
         MorphicSwitchRow(
-            label = "Show the strip",
-            // Warns rather than describes, which is the bar this pane's one supporting line has to clear: where the
-            // strip appears is not guessable from a switch that names no surface, and it is not something the user
-            // can discover without leaving settings and trying all five layouts.
-            supportingText = "On the app screen's list and grid, which are the layouts ordered A–Z.",
+            label = "Find apps by letter",
+            // Warns rather than describes, which is the bar this pane's one supporting line has to clear: the switch
+            // turns on *two* affordances that look nothing alike, and which one a layout gets is not guessable from
+            // here or discoverable without trying all five of them.
+            supportingText = "A strip beside the list and grid; a letter picker on the category pager.",
             checked = strip.enabled,
             onCheckedChange = viewModel::setAlphabetStripEnabled,
         )
 
         AnimatedVisibility(visible = strip.enabled) {
             Column {
-                SettingsSectionHeader("Style")
+                // The style is the *strip's* alone — the picker is a grid of letters and has no rail to bow — which
+                // is why the heading names it rather than saying "Style" over a control that governs half the switch
+                // above it.
+                SettingsSectionHeader("Strip style")
                 val styles = AlphabetStripStyle.entries
                 MorphicSegmentedButtons(
                     options = styles.map { style ->

@@ -91,6 +91,9 @@ import inkspire.morphic.feature.apps.AppsCategory
  *   than the field itself, and that is the whole shape of this placement: the field belongs to `AppsScreen`, which
  *   swaps this arrangement out for the results the moment there is a query, so a field drawn here would be disposed
  *   by the first keystroke.
+ * @param onAlphabet opens the A–Z letter picker, from a button beside [onSearch]'s. **Null draws no button**, which
+ *   is what A–Z navigation being switched off means here. A *filter* rather than an index, because this surface's
+ *   pages are categories in an order the user chose — there is no alphabetical list under a strip to scroll.
  */
 @Composable
 internal fun CategoryPage(
@@ -109,6 +112,7 @@ internal fun CategoryPage(
     onGeometry: (GridGeometry) -> Unit,
     onScrollState: (ScrollState) -> Unit,
     onSearch: (() -> Unit)?,
+    onAlphabet: (() -> Unit)?,
 ) = BoxWithConstraints(Modifier.fillMaxSize()) {
     val colors = LocalMorphicColors.current
     // **The stored column count, clamped to what this page's width can draw at this icon size** — and everything below
@@ -219,6 +223,17 @@ internal fun CategoryPage(
             if (onSearch != null) {
                 IconButton(onClick = onSearch) {
                     Icon(Icons.Filled.Search, contentDescription = "Search apps", tint = colors.content)
+                }
+            }
+            // Text rather than a glyph, and L1's too: there is no icon for "the alphabet" that reads faster than the
+            // two letters that are the alphabet.
+            if (onAlphabet != null) {
+                IconButton(onClick = onAlphabet) {
+                    Text(
+                        text = "A–Z",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.content,
+                    )
                 }
             }
         }

@@ -54,6 +54,7 @@ import inkspire.morphic.core.designsystem.surface.AxisScroll
 import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.designsystem.surface.ScrollAxes
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.AppsCardGrid
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.AppsListGrid
@@ -69,6 +70,8 @@ import inkspire.morphic.core.model.colsFor
 import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.feature.apps.layout.AppsVerticalGrid
 import inkspire.morphic.feature.apps.layout.AppsVerticalList
+import inkspire.morphic.feature.apps.layout.alphabet.AlphabetFilterBar
+import inkspire.morphic.feature.apps.layout.alphabet.AlphabetPicker
 import inkspire.morphic.feature.apps.layout.alphabet.AlphabetStrip
 import inkspire.morphic.feature.apps.layout.alphabet.LetterBucket
 import inkspire.morphic.feature.apps.layout.categorycard.AppsCategoryCard
@@ -190,21 +193,22 @@ fun AppsScreen(
     // and a new one must not be able to forget.
     val query = rememberAppsSearch(viewModel, presented)
     val placement = state.searchOn(layout)
-    val search = searchChrome(placement, query.opened)
-    // **The category pager's search is a mode, and the other four placements are fixtures.** A mode is opened from a
-    // button on the page header, closed from the field, and shows results from the moment it opens; a fixture keeps
-    // its field on screen always, so for it "show results" is exactly "is there a query".
+    val search = searchChrome(placement, query.opened, state.searching)
     val asMode = placement is SearchPlacement.InHeader
-    val showResults = search.edge != null && (asMode || state.searching)
     // Back closes the search before it closes the surface, which is the order the user pressed them in.
     BackHandler(enabled = asMode && query.opened) { query.close() }
+
+    // **The A–Z filter, which is what an alphabet can do for a surface that is not in alphabetical order.** Only the
+    // arranged layouts reach it; the two derived ones index themselves with a strip instead.
+    val alphabet = rememberAlphabetFilter(state, layout, presented)
+    BackHandler(enabled = alphabet.showing) { alphabet.back() }
 
     // **Which bucket a finger is holding on the A–Z strip**, and the run of apps it points at. Held by the screen
     // rather than by the strip because it is the *content* that answers for it: two layouts read the same range, and
     // neither of them is the thing being touched. A *position* rather than a label, because an alphabetic index
     // labels both its ends `…` and a label would not say which end was being held.
     var held by remember { mutableStateOf<Int?>(null) }
-    val indexed = held?.let { state.alphabetLettersFor(layout).getOrNull(it)?.range }
+    val indexed = held?.let { state.alphabetBuckets.getOrNull(it)?.range }
 
     OnFilm {
         Box(
@@ -248,23 +252,35 @@ fun AppsScreen(
                         // layouts are told the same thing through `insetSides` instead.
                         .consumeWindowInsets(search.consumed),
                 ) {
-                    // A mode shows results before a single letter is typed, which is what an empty query already
-                    // resolves to (`AppsState.results` is the whole list while it is blank) and what Smart Launcher
-                    // shows there too.
-                    if (showResults) {
-                        AppsResults(layout, state, viewModel, device, search.contentSides)
-                    } else {
-                        AppsArrangement(
+                    // Three things can be on screen here, and they are tried in the order a user would expect to get
+                    // out of them: a query replaces everything, a chosen letter replaces the arrangement, and the
+                    // arrangement is what is there when neither is. A mode shows results before a single letter is
+                    // typed, which is what an empty query already resolves to (`AppsState.results` is the whole list
+                    // while it is blank) and what Smart Launcher shows there too.
+                    val lettered = alphabet.apps
+                    when {
+                        search.showResults -> AppsResults(layout, state.results, state, viewModel, device, search.contentSides)
+                        lettered != null -> Column(Modifier.fillMaxSize()) {
+                            AlphabetFilterBar(alphabet.label, alphabet::pick, alphabet::clear)
+                            AppsResults(layout, lettered, state, viewModel, device, search.contentSides)
+                        }
+
+                        else -> AppsArrangement(
                             layout = layout,
                             state = state,
                             viewModel = viewModel,
                             device = device,
                             geometry = AppsGeometry(card, pagerFit, pagerPadding, search.contentSides),
                             additions = additions,
-                            chrome = AppsChromeReach(query::open.takeIf { asMode }, indexed),
+                            chrome = AppsChromeReach(
+                                onSearch = query::open.takeIf { asMode },
+                                onAlphabet = alphabet.open,
+                                indexed = indexed,
+                            ),
                         )
                     }
-                    AppsIndexStrip(state, layout, drawn = !showResults, onLetter = { held = it })
+                    AppsIndexStrip(state, layout, drawn = !search.showResults, onLetter = { held = it })
+                    AppsLetterPicker(state, alphabet)
                 }
                 if (search.edge == VerticalEdge.BOTTOM) field()
             }
@@ -346,6 +362,10 @@ private fun rememberAppsSearch(viewModel: AppsViewModel, presented: Boolean): Ap
  * @property consumed the same fact for every other layout, which pads *itself* with `windowInsetsPadding` and so
  *   respects consumption. Written out rather than derived from [contentSides] because "no sides at all" is not a
  *   `WindowInsetsSides` value.
+ * @property showResults whether the query's matches replace the arrangement. **The category pager's search is a mode
+ *   and the other four placements are fixtures**, which is the whole of this line: a mode is opened from a button and
+ *   shows results from the moment it opens, where a fixture keeps its field on screen always and so answers "is there
+ *   a query". Resolved beside the insets because it is the same question about the same placement.
  * @property keyboardLift how far a field on the bottom edge must translate to clear the keyboard, or null for a field
  *   the keyboard cannot reach. **A translation and not padding, which is the whole point**: this surface must not be
  *   resized by an IME. Four of the five layouts divide a fixed `rows × cols` out of the height they are given, so
@@ -360,6 +380,7 @@ private class SearchChrome(
     val contentSides: WindowInsetsSides,
     val consumed: WindowInsets,
     val keyboardLift: WindowInsets?,
+    val showResults: Boolean,
 )
 
 /**
@@ -367,9 +388,21 @@ private class SearchChrome(
  *
  * @param opened whether the user has opened a search, which decides whether the *mode* placement has a field on
  *   screen at all. A pinned field ignores it, being there either way.
+ * @param hasQuery whether anything is typed — what a pinned field's results turn on, where a mode's turn on being
+ *   open.
  */
+/**
+ * Whether the query's matches replace the arrangement, given where the field ended up.
+ *
+ * Its own function because it is the one thing [searchChrome] resolves that is not an inset, and because both halves
+ * of it are easy to state and easy to get backwards: there must be a field on screen at all, and then either it is a
+ * mode (which shows results from the moment it opens) or there is something typed into it.
+ */
+private fun showsResults(placement: SearchPlacement, edge: VerticalEdge?, hasQuery: Boolean): Boolean =
+    edge != null && (placement is SearchPlacement.InHeader || hasQuery)
+
 @Composable
-private fun searchChrome(placement: SearchPlacement, opened: Boolean): SearchChrome {
+private fun searchChrome(placement: SearchPlacement, opened: Boolean, hasQuery: Boolean): SearchChrome {
     val edge = when (placement) {
         is SearchPlacement.Pinned -> placement.edge
         SearchPlacement.InHeader -> VerticalEdge.TOP.takeIf { opened }
@@ -397,11 +430,112 @@ private fun searchChrome(placement: SearchPlacement, opened: Boolean): SearchChr
             VerticalEdge.BOTTOM -> bars.only(WindowInsetsSides.Bottom)
             null -> WindowInsets(0)
         },
+        showResults = showsResults(placement, edge, hasQuery),
         keyboardLift = if (edge == VerticalEdge.BOTTOM) {
             WindowInsets.ime.exclude(bars.only(WindowInsetsSides.Bottom))
         } else {
             null
         },
+    )
+}
+
+/**
+ * What the A–Z **filter** is doing right now: the picker being open, and the letter it left behind.
+ *
+ * **The letter outlives the picker, which is the whole point of a filter rather than a scrub.** The strip on the
+ * derived layouts reports null the moment a finger lifts, because it has already scrolled and there is nothing to
+ * keep; a filter that cleared on release would show a screenful of apps nobody could tap. So this is chosen, then
+ * lived in, then left — by back, or by the bar's own close, which is the lesson the search field already taught:
+ * back does work and nothing on screen says so.
+ *
+ */
+@Stable
+private class AlphabetFilter(private val buckets: List<LetterBucket>, private val sorted: List<AppInfo>) {
+
+    var picking by mutableStateOf(false)
+        private set
+    private var chosen by mutableStateOf<Int?>(null)
+
+    /**
+     * The verb an arrangement hosts on its header, or null when this layout has no filter to offer — A–Z navigation
+     * switched off, nothing to index, or a layout that indexes itself with a strip instead.
+     */
+    val open: (() -> Unit)? get() = if (buckets.isEmpty()) null else ::pick
+
+    /** True while either half of the filter is on screen, which is what back has to answer for. */
+    val showing: Boolean get() = picking || chosen != null
+
+    /** The letter being shown, or empty when none is — read only by the bar, which is not drawn otherwise. */
+    val label: String get() = chosen?.let { buckets.getOrNull(it)?.label }.orEmpty()
+
+    /**
+     * The apps the chosen letter covers, or null when nothing is chosen.
+     *
+     * Sliced by the bucket's range rather than filtered by a second pass over every label: the ranges come from the
+     * same collation the list is sorted by, so a bucket is a run and a run is a slice. Bounds-checked because the
+     * collection can change under a chosen letter — an install lands, the ranges move, and the index held here is a
+     * moment older than the list it points into.
+     */
+    val apps: List<AppInfo>?
+        get() = chosen?.let { buckets.getOrNull(it) }
+            ?.range
+            ?.takeIf { it.last < sorted.size }
+            ?.let(sorted::slice)
+
+    fun pick() {
+        picking = true
+    }
+
+    fun choose(index: Int) {
+        chosen = index
+        picking = false
+    }
+
+    fun dismiss() {
+        picking = false
+    }
+
+    fun clear() {
+        picking = false
+        chosen = null
+    }
+
+    /** Back leaves the picker if it is open, and the filter if it is not — one step at a time, as it was entered. */
+    fun back() {
+        if (picking) dismiss() else clear()
+    }
+}
+
+/**
+ * [AlphabetFilter] for this surface, closed when the surface leaves.
+ *
+ * A letter is about *this* visit, exactly as a query is: left behind, the next open shows a surface missing most of
+ * its apps for a reason that happened last time.
+ */
+@Composable
+private fun rememberAlphabetFilter(state: AppsState, layout: AppsLayout, presented: Boolean): AlphabetFilter {
+    val buckets = if (layout.indexesAlphabetically) emptyList() else state.alphabetBuckets
+    val filter = remember(buckets, state.apps) { AlphabetFilter(buckets, state.apps) }
+    LaunchedEffect(presented) { if (!presented) filter.clear() }
+    return filter
+}
+
+/**
+ * The A–Z letter picker, while one is being asked for.
+ *
+ * Above the surface's own content and below the shell's menu, like a collection overlay: it is a choice being made
+ * *about* what is underneath, so what is underneath stays visible behind it.
+ *
+ * **Whether it is on screen is decided here**, not by the caller — the same division `AppsIndexStrip` keeps, and for
+ * the same reason: an `if` at a call site is one a later call site can forget.
+ */
+@Composable
+private fun AppsLetterPicker(state: AppsState, filter: AlphabetFilter) {
+    if (!filter.picking) return
+    AlphabetPicker(
+        labels = state.alphabetBuckets.map(LetterBucket::label),
+        onPick = filter::choose,
+        onDismiss = filter::dismiss,
     )
 }
 
@@ -426,7 +560,7 @@ private fun BoxScope.AppsIndexStrip(
     drawn: Boolean,
     onLetter: (Int?) -> Unit,
 ) {
-    val buckets = state.alphabetLettersFor(layout)
+    val buckets = if (layout.indexesAlphabetically) state.alphabetBuckets else emptyList()
     if (!drawn || buckets.isEmpty()) return
     AlphabetStrip(
         labels = buckets.map(LetterBucket::label),
@@ -448,11 +582,14 @@ private fun BoxScope.AppsIndexStrip(
  *
  * @property onSearch opens the surface's search from a button the arrangement hosts. Only the category pager has one;
  *   null everywhere else, which is what draws no button.
+ * @property onAlphabet opens the A–Z letter picker, from a button beside the search one. The category pager's, for
+ *   the same reason: an arranged surface can be *filtered* by a letter where an ordered one is indexed by it.
  * @property indexed the run of apps the A–Z strip is pointing at, or null when nothing is being scrubbed. Only the
  *   two derived layouts read it, being the only two ordered A–Z.
  */
 private class AppsChromeReach(
     val onSearch: (() -> Unit)?,
+    val onAlphabet: (() -> Unit)?,
     val indexed: IntRange?,
 )
 
@@ -471,7 +608,11 @@ private class AppsGeometry(
 )
 
 /**
- * What the surface draws while a search is open: its **derived** shape, filtered.
+ * What the surface draws in place of its arrangement: its **derived** shape, over whatever list it is handed.
+ *
+ * Two callers hand it two lists — a query's matches, and one letter's run — which is the whole reason [apps] is a
+ * parameter rather than a read of `state.results`. Both are the same view of the same collection, and drawing them
+ * from one place is what stops a letter's apps and a query's apps being laid out differently.
  *
  * A list layout narrows its rows; the four that arrange something show the A–Z grid instead of their arrangement,
  * because a filtered arrangement is neither — L1 narrowed its pages in place and left the matches scattered across
@@ -483,15 +624,16 @@ private class AppsGeometry(
 @Composable
 private fun AppsResults(
     layout: AppsLayout,
+    apps: List<AppInfo>,
     state: AppsState,
     viewModel: AppsViewModel,
     device: DeviceConfiguration,
     insetSides: WindowInsetsSides,
 ) {
     when {
-        state.results.isEmpty() -> NoMatches()
+        apps.isEmpty() -> NoMatches()
         layout == AppsLayout.VERTICAL_LIST -> AppsVerticalList(
-            apps = state.results,
+            apps = apps,
             onLaunch = viewModel::launch,
             metrics = state.metricsFor(GridSlot.APPS_LIST),
             rowHeight = state.rowHeight,
@@ -500,7 +642,7 @@ private fun AppsResults(
         )
 
         else -> AppsVerticalGrid(
-            apps = state.results,
+            apps = apps,
             onLaunch = viewModel::launch,
             metrics = state.metricsFor(GridSlot.APPS_SCROLL),
             cols = state.colsFor(GridSlot.APPS_SCROLL, device),
@@ -589,6 +731,7 @@ private fun AppsArrangement(
             // The one piece of chrome any of these five layouts reads: which edge its tab strip sits on.
             tabEdge = state.categoryTabEdge,
             onSearch = chrome.onSearch,
+            onAlphabet = chrome.onAlphabet,
         )
         // The fifth and last layout, sharing the category store the one above uses. Named rather than folded
         // into an `else`, like every arm here: adding a value to [AppsLayout] must fail to compile until it
