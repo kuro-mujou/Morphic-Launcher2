@@ -109,6 +109,26 @@ interface SettingsRepository {
      */
     val iconPresets: Flow<List<IconPreset>>
 
+    /**
+     * The **name** of the preset last applied, or null when the global recipe came from somewhere else.
+     *
+     * **A preset's identity is its name, and this is the only record of which one is in force.** Recipes cannot
+     * stand in for it: duplicating a look under a second name is a supported thing to do — it is how a variation is
+     * kept for later adjustment — so two presets can hold an equal [IconAppearance] by design, and a library that
+     * marks the applied one by comparing recipes names whichever was saved first whatever the user pressed. Nothing
+     * about *rendering* reads this; it exists so the library can say which tile is in force.
+     *
+     * **It can dangle, and the reader drops it when it does.** A preset can be deleted after being applied, which
+     * does not touch what is applied — so a consumer checks the name still names something rather than trusting it
+     * outright; `IconsState.appliedPreset` is that check. A *rename* is carried here instead of being left to the
+     * reader, because a renamed preset is still the one in force and nothing downstream could work that out.
+     *
+     * The known staleness left in: saving over the applied preset with a different look leaves this pointing at a
+     * name whose recipe is no longer what is applied, until the next apply or studio save. Accepted rather than
+     * fixed, because every fix for it is a recipe comparison, which is the thing this key exists to replace.
+     */
+    val appliedIconPreset: Flow<String?>
+
     /** Saves [appearance] under [name], replacing any preset already called that. */
     suspend fun saveIconPreset(name: String, appearance: IconAppearance)
 
@@ -120,6 +140,10 @@ interface SettingsRepository {
      *
      * Its own operation rather than a delete and a save, because the name *is* the identity: spelled that way, the
      * preset would come back at the end of the list.
+     *
+     * **Carries [appliedIconPreset] along when it names [from]**, and that is load-bearing rather than tidiness: the
+     * ring is resolved by name alone, so a rename the stamp did not follow would silently un-mark the preset that is
+     * actually in force.
      */
     suspend fun renameIconPreset(from: String, to: String)
 
@@ -148,8 +172,16 @@ interface SettingsRepository {
      * A whole-value write because a layer set is an **ordered list**: there is no sparse record to patch and no
      * stable key to patch it by, since inserting a layer moves every index below it. It is also what makes undo
      * cheap — an appearance is an immutable value, so history is a list of them and a step is an index.
+     *
+     * **[preset] is stamped in the same call, and defaulting it to null is what keeps [appliedIconPreset] from going
+     * stale.** Every path that sets a recipe re-stamps the name, so a studio save — which is not a preset — clears
+     * whatever a previous apply left behind without its author having to know this key exists. A separate
+     * "and now record the name" call would be a second thing to remember, and forgetting it fails silently: with the
+     * ring resolved by name alone, the library would go on marking a tile whose look is no longer on.
+     *
+     * @param preset the name this appearance came from, or null when it came from anywhere else.
      */
-    suspend fun setIconAppearance(appearance: IconAppearance)
+    suspend fun setIconAppearance(appearance: IconAppearance, preset: String? = null)
 
     /**
      * What the **icon studio's canvas** is drawn on, so the studio reopens on the backdrop it was left on.

@@ -120,6 +120,25 @@ private val IconPresetsSlice = SettingsSlice(
 )
 
 /**
+ * The name of the preset last applied: one key, one bare nullable string.
+ *
+ * **Not a field on [IconPresetsSlice], though it names one of that blob's entries.** The library is written when a
+ * preset is created, renamed or dropped; this is written on every apply and on every studio save — so sharing a key
+ * would make each apply rewrite the whole library, which is the cost that slice's own comment exists to avoid.
+ * It is not a field on [IconAppearanceSlice] either, and that one is not about cost: the recipe blob is a bare
+ * `IconAppearance` from `core:model`, and an icon's *identity* — what the bake cache keys on — must not depend on
+ * what someone called it.
+ *
+ * Null is the stored value rather than an absent key when a recipe came from the studio, since [SettingsSlice] has no
+ * way to delete one; both read back as null, so nothing downstream can tell them apart.
+ */
+private val AppliedIconPresetSlice = SettingsSlice(
+    name = "icon_applied_preset",
+    serializer = serializer<String?>(),
+    default = null,
+)
+
+/**
  * The icon studio's canvas backdrop: one key, one bare enum.
  *
  * **The smallest slice there is, and its own key for [IconAppearanceSlice]'s stated reason** — that comment reserved a new
@@ -228,6 +247,8 @@ internal class SettingsRepositoryImpl(
 
     override val iconPresets: Flow<List<IconPreset>> = dataStore.read(IconPresetsSlice) { it.presets }
 
+    override val appliedIconPreset: Flow<String?> = dataStore.read(AppliedIconPresetSlice) { it }
+
     override val iconStudioBackground: Flow<PreviewBackground> = dataStore.read(IconStudioBackgroundSlice) { it }
 
     // Ignores the old value: one value replaced outright. See the interface.
@@ -269,8 +290,17 @@ internal class SettingsRepositoryImpl(
 
     override suspend fun deleteIconPreset(name: String) = update(IconPresetsSlice) { without(name) }
 
-    override suspend fun renameIconPreset(from: String, to: String) =
-        update(IconPresetsSlice) { renamed(from, to) }
+    // Two slices, and the second only when the applied preset is the one being renamed. Whether the rename happens
+    // at all is the library's answer, read out of the transform rather than re-derived from `from` and `to` — a
+    // second copy of that rule would leave the ring on a name nothing is called after the two drifted.
+    override suspend fun renameIconPreset(from: String, to: String) {
+        var renamedTo = from
+        update(IconPresetsSlice) {
+            renamedTo = nameAfterRename(from, to)
+            renamed(from, to)
+        }
+        update(AppliedIconPresetSlice) { if (this == from) renamedTo else this }
+    }
 
     // Ignores the old value rather than transforming it — see the interface. The `update` helper is still the right
     // path: it is what puts the write inside a DataStore transaction.
@@ -279,8 +309,14 @@ internal class SettingsRepositoryImpl(
         update(BackdropEffectSlice) { transform(this) }
 
     // Also ignores the old value: a layer set is replaced wholesale, never patched. See the interface.
-    override suspend fun setIconAppearance(appearance: IconAppearance) =
+    //
+    // **Two writes, never one**, so the name cannot outlive the recipe it named. The order is deliberate: the
+    // appearance lands first, so a library recomposing between the two marks nothing for a frame rather than
+    // marking the tile that is about to be in force but is not yet.
+    override suspend fun setIconAppearance(appearance: IconAppearance, preset: String?) {
         update(IconAppearanceSlice) { appearance }
+        update(AppliedIconPresetSlice) { preset }
+    }
 
     override suspend fun setHomeLayout(layout: HomeLayout) =
         update(SurfaceRegisterSlice) { copy(homeLayout = layout) }

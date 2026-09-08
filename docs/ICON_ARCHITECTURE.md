@@ -1096,9 +1096,28 @@ Rendering one costs almost nothing, since `AppIcon`/`LauncherIcon` take an expli
   screen before the finger lands, so "look before you restyle every icon" happens by reading rather than by
   navigating. The studio is still one tap away as **Edit** in the tile's menu, by exactly the route the old tap
   took.
-- **The applied preset carries a ring**, compared by *value* — so it marks a look re-created in the studio as well
-  as one that was tapped. Without it a tap changes every inheriting icon on the device and the pane shows nothing
-  at all. There is no undo: the presets slice keeps no history, which is stated on `IconsViewModel.apply`.
+- **The applied preset carries a ring, resolved by *name*.** Without a ring a tap changes every inheriting icon on
+  the device and the pane shows nothing at all. There is no undo: the presets slice keeps no history, which is
+  stated on `IconsViewModel.apply`.
+  - **A preset's identity is its name, not its recipe, because duplicating a look is a supported thing to do** — a
+    variation kept under a second name so one copy can be adjusted later. So two presets are value-equal by design,
+    and the ring was originally compared by value: `firstOrNull` over recipes rang whichever clone was saved first
+    no matter which tile was pressed. Resolving by name is what tells clones apart, and it can be, since
+    `IconPresets.with` replaces rather than duplicating and so keeps at most one preset per name.
+  - So applying **stamps a name** — its own slice, `icon_applied_preset`, written by
+    `setIconAppearance(appearance, preset)` in the same call that sets the recipe. One call rather than two, so a
+    studio save (which passes no name) clears it without its author having to know the key exists; a separate
+    "record the name" step is one that fails silently when forgotten.
+  - The stamp is dropped on read when it **dangles** — the preset was deleted — which is the only check
+    `IconsState.appliedPreset` makes. A *rename* is carried in the store instead (`renameIconPreset`, reading
+    `IconPresets.nameAfterRename` rather than re-deciding when a rename is a no-op), because a renamed preset is
+    still the one in force and no reader could work that out.
+  - Two costs, both deliberate. **A look re-created by hand in the studio marks nothing** — value comparison used to
+    catch it, but a recipe arrived at by editing did not come from a preset. And **saving over the applied preset
+    with a different look** leaves the ring on it until the next apply; every fix for that is a recipe comparison,
+    which is the thing the name replaced.
+  - The name is not a field on `icon_appearance`, and that one is not about cost: an icon's identity is what the
+    bake cache keys on, and it must not depend on what someone called the recipe.
 - **The menu opens two ways** — a three-dot button *and* long-press, one menu with one verb list. The button
   because a settings pane teaches no gestures and Edit/Delete would otherwise be unreachable; the long-press
   because that is what every other menu in this launcher uses and it must not be wrong here.

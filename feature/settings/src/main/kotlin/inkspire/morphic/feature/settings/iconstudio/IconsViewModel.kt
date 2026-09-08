@@ -3,7 +3,6 @@ package inkspire.morphic.feature.settings.iconstudio
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.model.ComponentKey
-import inkspire.morphic.core.model.icon.IconAppearance
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.settings.IconPreset
 import inkspire.morphic.data.settings.SettingsRepository
@@ -36,7 +35,7 @@ internal class IconsViewModel(
     val state: StateFlow<IconsState> =
         combine(
             settingsRepository.iconPresets,
-            settingsRepository.iconAppearance,
+            settingsRepository.appliedIconPreset,
             sample.app,
         ) { presets, applied, app ->
             IconsState(presets = presets, applied = applied, sample = app?.componentKey)
@@ -53,7 +52,8 @@ internal class IconsViewModel(
      * a look worth saving first.
      */
     fun apply(preset: IconPreset) = viewModelScope.launch {
-        settingsRepository.setIconAppearance(preset.appearance)
+        // The name goes with the recipe, and it is what the ring is resolved from — see [IconsState.appliedPreset].
+        settingsRepository.setIconAppearance(preset.appearance, preset.name)
     }
 
     /** Removes a saved preset. Touches nothing it was applied to — a preset is a copy, not a link. */
@@ -68,23 +68,32 @@ internal class IconsViewModel(
 
 /**
  * @property presets the saved library, in the order it is stored.
- * @property applied the recipe in force for every app that has not been given its own — what a tile is compared
- *   against to know whether it is the one being used.
+ * @property applied the name the last apply stamped, or null when the recipe in force came from anywhere else. Not
+ *   yet an answer about the library — see [appliedPreset].
  * @property sample the app whose artwork every tile draws, or null until the app cache answers.
  */
 internal data class IconsState(
     val presets: List<IconPreset> = emptyList(),
-    val applied: IconAppearance = IconAppearance.Base,
+    val applied: String? = null,
     val sample: ComponentKey? = null,
 ) {
 
     /**
-     * The name of the preset currently in force, or null when the default matches none of them.
+     * The name of the preset currently in force, or null when none is.
      *
-     * **Compared by value, not remembered as a pointer.** A recipe is a data class all the way down, so equality
-     * *is* "these produce the same icon" — which is also what `IconId` keys the bake cache on. So editing the
-     * default in the studio until it happens to match a preset marks that preset, correctly: it says which look is
-     * on, not which tile was last pressed.
+     * **Resolved by name, never by comparing recipes, because a preset's recipe is not its identity.** Duplicating a
+     * look under a second name is a supported thing to do — it is how a variation is kept for later adjustment — so
+     * two presets can be value-equal by design, and a `firstOrNull` over recipes then rings whichever was saved
+     * first no matter which tile was pressed. That was the bug, and comparing looks *at all* is what caused it: the
+     * name is the only thing that tells clones apart, and it can be, since `IconPresets.with` replaces rather than
+     * duplicating and so keeps at most one preset per name.
+     *
+     * The one thing checked is that the name still names something — a preset can be deleted after being applied,
+     * and a dangling stamp would make this claim a preset is in force when the library no longer holds it.
+     *
+     * The cost, and it is deliberate: **a look re-created by hand in the studio marks nothing.** Value comparison
+     * used to catch that, and it is genuinely a small loss — but a recipe arrived at by editing did not come from a
+     * preset, and paying for that with an unreliable ring on every clone is the wrong trade.
      */
-    val appliedPreset: String? get() = presets.firstOrNull { it.appearance == applied }?.name
+    val appliedPreset: String? get() = applied?.takeIf { name -> presets.any { it.name == name } }
 }

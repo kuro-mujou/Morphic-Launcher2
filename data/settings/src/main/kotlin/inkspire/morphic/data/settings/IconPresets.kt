@@ -64,16 +64,29 @@ data class IconPresets(
      * A no-op when [from] is not here, or when [to] is blank — a preset with no name is one nothing could pick out.
      */
     fun renamed(from: String, to: String): IconPresets {
-        val name = to.trim()
-        if (name.isEmpty()) return this
+        val name = nameAfterRename(from, to)
         val index = presets.indexOfFirst { it.name == from }
-        if (index < 0) return this
+        if (name == from || index < 0) return this
         val renamed = presets[index].copy(name = name)
         return copy(
             presets = presets
                 .mapIndexed { i, preset -> if (i == index) renamed else preset }
                 .filter { it === renamed || it.name != name },
         )
+    }
+
+    /**
+     * What the preset called [from] ends up called under [renamed] — [from] itself when that would be a no-op.
+     *
+     * **Exists so that "did the rename happen" has one answer rather than two.** The rule is three conditions —
+     * the name is trimmed, a blank one is refused, a missing preset is not there to rename — and the settings store
+     * has to know the outcome too, because the *applied preset* is remembered by name and must follow a rename.
+     * Written out a second time there, the two would agree until one of the three moved.
+     */
+    fun nameAfterRename(from: String, to: String): String {
+        val name = to.trim()
+        if (name.isEmpty() || presets.none { it.name == from }) return from
+        return name
     }
 
     companion object {

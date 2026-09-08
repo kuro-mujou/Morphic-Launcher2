@@ -109,4 +109,19 @@ class IconPresetsTest {
         assertEquals(library, library.renamed("nope", "C"))
         assertEquals(library, library.renamed("A", "   "))
     }
+
+    /**
+     * [IconPresets.nameAfterRename] answers the same three conditions [IconPresets.renamed] acts on, and the settings
+     * store reads it to carry the *applied* preset's name through a rename. Pinned together because the failure is
+     * silent: the two agreeing today and disagreeing after one of them moves would leave the library's ring on a name
+     * nothing is called.
+     */
+    @Test
+    fun `the name after a rename is the trimmed one, or the old one when nothing happens`() {
+        val library = IconPresets.Default.with(IconPreset("A", set(1)))
+
+        assertEquals("Ay", library.nameAfterRename("A", "  Ay  "))
+        assertEquals("A", library.nameAfterRename("A", "   "))
+        assertEquals("nope", library.nameAfterRename("nope", "C"))
+    }
 }
