@@ -304,9 +304,21 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     its own knobs** (`DesignStyle` on the `Generator` interface) rather than the UI tabulating them, because a knob the
     panel offers and the generator ignores fails silently; the amount slider offers the generator's **real counts**
     through one shared mapping. Color mode moved out of the palette row into the panel, so Style is every knob in
-    `DesignParams`. Still deferred: a draft-quality render during the drag (the panel commits on release — open
-    question 1 below, now with a consumer), the frosted material under the bottom bar, and per-design defaults. Full
+    `DesignParams`. Still deferred: the frosted material under the bottom bar, and per-design defaults. Full
     record in the teardown doc.
+  - **W12 — the live preview. ✅ (2026-09-07)** The Style knobs preview **per frame of a drag** instead of committing on
+    release, which is open question 1 answered by adopting the icon studio's mechanism rather than a second one. The
+    loop is `core:common`'s **`draftThenSettle`**, extracted from `IconPreview` on this second consumer: it paints a
+    downscaled **draft** at once and the full size only once the recipe has been still for a moment, and — the clause
+    that matters — the draft is never abandoned, only the settled pass is. Cancelling on every emission is what had
+    frozen the preview until the finger lifted, since a full-screen render is never shorter than the gap between two
+    pointer events. Three things fell out of it: the draft's short side is floored at **360px** (the finest lattice any
+    generator lays down, `ContourGenerator`'s — below it a draft is a *different* composition rather than a softer
+    one), the blur filter stopped being measured in **absolute pixels** and became a fraction of the frame (a fixed
+    60px radius is three times the blur on a third-scale draft, and the same recipe meant two pictures on two screens),
+    and the transition split in two — a new design or seed still **dissolves**, a knob under a finger **swaps**, since
+    fading each intermediate render into the last smears a drag into a trail. Apply refuses a draft, so the check
+    button greys while one is showing.
   - **W11 — the design-by-design quality pass. In progress — 16 of their 22 driven.** The engine and the panel are
     built, so what is left is per design: open theirs, render ours, compare, fix one. The **checklist of which
     designs have actually been driven** (and which were built from a one-line note instead) is in
@@ -419,11 +431,13 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
 
 ## Open questions (for the planning conversation)
 
-1. **Performance during the transition/interaction.** Re-rolling a full-screen generate + the filter stack on every
-   swipe (and animating a crossfade over it) is heavy in software. Draft quality during the drag (reduced scale, or
-   filters skipped) and a high-quality bake on release is the likely answer; the noise-based filters may want AGSL
-   (API 33+) to stay smooth, which would mean the wallpaper filter path is GPU for the live preview and the reused
-   **CPU** icon helpers only for the final bake. This is the biggest technical risk and W2/W4 have to prove it.
+1. **Performance during the transition/interaction. — Answered (W12).** Draft quality during the drag and a
+   high-quality pass on release, which is what it guessed; what it did not guess is that the draft is a *proportional
+   downscale of the same picture* rather than a cheaper rendering of it, that nothing is skipped (the guess was
+   "filters skipped" — a draft that omits a filter is a preview of a different recipe), and that the whole of the
+   throttle is refusing to cancel the cheap pass. No AGSL and no GPU path: at a ninth of the pixels the CPU stack
+   keeps up. What remains open is the *generators' own* cancellation — a superseded full-size pass is abandoned in
+   intent only, since none of them checks.
 2. **Is there an in-drag continuous morph on the noise-based designs?** The evidence says the base mechanism is a
    discrete re-seed + crossfade, but a video may show the flow/contour/metaball designs *also* morphing continuously
    during the drag. If wanted, that is a per-generator enhancement (3D-noise `z = swipe`), not the base model — decide

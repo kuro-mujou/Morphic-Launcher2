@@ -18,6 +18,21 @@ class FilterPipelineTest {
     private val gray = 0xFF808080.toInt()
 
     @Test
+    fun `blur radius scales with the frame, so a draft previews the wallpaper's blur`() {
+        // The studio drafts at a third of the screen's short side, and the draft has to be the same picture: a third
+        // of the radius over a third of the pixels is the same softness, where a fixed radius is three times as much.
+        val full = FilterPipeline.blurRadiusPx(strength = 1f, width = 1080, height = 2400)
+        val draft = FilterPipeline.blurRadiusPx(strength = 1f, width = 360, height = 800)
+
+        assertEquals("a third of the frame is a third of the radius", full / 3f, draft.toFloat(), 1f)
+    }
+
+    @Test
+    fun `blur radius is never zero, so a faint blur still blurs`() {
+        assertTrue(FilterPipeline.blurRadiusPx(strength = 0.001f, width = 360, height = 800) >= 1)
+    }
+
+    @Test
     fun `vignette leaves the centre pixel untouched and darkens a corner`() {
         // 3x3 so the centre pixel sits exactly at distance 0.
         val pixels = IntArray(9) { gray }

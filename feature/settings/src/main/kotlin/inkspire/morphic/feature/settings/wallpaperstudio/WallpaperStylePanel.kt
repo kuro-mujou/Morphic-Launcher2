@@ -85,7 +85,7 @@ internal fun WallpaperStylePanel(
                 what = style.labelOf(selected),
                 value = fraction.of(params),
                 default = fraction.of(DesignParams()),
-                onCommit = { onParams(fraction.set(params, it)) },
+                onSet = { onParams(fraction.set(params, it)) },
             )
 
             chooser != null -> {
@@ -131,6 +131,8 @@ private fun AmountControl(knob: AmountKnob?, density: Float, onSetDensity: (Floa
             default = knob.at(DesignParams().density),
             what = knob.label.lowercase(),
             valueLabel = { it.toString() },
+            // Both, for [FractionControl]'s reason — a count moving under the finger is the same edit its release is.
+            onPreview = { onSetDensity(knob.densityFor(it)) },
             onCommit = { onSetDensity(knob.densityFor(it)) },
             style = studioSliderRowStyle(),
         )
@@ -139,7 +141,7 @@ private fun AmountControl(knob: AmountKnob?, density: Float, onSetDensity: (Floa
             what = knob.label,
             value = density,
             default = DesignParams().density,
-            onCommit = onSetDensity,
+            onSet = onSetDensity,
         )
 
         // Unreachable: the Amount tab is only offered for a design that declares the knob.
@@ -147,16 +149,25 @@ private fun AmountControl(knob: AmountKnob?, density: Float, onSetDensity: (Floa
     }
 }
 
-/** A `0..1` knob read as a percentage — the organic-noise family, and the one amount that counts nothing. */
+/**
+ * A `0..1` knob read as a percentage — the organic-noise family, and the one amount that counts nothing.
+ *
+ * **One lambda on both the preview and the commit, because here they are the same act.** The value being edited is a
+ * field of an in-memory recipe rather than a store write, so there is nothing a release does that a frame of the drag
+ * should not: [onSet] per frame is what puts the wallpaper under the finger, and the model drops the commit that
+ * lands on the value already drawn. What makes a per-frame edit affordable at all is the draft pass in
+ * `WallpaperStudioViewModel`, not anything this row does.
+ */
 @Composable
-private fun FractionControl(what: String, value: Float, default: Float, onCommit: (Float) -> Unit) {
+private fun FractionControl(what: String, value: Float, default: Float, onSet: (Float) -> Unit) {
     MorphicSliderRow(
         value = value,
         valueRange = 0f..1f,
         default = default,
         what = what.lowercase(),
         valueLabel = { "${(it * 100).roundToInt()}%" },
-        onCommit = onCommit,
+        onPreview = onSet,
+        onCommit = onSet,
         style = studioSliderRowStyle(),
     )
 }

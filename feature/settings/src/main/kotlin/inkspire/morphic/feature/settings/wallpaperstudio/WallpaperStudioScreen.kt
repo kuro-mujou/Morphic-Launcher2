@@ -1,8 +1,12 @@
 package inkspire.morphic.feature.settings.wallpaperstudio
 
-import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -68,9 +72,10 @@ import kotlin.math.abs
  * on top of it rather than beside it — the same placement decision the icon studio's color picker makes for the same
  * reason.
  *
- * **A [Crossfade] on the render is the transition.** When a new design or a shuffled seed produces a fresh bitmap it
- * dissolves over the old one rather than snapping, which is the whole of the studio's premium motion at this stage —
- * the discrete re-seed with an animated fade the plan settled on, not a continuous morph.
+ * **A dissolve is the transition, and only between *pictures*.** A new design or a shuffled seed fades over the last,
+ * which is the whole of the studio's premium motion at this stage — the discrete re-seed with an animated fade the
+ * plan settled on, not a continuous morph. A knob being dragged is a picture changing rather than a new one, so it
+ * swaps; see [WallpaperPreview].
  *
  * **A horizontal swipe shuffles**, the gesture the walkthrough found is the app's core toy — mapped here to the
  * discrete re-roll it actually is. Picking a design is the row; applying it as the wallpaper is the next slice.
@@ -111,7 +116,7 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
                     ) { _, amount -> travelled += amount }
                 },
         ) {
-            WallpaperPreview(bitmap = state.bitmap, onViewport = viewModel::setViewport)
+            WallpaperPreview(shot = state.shot, onViewport = viewModel::setViewport)
 
             StudioIconButton(
                 icon = Icons.AutoMirrored.Filled.ArrowBack,
@@ -127,9 +132,10 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
                 icon = Icons.Default.Check,
                 contentDescription = "Set as wallpaper",
                 onClick = { viewModel.apply(onApplied = onBack) },
-                // Nothing to apply until the first render lands, and one write at a time — the model guards the second,
-                // this greys the button while it runs so the guard is visible rather than silent.
-                enabled = state.bitmap != null && !state.applying,
+                // Nothing to apply until a *settled* render lands — a draft is a fraction of the screen's pixels — and
+                // one write at a time. The model guards both; this greys the button so each guard is visible rather
+                // than silent.
+                enabled = state.shot?.draft == false && !state.applying,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .statusBarsPadding()
@@ -329,22 +335,37 @@ private fun Chooser(
 }
 
 /**
- * The render, full-bleed, dissolving into whatever replaces it.
+ * The render, full-bleed — dissolving into a new picture, swapping outright into the next frame of the same one.
+ *
+ * **Two arrivals, one surface, and the shot says which.** A shuffle or a new design is a different picture and earns
+ * the fade the studio's motion is built on; the drafts that stream out of a Style knob under a finger are one picture
+ * changing, and fading each into the last would smear a drag into a trail of half-dissolved renders. It cannot be a
+ * [Crossfade], which animates every change alike — hence [AnimatedContent] with the transition chosen per arrival.
  *
  * **It measures itself and reports its pixel size**, so the generator paints exactly the resolution being shown rather
  * than a fixed guess scaled to fit. `onGloballyPositioned` would do, but the size is all that is wanted.
  */
 @Composable
-private fun WallpaperPreview(bitmap: Bitmap?, onViewport: (Int, Int) -> Unit) {
+private fun WallpaperPreview(shot: WallpaperShot?, onViewport: (Int, Int) -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
             .onSizeChanged { onViewport(it.width, it.height) },
     ) {
-        Crossfade(targetState = bitmap, label = "wallpaperPreview") { shown ->
+        AnimatedContent(
+            targetState = shot,
+            transitionSpec = {
+                if (targetState?.dissolve == true) {
+                    fadeIn() togetherWith fadeOut()
+                } else {
+                    EnterTransition.None togetherWith ExitTransition.None
+                }
+            },
+            label = "wallpaperPreview",
+        ) { shown ->
             if (shown != null) {
                 Image(
-                    bitmap = shown.asImageBitmap(),
+                    bitmap = shown.bitmap.asImageBitmap(),
                     contentDescription = "Wallpaper preview",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),

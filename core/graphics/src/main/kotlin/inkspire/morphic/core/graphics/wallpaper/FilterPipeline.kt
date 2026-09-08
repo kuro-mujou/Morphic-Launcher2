@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import inkspire.morphic.core.graphics.BitmapBlur
 import inkspire.morphic.core.model.wallpaper.WallpaperFilter
 import kotlin.math.hypot
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -20,6 +21,12 @@ import kotlin.math.roundToInt
  * then vignette and scanlines, then grain **last** so its speckle stays sharp rather than being blurred away. The
  * whole stage is skipped when nothing is turned on.
  *
+ * **The blur is measured in fractions of the frame; the grain and the scanlines are measured in pixels, and stay
+ * that way.** A texture whose whole nature is one-pixel speckle or a one-pixel rule has no smaller form to scale to,
+ * so on the studio's downscaled draft both read *coarser* than they will on the wallpaper — grain as blotches, the
+ * scanline pitch as wider banding. That is a draft telling the truth about which filters are on and lying about how
+ * fine they are, which is the trade the draft exists to make; the settled pass is what shows them at their real size.
+ *
  * The per-pixel passes mutate the working bitmap in place; only the blur allocates, since it needs a second buffer.
  */
 object FilterPipeline {
@@ -35,7 +42,7 @@ object FilterPipeline {
 
         val blur = filters[WallpaperFilter.BLUR] ?: 0f
         val result = if (blur > 0f) {
-            BitmapBlur.blurred(bitmap, (blur * MaxBlurRadiusPx).roundToInt().coerceAtLeast(1))
+            BitmapBlur.blurred(bitmap, blurRadiusPx(blur, bitmap.width, bitmap.height))
         } else {
             bitmap
         }
@@ -54,6 +61,24 @@ object FilterPipeline {
         result.setPixels(pixels, 0, width, 0, 0, width, height)
         return result
     }
+
+    /**
+     * How far to blur at [strength], for an image `[width] × [height]` — **a fraction of its short side, not a count
+     * of its pixels.**
+     *
+     * A recipe is a description of a picture rather than of a bitmap, so every quantity in it that has a size has to
+     * be relative to the frame or the same recipe means two different pictures at two resolutions. That is not
+     * hypothetical: the studio previews a draft at a fraction of the screen's pixels and applies the full-size render,
+     * and a radius fixed in pixels made the draft several times blurrier than the wallpaper it was previewing — the
+     * whole picture a mush that resolved to something else the moment the finger stopped. A shared recipe landing on
+     * a screen of another size is the other half of the same bug.
+     *
+     * [MaxBlurRadiusFraction] is the 60 pixels this was, at the 1080-wide phone that number was picked on, so the
+     * wallpaper a recipe produces there is unchanged. A radius is at least one pixel, since below that there is
+     * nothing to average and [BitmapBlur] would copy the image for no reason.
+     */
+    internal fun blurRadiusPx(strength: Float, width: Int, height: Int): Int =
+        (strength * MaxBlurRadiusFraction * min(width, height)).roundToInt().coerceAtLeast(1)
 
     /**
      * The corners weighted down — each pixel scaled toward black by how far it is from the center, squared, so the
@@ -168,7 +193,11 @@ object FilterPipeline {
     private const val ChannelMax = 255
     private const val RedShift = 16
     private const val GreenShift = 8
-    private const val MaxBlurRadiusPx = 60f
+    /**
+     * The widest blur, as a fraction of the image's short side — 60px on the 1080-wide phone the number was picked
+     * on. See [blurRadiusPx] for why it is a fraction at all.
+     */
+    private const val MaxBlurRadiusFraction = 60f / 1080f
     private const val ScanlineDepth = 0.35f
     private const val GrainAmplitude = 40f
     private const val HashMultiplier = -1640531527 // 0x9E3779B9, the golden-ratio scramble

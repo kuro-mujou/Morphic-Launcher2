@@ -894,6 +894,10 @@ arithmetic to produce a poor picture:
     cannot represent a fine setting at all and comes back identical across a whole stretch of the slider. Which is
     why `DraftPx` is a floor rather than a fraction; see the grain notes below. A sharp recipe draws live and never
     reaches the cap.
+  - **The draft/settle loop itself is `core:common`'s `draftThenSettle` now, shared with the wallpaper studio**,
+    which draws a different picture from a recipe under the same finger and had the same starvation for the same
+    reason. What stayed here is the pair of sizes and the fact that `IconRenderer.render` cooperates with
+    cancellation — the loop can only ask a renderer to stop.
 
 **And then it was slow and, on a home icon, invisible — three faults that only a device showed, each with a
 different cause.** Worth keeping together, because none of them is about the look:

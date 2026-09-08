@@ -18,17 +18,16 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntSize
+import inkspire.morphic.core.common.render.draftThenSettle
 import inkspire.morphic.core.icon.parse.ParsedIcon
 import inkspire.morphic.core.icon.render.IconRenderer
 import inkspire.morphic.core.model.icon.IconLayerSet
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * One icon as the editor should see it: drawn live where that is possible, and **from the bake where it is not**.
@@ -86,36 +85,10 @@ fun IconPreview(
  * ## Draft first, then full — which is the throttle *and* the resolution split, in one mechanism
  *
  * Every recipe is baked twice: once **downscaled**, immediately, and then — once nothing newer has arrived for
- * [SettleMs] — once at full size. A loop takes the newest recipe, drafts it, waits, and sharpens it.
- *
- * **The draft is never abandoned; only the full-size pass is.** That asymmetry is the correction this file's own
- * design needed, and it is worth stating plainly because the old shape looked obviously right: the bake lived in a
- * `LaunchedEffect` *keyed on the recipe*, so anything newer cancelled whatever was running. Conflating by
- * cancellation works only while the work is shorter than the gap between two emissions — and nothing was checking
- * that. A slider thumb emits per pointer event, about seven milliseconds apart on a 144Hz phone, so for any effect
- * whose draft costs more than that, **every draft was killed before it finished and the preview did not move at all
- * until the finger lifted.** It was reported as the preview freezing on a drag while the +/- buttons worked, which
- * sounds like two bugs and is one: a discrete step leaves a gap long enough for a draft to land.
- *
- * Letting the draft finish and *then* taking whatever the newest recipe is gives the property actually wanted —
- * the preview updates as fast as the machine can draft, never slower and never not at all — while still coalescing,
- * since everything emitted mid-draft collapses into one value. The full-size pass keeps the old behavior, because
- * there the old argument holds: it is slow, it is superseded the moment the recipe moves, and a stale sharp icon is
- * worth nothing.
- *
- * **The settle is a second, different question.** The loop asks "has something newer arrived?"; [SettleMs] asks "is
- * the user still going?" — which nothing else can see, and without which a full-size pass fast enough to finish
- * between two slider frames makes the preview alternate soft and sharp several times a second. That reads as
- * flashing.
- *
- * **No queue.** A drag emits far more frames than any bake can service, and conflating them is the whole requirement.
- *
- * **And abandoning only became real when [IconRenderer.render] learned to cooperate with it.** Cancellation is
- * cooperative, so a bake that never checks runs to the end however dead its coroutine is. Every frame of a drag
- * therefore queued a full draft *and* a full-size bake, all of which completed in turn — which is why the preview
- * once arrived in a backlog seconds after the finger lifted, and why the studio's bakes starved every other icon
- * sharing the dispatcher. The lesson is worth keeping: cancelling a coroutine gives you the *intent* to abandon
- * work, never the fact of it.
+ * [SettleMs] — once at full size. [draftThenSettle] is that loop and carries the reasoning for its every clause; it
+ * is shared with the wallpaper studio, which draws a different picture from a recipe under the same finger. What is
+ * this file's own is the two sizes ([DraftPx], [MaxPreviewPx]) and the fact that [IconRenderer.render] **cooperates
+ * with cancellation**, without which abandoning a full-size pass is an intent rather than a fact.
  *
  * **Deliberately not [inkspire.morphic.core.icon.render.IconRenderManager].** That cache is keyed on the resolved
  * layer set, which is exactly what changes on every frame of a drag — so a preview going through it would evict
@@ -156,59 +129,34 @@ private fun BakedIconPreview(
         val latest = remember { MutableStateFlow(request) }
         SideEffect { latest.value = request }
 
-        // **The draft runs to completion; only the full-size pass is abandoned.** This used to be `LaunchedEffect`
-        // keyed on the request, so *every* bake was cancelled the moment a newer recipe arrived — and that starves
-        // outright as soon as one draft costs more than the gap between two emissions. A slider thumb emits per
-        // pointer event, which on a 144Hz phone is about seven milliseconds apart, so on a heavy effect **no draft
-        // ever finished and the preview did not move at all until the finger lifted**. Pressing the +/- buttons
-        // worked, and looked like a different bug: a step leaves a gap long enough for a draft to land.
+        // **This was a `snapshotFlow` + `collectLatest` before the loop below**, which is worth keeping written down:
+        // that block read `layerSet` and `sizePx` as plain captured parameters, and `snapshotFlow` only re-runs its
+        // block when *snapshot state* it read is invalidated. Having read none, it emitted once and never again.
         //
-        // Conflation by cancellation only works while the work is shorter than the interval, and nothing was checking
-        // that. Finishing the draft and *then* taking whatever the newest recipe is gives the property actually
-        // wanted — the preview updates as fast as the machine can draft, never slower and never not at all — and it
-        // still coalesces, because everything emitted while a draft is in flight collapses into one value.
-        //
-        // The full-size pass keeps the old behavior, because there the old reasoning holds: it is slow, it is
-        // superseded the instant the recipe moves, and a stale sharp icon is worth nothing.
-        //
-        // **This was a `snapshotFlow` + `collectLatest` before either**, which is worth keeping written down: that
-        // block read `layerSet` and `sizePx` as plain captured parameters, and `snapshotFlow` only re-runs its block
-        // when *snapshot state* it read is invalidated. Having read none, it emitted once and never again.
+        // The size guard is a filter rather than a skip inside the loop: a node with no size yet is not a bake to
+        // conflate against, it is nothing to draw at all.
         LaunchedEffect(renderer) {
-            var rendered: Request? = null
-            while (true) {
-                val next = latest.first { it != rendered }
-                rendered = next
-                if (next.sizePx !in 1..MaxBakePx) continue
+            latest
+                .filter { it.sizePx in 1..MaxBakePx }
+                .draftThenSettle(
+                    settle = SettleMs.milliseconds,
+                    draft = { next ->
+                        // **The draft has a size of its own rather than a fraction of the settled one** — see
+                        // [DraftPx]. The settled bake may be large enough to survive being zoomed into; the draft
+                        // stays fixed however large that is, so a drag costs the same whatever the canvas is doing.
+                        val draftPx = DraftPx.coerceAtMost(fullPxOf(next))
 
-                // **The draft has a size of its own rather than a fraction of the settled one** — see [DraftPx].
-                // The settled bake may be large enough to survive being zoomed into; the draft stays fixed however
-                // large that is, so a drag costs the same whatever the canvas is doing.
-                val fullPx = next.sizePx.coerceAtMost(MaxPreviewPx)
-                val draftPx = DraftPx.coerceAtMost(fullPx)
-
-                // Only worth a first pass while it is meaningfully cheaper — on a thumbnail the draft *is* the full
-                // size, and baking twice would be two bakes for one picture.
-                if (draftPx < fullPx) {
-                    baked = renderer.bake(next, draftPx)
-                    // **The settle: is the user still going?** A different question from "has something newer
-                    // arrived", which is what the loop above answers. Without the wait, a full-size pass that is fast
-                    // enough to finish between two slider frames makes the preview alternate soft and sharp several
-                    // times a second, which reads as flashing.
-                    if (withTimeoutOrNull(SettleMs) { latest.first { it != rendered } } != null) continue
-                }
-
-                // Abandoned outright if the recipe moves under it — the one place cancellation is still right.
-                coroutineScope {
-                    val full = launch { baked = renderer.bake(next, fullPx) }
-                    val superseded = launch {
-                        latest.first { it != rendered }
-                        full.cancel()
-                    }
-                    full.join()
-                    superseded.cancel()
-                }
-            }
+                        // Only worth a first pass while it is meaningfully cheaper — on a thumbnail the draft *is*
+                        // the full size, and baking twice would be two bakes for one picture.
+                        if (draftPx < fullPxOf(next)) {
+                            baked = renderer.bake(next, draftPx)
+                            true
+                        } else {
+                            false
+                        }
+                    },
+                    settled = { next -> baked = renderer.bake(next, fullPxOf(next)) },
+                )
         }
 
         Canvas(Modifier.fillMaxSize()) {
@@ -247,6 +195,13 @@ private suspend fun IconRenderer.bake(request: Request, sizePx: Int): ImageBitma
             customImage = request.customImage,
         ).asImageBitmap()
     }
+
+/**
+ * The size the settled pass bakes [request] at — what the node asked for, held under [MaxPreviewPx].
+ *
+ * Read by the draft as well, since "is a draft worth it?" is a comparison against exactly this.
+ */
+private fun fullPxOf(request: Request): Int = request.sizePx.coerceAtMost(MaxPreviewPx)
 
 /**
  * The size to bake at for a node [nodePx] wide: capped, then rounded **up** to [BakeQuantum].

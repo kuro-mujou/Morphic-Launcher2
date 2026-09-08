@@ -645,7 +645,10 @@ forget to ask is one that silently shows a lie. Five things worth knowing:
   finish and then taking the newest recipe gives the property actually wanted — as fast as the machine can draft,
   never slower and never not at all — and still coalesces, since everything emitted mid-draft collapses into one
   value. **The plan's gesture-in-flight signal turned out to be unnecessary** — "nothing newer has arrived" *is* what
-  settled means, where `onCommit` is a proxy any non-slider edit would answer differently.
+  settled means, where `onCommit` is a proxy any non-slider edit would answer differently. **The loop itself is
+  `core:common`'s `draftThenSettle` now**, extracted on its second consumer: the wallpaper studio's Style knobs had
+  frozen the same way for the same reason, a full-screen generator being even less able to finish inside a slider's
+  frame gap. What stayed in `IconPreview` is the two sizes and `IconRenderer`'s cooperation with cancellation.
 - **Deliberately not `IconRenderManager`.** Its cache is keyed on the resolved layer set, which is exactly what changes
   every frame of a drag — a preview going through it would evict every real icon on the device within seconds. The
   editor wants one slot and has one. Its coalescing and concurrency cap are moot here too: there is one bake in flight
