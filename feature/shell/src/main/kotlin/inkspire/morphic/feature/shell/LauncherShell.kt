@@ -174,6 +174,17 @@ fun LauncherShell(
         // stream the whole way.
         val coordinator = rememberDragCoordinator()
 
+        // **A drag does not survive the device turning.** `configChanges` keeps this Activity — and therefore this
+        // composition, and therefore the lifted session — across a rotation or a fold, while every drop zone in the
+        // registry re-registers with the bounds of a window that no longer exists. The finger is still down, so the
+        // release would commit a plan hit-tested against the old screen: an icon landing in a cell that has since
+        // moved, or a zone that is no longer on screen at all. Cancelling is the honest outcome, since there is no
+        // way to say where the finger *would* have been on a screen the user has not seen yet.
+        //
+        // Keyed on the posture rather than run on every recomposition, so an ordinary drag is untouched; the effect's
+        // first run finds no session and does nothing.
+        LaunchedEffect(device) { coordinator.cancel() }
+
         // **The launcher's one item-menu host, and it belongs at this layer for the coordinator's reason.** The verbs
         // on an item's menu are the *item's* — App info, Uninstall, its own shortcuts — and the same app is reachable
         // from home, from the drawer, and from inside a folder. Binding the commands here once is what stops those
