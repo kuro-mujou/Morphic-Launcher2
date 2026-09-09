@@ -192,18 +192,23 @@ Each phase ends verified **on the device**, not on a green build.
 - [x] Delete the `ORIENTATION` constants — **six** sites, not five; each ViewModel derives its key from the
       reported `DeviceConfiguration` (always the authored key, no sharing yet).
 - [x] Delete `drawsStoredPlacements` and its two guards.
-- [ ] **Verify on device:** rotate a phone with a populated home. Landscape comes up **A–Z seeded** (see the
-      progress note below — not empty, as this plan first said), drags in landscape persist to landscape only,
-      portrait is untouched on rotating back. The dock rail accepts drops and `fitDockTo` no longer refuses to run.
+- [x] **Verified on device** (2026-09-09, Pixel Fold emulator): each posture writes its own key, and a drag made in
+      one lands only under that key. **The A–Z clause is stale and was not observable** — L2's seed and L3b's
+      re-derive both run ahead of `seedIfEmpty`, so the alphabet is the third fallback and a populated home never
+      reaches it. Checking L1 in isolation would mean reverting two slices.
+- [ ] **Still unverified:** the dock rail accepting drops, and `fitDockTo` running where `drawsStoredPlacements`
+      used to refuse. The seed fills `MAIN` only, so the rail was empty throughout and nothing exercised it.
 
 ### L2 — The projection
 
 - [x] `ArrangementProjection` in `data:layout` — **reflow only**, pure, 11 unit tests. Rotate-in-place moved to L3;
       see the progress note.
 - [x] Seed an empty authored key from its portrait counterpart on first use — HOME (every zone) and the APPS pager.
-- [ ] **Verify on device:** first rotate shows the portrait layout re-laid rather than the alphabet, on home main /
-      dock / widget area, with multi-cell widgets and folders present; and the APPS pager keeps its order rather
-      than reverting to A–Z.
+- [x] **Verified on device** (2026-09-09) for HOME `MAIN`: portrait's reading order arrives in landscape intact,
+      re-laid densely into the wider grid and re-aligned to whole cells. Pinned by making portrait's order differ
+      from the alphabet — the app the seed would have placed *first* came back **last**.
+- [ ] **Still unverified:** the dock and widget-area zones, multi-cell widgets, folders, and the APPS pager — the
+      test home held apps in `MAIN` only.
 
 ### L3 — Reference, policy, settings
 
@@ -215,8 +220,10 @@ L3b's toggles need already exists.
 - [x] `RotationMode` in `core:model`; `OrientationSettings` slice in `data:settings`.
 - [x] A new **Orientation** settings section, in the Layout group beside the screen manager.
 - [x] `MainActivity` follows the stored mode via `requestedOrientation`.
-- [ ] **Verify on device:** locking to portrait keeps HOME *and* settings portrait when the device is turned;
-      "Follow device" restores rotation; a lock set while the launcher is backgrounded is in force when it returns.
+- [x] **Verified on device** (2026-09-09): choosing "Landscape" from inside the Orientation pane turned **that pane**,
+      which is the half worth checking — the lock lives on the Activity precisely so settings obeys it too.
+- [ ] **Still unverified:** a lock set while the launcher is backgrounded being in force when it returns, and
+      `AUTO` declining to rotate while the system's own auto-rotate is off.
 
 #### L3b — the sharing policy
 
@@ -225,9 +232,17 @@ L3b's toggles need already exists.
       (portrait / landscape / neither).
 - [x] Write-back from a non-reference posture, and the unconditional re-derive on entry that pairs with it.
 - [ ] `independentFormFactor` — **deferred, and it needs one decision**; see the progress note.
-- [ ] **Verify on device:** the sequence named in the plan — independence on, edit portrait, rotate, edit landscape,
-      independence off, each of the three chooser answers. Plus the default path: with independence off, a portrait
-      edit shows up in landscape on the next rotate, and a landscape edit survives rotating away and back.
+- [x] **The default path verified on device** (2026-09-09): a landscape drag wrote back into portrait *on the drop*
+      rather than on the next rotation, the re-derive carried a portrait edit into landscape, and three rotations
+      either way produced no drift — the no-op guard holds.
+- [x] **Independence and the chooser verified as far as they go:** the toggle writes `PHONE_SHARED` on enable, and
+      the dialog offers its three answers with Cancel leaving independence on.
+- [x] **Independence holds a posture apart for removals**, verified after the fix below: removing in landscape
+      leaves portrait whole, and with the two shared it reaches portrait without resurrecting on the next rotation.
+- [ ] **Still open — structural additions.** A folder made under independence still takes its apps off the other
+      posture without giving it the folder; see "2b" below, which needs a decision.
+- [ ] **Still unverified:** the KEEP_PORTRAIT and KEEP_LANDSCAPE answers, which need a run that does not trip the
+      bug above.
 
 #### L3c — coupling and the second mode
 
@@ -385,6 +400,84 @@ enum field and the behaviour that matters is a platform call.
 item the winning side does not have, while leaving that item's *definition* alone. A folder made only in landscape,
 with "portrait" chosen at merge time, therefore survives as a row nothing draws. That is what the user asked for by
 naming a winner; collecting the orphan is a separate cleanup, alongside the empty-folder auto-dissolve.
+
+### Device verification — 2026-09-09, Pixel Fold emulator (API 36)
+
+Driven over adb against the live Room database, so every claim below is a row rather than a screenshot reading.
+Two defects, both of which only *became* defects when L1 gave the launcher more than one arrangement.
+
+#### 1. A posture change seeds the new key against the **previous** posture's grids
+
+Folding from the unfolded screen (`TABLET_LANDSCAPE`, 8 visual columns) to the cover screen (`PHONE_PORTRAIT`,
+4 columns) wrote `PHONE_PORTRAIT` rows running out to logical column 14 — a layout eight visual columns wide,
+stored under a key whose grid is four. Columns 8–14 are outside it, so **eight of twenty apps simply did not
+draw**, with nothing on screen to say why.
+
+**Fixed** — the grids now carry the posture they were resolved for (`ZoneGrids`), so the key is read out of them
+rather than from a report beside them.
+
+`HomeViewModel`'s seed collector combined `device` with `zoneConfigs`, and `zoneConfigs` is itself derived from
+`device`. `combine` emits on the latest of each, so a posture change fired it **once with the new key and the old
+grids** before the new grids arrived. The window is one emission wide and always taken.
+
+Which of the three writers it damages depends on whether the writer is guarded:
+
+- `copyArrangement` (the re-derive) is unconditional, so the corrected emission rewrites it — **self-healing**.
+- `copyArrangementIfEmpty` and `seedIfEmpty` are guarded on the target being empty, and the bad write is what
+  makes it non-empty — **permanent**.
+
+The fix already exists one module over: `AppsViewModel` carries the device inside `PagerFit` and turns the
+disagreement into a null rather than a plausible wrong number. HOME needs the same — the grids must name the
+posture they were resolved for, and a mismatch must be dropped rather than used.
+
+#### 2. `RemoveFromGrid` deletes across every arrangement, and that is now data loss
+
+L1's progress note recorded this as known and "left as-is… an L3 policy question". It is not a policy question:
+on device it destroys placements the user can see. **Fixed** — removal is scoped to the arrangement being applied
+(apps, folders, icon containers), a definition no posture places is collected, and the remove band writes back into
+the reference while the two are kept in step. Widgets and widget containers stay global, since destroying one is
+meaningless without the `AppWidgetHost` unbind and no caller can yet be told whether this was the last posture
+holding it.
+
+Two things the fix flushed out, both worth keeping:
+
+- **The remove band never wrote back.** `ShellViewModel.removeFromHome` applies straight to the repository, skipping
+  the write-back every drag makes. Invisible while removal was global; scoped, it meant portrait never heard, and
+  the next rotation rebuilt landscape from portrait and **brought the removed item back**. The write-back is now an
+  extension on `LayoutRepository`, shared by both callers.
+- **A definition outliving its last placement needs collecting.** That state was already reachable and observed: a
+  folder with both members and no placement under any key.
+
+#### 2b. Still open — a structural change made under independence reaches the other posture anyway
+
+**The original repro's app loss was `CreateFolder`, not `RemoveFromGrid`**, and scoping removal does not close it.
+Folder and container *membership* has no arrangement column, so filing an app into one must detach it from every
+grid — that part is right, and a per-posture detach would leave portrait drawing an app that a landscape folder also
+contains.
+
+What is missing is the other half: the new folder is placed **only** in the posture it was made in. While the two
+are kept in step the write-back carries it across; under **independence** nothing does, so the other posture loses
+the apps and gains no folder. The same holds for any structural addition — a new icon container, a placed widget.
+
+Three answers, none obviously right, and it is the user's call:
+
+1. **Place it in every arrangement**, finding a free cell in each posture's own grid. Needs those grids, which
+   `data:layout` deliberately does not resolve — so they arrive as a parameter, as `copyArrangement`'s do.
+2. **Accept the loss and make it visible**, by telling the user a folder made here does not exist over there.
+3. **Give membership an arrangement column**, which makes folders genuinely per-posture and is a storage change.
+
+#### Not reached, and why
+
+The dock rail, the widget area, multi-cell widgets, the APPS pager, the grid editor in landscape, and
+`ContainerSettingsViewModel`'s footprint preview. The seed fills `MAIN` only, so a default install has nothing in
+the other zones and nothing to drag from — populating them is a prerequisite for that half of the pass.
+
+#### Adjacent finding: an unfolded foldable is `TABLET_LANDSCAPE` in **both** physical orientations
+
+The inner screen is 851×883dp. `fromWindowSizeClass` decides orientation from width alone, so 851dp clears the
+expanded bound and the posture reads landscape — and turning the device to 883×851 reads landscape again. Rotating
+while unfolded therefore changes no arrangement at all. Correct-ish for layout (a near-square screen wants the wide
+grid either way) and wrong as a *name*, since the arrangement key inherits it. Worth a decision beside L4's audit.
 
 ## Rejected
 
