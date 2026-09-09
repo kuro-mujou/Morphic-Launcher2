@@ -332,18 +332,46 @@ blueprint edit has to face it rather than silently making a board rotation lossy
 
 ### L4 — The UI tail
 
-Audit, then fix. Known suspects:
+**Audited 2026-09-09.** The audit's finding is that this bullet list conflated two different things: surfaces that
+are *wrong* in landscape, and surfaces that are merely *unarranged* for it. Only the first kind is a defect, and
+all three are now fixed. The second kind is a design pass, and it is deliberately not being done blind.
 
-- [ ] `BottomSheet` at `SheetHeightFraction = 0.7f` — 70% of a short screen. Affects the widget picker, the app
-      selection sheet and the gesture sheet.
-- [ ] `IconStudioScreen`, `StudioFinalizeScreen`, `PackDrawablePicker`, `StudioColorPicker` — no landscape branch.
-- [ ] `WallpaperStudioScreen`, `WallpaperCropScreen`, `WallpaperCaptureScreen` — no landscape branch.
-- [ ] `ContainerSettingsScreen`, `GestureActionScreen`, `ArrangementPicker`.
-- [ ] The settings panes with no landscape pass: `EffectsDetail`, `ExtrasDetail`, `SurfaceRegisterDetail`,
-      `WallpaperDetail`.
-- [ ] Cancel an in-flight drag on a configuration change — `configChanges` means no recreation, so a drag
-      currently survives a rotate holding geometry for a window that no longer exists.
-- [ ] `uiInsets` under a landscape cutout on every surface (the notch moves to a long edge).
+#### Fixed — the ones that were wrong
+
+- [x] **A drag survived a configuration change.** `configChanges` keeps the Activity, so the lifted session outlived
+      the window its drop zones were measured in; releasing after a turn committed a plan hit-tested against a screen
+      that no longer existed. Cancelled on the posture change. **Verified**: lift in portrait, turn with the finger
+      down, release — nothing is written.
+- [x] **`BottomSheet` at a fixed 0.7.** Right on a tall screen, where the third left over is the glimpse that makes a
+      sheet modal; wrong at ~440dp, where the same third is most of the usable height. A short screen keeps a strip
+      instead. **Verified**: the widget picker in landscape shows both component rows and the next heading.
+- [x] **`uiInsets` under a landscape cutout.** `WallpaperCropScreen` and `WallpaperStudioScreen` were the last two
+      files in the tree still padding by `statusBarsPadding`/`navigationBarsPadding` — bars, not the cutout a notch
+      becomes on a long edge. `WallpaperCaptureScreen` is deliberately left: it hides the bars for the capture and
+      draws no chrome to occlude.
+
+#### Not defects — thirteen screens with no landscape branch
+
+None of these is broken; each was checked for the thing that would break one, which is content taller than the
+window with no way to reach it:
+
+| Screen | Why it holds up |
+|---|---|
+| `StudioFinalizeScreen`, `PackDrawablePicker`, `GestureActionScreen`, `EffectsDetail`, `ExtrasDetail`, `SurfaceRegisterDetail`, `WallpaperDetail` | all scroll, so landscape makes them dense rather than unreachable |
+| `IconStudioScreen`, `WallpaperStudioScreen`, `WallpaperCropScreen`, `WallpaperCaptureScreen`, `StudioColorPicker` | canvas surfaces that fill by design; a wider window is simply a wider canvas |
+| `ArrangementPicker` | a short fixed list |
+
+What they want is a landscape *arrangement* — the two-column treatment `SurfaceDetail` and `IconsDetail` already
+have, where a preview sits beside its controls instead of above them. That is a design decision per screen, not a
+mechanical port, and guessing at thirteen of them in one pass is how a codebase acquires thirteen layouts nobody
+chose. **Left open on purpose**, to be taken one screen at a time with the surface in front of you.
+
+#### Still unexercised, for want of content
+
+The dock rail, the widget area, multi-cell widgets and the APPS pager have never been driven through a rotation,
+because `seedIfEmpty` fills `HomeZone.MAIN` only — a default install has nothing in the other zones to drag. Filling
+them by hand is the prerequisite for that half of the pass.
+
 
 ## Progress
 
