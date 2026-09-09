@@ -206,8 +206,10 @@ class HomeViewModel(
      * happens to be showing, and a dock placement is a dock placement whichever main area is beside it.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val zoneConfigs: Flow<Map<HomeZone, GridConfig>?> =
-        device.flatMapLatest { current -> if (current == null) flowOf(null) else zoneConfigsFor(current) }
+    private val zoneConfigs: Flow<ZoneGrids?> =
+        device.flatMapLatest { current ->
+            if (current == null) flowOf(null) else zoneConfigsFor(current).map { ZoneGrids(current, it) }
+        }
 
     /**
      * Every HOME zone's grid for **any** configuration, not only the reported one.
@@ -445,11 +447,16 @@ class HomeViewModel(
         // The app cache is refreshed once, before the first seed, since a seed with an empty cache places nothing.
         viewModelScope.launch {
             var refreshed = false
-            device.filterNotNull()
-                .combine(zoneConfigs.filterNotNull()) { current, configs -> current.authoredArrangement to configs }
-                .combine(independentLayout) { (key, configs), independent -> Triple(key, configs, independent) }
+            zoneConfigs.filterNotNull()
+                .combine(independentLayout) { grids, independent -> grids to independent }
                 .distinctUntilChanged()
-                .collect { (key, configs, independent) ->
+                .collect { (grids, independent) ->
+                    // **The key comes out of the grids, never from the device report beside them.** Both derive from
+                    // `device`, so combining them made a pair that could disagree: `combine` emits on the latest of
+                    // each, and a posture change fires it once with the *new* key and the *previous* posture's grids
+                    // before the new grids arrive. That window is one emission wide and always taken.
+                    val key = grids.device.authoredArrangement
+                    val configs = grids.byZone
                     // **Kept in step means re-derived on arrival, not copied on every edit.** While the postures share
                     // one layout, entering a non-reference one rebuilds it from portrait *unconditionally* — which is
                     // what makes a portrait edit show up here without portrait having had to push it. The write-back
@@ -1290,6 +1297,20 @@ private data class HomePosture(val device: DeviceConfiguration, val layout: Home
      */
     val iconSlots: List<GridSlot> get() = slots.filter { it.blueprint.icon != null }
 }
+
+/**
+ * Every HOME zone's grid, **carrying the posture they were resolved for**.
+ *
+ * The device is in here rather than read beside these grids because a seed uses both together, and a seed writes:
+ * it derives the arrangement key from one and the layout from the other, so two values that disagree for even a
+ * single emission store a layout of one posture's shape under another posture's key. Nothing draws such a row —
+ * placements past the target grid's bounds are silently not rendered — and the guarded writers
+ * (`copyArrangementIfEmpty`, `seedIfEmpty`) fire *once*, so the bad write is also the one that makes them stop
+ * asking. Folding phone-portrait's key together with tablet-landscape's eight columns is what that looked like.
+ *
+ * `AppsViewModel.PagerFit` carries its device for the same reason and against the same hazard; this is HOME's.
+ */
+private data class ZoneGrids(val device: DeviceConfiguration, val byZone: Map<HomeZone, GridConfig>)
 
 /**
  * The settings-resolved half of [HomeState], assembled before it joins the content half.
