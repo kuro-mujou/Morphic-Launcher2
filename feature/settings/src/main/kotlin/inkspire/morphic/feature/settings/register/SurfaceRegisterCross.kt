@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
@@ -93,14 +94,21 @@ internal fun SurfaceRegisterCross(
 ) {
     val window = usableWindowArea(uiInsets)
     val ratio = (window.heightDp / window.widthDp.coerceAtLeast(1f)).coerceIn(MIN_RATIO, MAX_RATIO)
+    // **The cross is three cards and two gaps tall, and it is a picture of the screen it is drawn on** — so on the
+    // one posture that is short, the mockup gives up some of the legible size the note above argues for, in order to
+    // stay a *cross*. At the tall figures a phone in landscape gets a 376dp cross inside about 350dp of pane: the
+    // bottom edge falls below the fold, and an arrangement whose whole meaning is which edge is which becomes a list
+    // you scroll. Reflowing it is not an option for the same reason.
+    val short = currentDeviceConfiguration().isShortWindow
+    val longSide = if (short) 128.dp else 176.dp
     val cardWidth: Dp
     val cardHeight: Dp
     if (ratio >= 1f) {
-        cardHeight = 176.dp
-        cardWidth = (176.dp / ratio).coerceAtLeast(88.dp)
+        cardHeight = longSide
+        cardWidth = (longSide / ratio).coerceAtLeast(88.dp)
     } else {
-        cardWidth = 176.dp
-        cardHeight = (176.dp * ratio).coerceAtLeast(120.dp)
+        cardWidth = longSide
+        cardHeight = (longSide * ratio).coerceAtLeast(if (short) 92.dp else 120.dp)
     }
 
     Column(
@@ -216,6 +224,11 @@ private fun FilledSlot(
     onClick: (() -> Unit)?,
     onSettings: (() -> Unit)?,
 ) {
+    // **The chrome gives way with the card, or the body does instead.** The body takes what the divider and the gear
+    // row leave, so on a short card it is the *label* that runs out of room and prints over the divider — the two
+    // targets this card exists to separate, drawn on top of each other. Shrinking the parts that are chrome keeps the
+    // part that is content legible.
+    val short = currentDeviceConfiguration().isShortWindow
     Column(
         modifier = Modifier
             .size(width, height)
@@ -232,8 +245,13 @@ private fun FilledSlot(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Icon(imageVector = icon, contentDescription = null, tint = content)
-            Spacer(Modifier.height(6.dp))
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = content,
+                modifier = Modifier.size(if (short) 20.dp else 24.dp),
+            )
+            Spacer(Modifier.height(if (short) 2.dp else 6.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
@@ -245,12 +263,12 @@ private fun FilledSlot(
         if (onSettings != null) {
             HorizontalDivider(color = content.copy(alpha = 0.2f))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                IconButton(onClick = onSettings, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = onSettings, modifier = Modifier.size(if (short) 26.dp else 32.dp)) {
                     Icon(
                         imageVector = Icons.Outlined.Settings,
                         contentDescription = "$label settings",
                         tint = content,
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(if (short) 16.dp else 18.dp),
                     )
                 }
             }

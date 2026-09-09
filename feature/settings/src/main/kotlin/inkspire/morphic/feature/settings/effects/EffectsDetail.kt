@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
@@ -154,11 +155,18 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
                     .background(colors.background)
                     .padding(top = 8.dp),
             ) {
+                // **Bounded, because this is a preview of a *panel*.** Given the full width of a landscape phone it
+                // became a 590dp letterbox — a shape no panel in the launcher has, previewing a material by showing
+                // it as something else. The cap is the widest a panel actually gets on a tall phone, so the picture
+                // stays the thing it is describing and the spare width goes to margin.
                 BackdropPreview(
                     effect = previewed,
                     image = previewImage,
                     accent = state.backdropAccent,
-                    modifier = Modifier.padding(horizontal = 20.dp),
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .widthIn(max = 420.dp)
+                        .padding(horizontal = 20.dp),
                 )
             }
         }

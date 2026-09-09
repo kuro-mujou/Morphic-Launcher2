@@ -67,10 +67,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
@@ -228,7 +230,9 @@ private fun WallpaperModePager(
     }
     HorizontalPager(
         state = pagerState,
-        modifier = Modifier.height(200.dp + 128.dp),
+        // The picture plus the block of title and actions beneath it — the 128dp is that block's own height, and is
+        // not the screen's to take back however short it gets.
+        modifier = Modifier.height(modePreviewHeight() + 128.dp),
         contentPadding = PaddingValues(horizontal = 16.dp),
         pageSpacing = 12.dp,
         verticalAlignment = Alignment.Top,
@@ -384,7 +388,7 @@ private fun WallpaperModePage(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(200.dp)
+                .height(modePreviewHeight())
         ) { preview() }
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -721,6 +725,20 @@ private fun Drawable.toImageBitmap(): ImageBitmap {
 }
 
 /** The two modes, in the order they are paged through. */
+/**
+ * How tall a mode page's picture is.
+ *
+ * **Named, against this file's rule that a dp is written where it is used**, because the pager's own height is this
+ * plus the action block, and the two are silently wrong when they disagree: the pager clips, and what it clips is the
+ * button at the bottom of the page. Two literals kept in step by intention is the hazard this codebase keeps
+ * rediscovering, and it had already bitten here — shrinking the pager alone cut "Design a wallpaper" in half.
+ *
+ * **Shorter on a short window.** At 200dp the picture plus its actions is 328dp, which is most of a phone in
+ * landscape: one control filled the pane and the mode rows below it sat under the fold. Only the picture gives way.
+ */
+@Composable
+private fun modePreviewHeight(): Dp = if (currentDeviceConfiguration().isShortWindow) 112.dp else 200.dp
+
 private const val SinglePage = 0
 private const val RotatingPage = 1
 private const val PageCount = 2

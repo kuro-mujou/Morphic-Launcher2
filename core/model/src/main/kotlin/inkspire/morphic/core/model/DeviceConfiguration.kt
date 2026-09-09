@@ -37,5 +37,15 @@ enum class DeviceConfiguration {
      */
     val landscape: DeviceConfiguration get() = if (isTablet) TABLET_LANDSCAPE else PHONE_LANDSCAPE
 
+    /**
+     * True on the one posture that is genuinely **short**: a phone on its side, perhaps 440dp of height.
+     *
+     * The other three have height to spare — a tablet in landscape included — which is why this is not
+     * [isLandscape]. It is the same fact `sideZoneEdge` turns into a rail, named here because layout constants
+     * chosen against a tall window stop being right on this one and nowhere else: a fraction that reads as a
+     * glimpse, a mockup sized for legibility, a preview given the full width.
+     */
+    val isShortWindow: Boolean get() = this == PHONE_LANDSCAPE
+
     companion object
 }
