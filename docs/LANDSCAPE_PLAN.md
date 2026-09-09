@@ -34,10 +34,8 @@ and the two are the split `Orientation.kt`'s KDoc already names.
 **The six pinned constants and the gate are gone** — L1 removed them, and every surface now derives its key from
 the reported `DeviceConfiguration`. What remains:
 
-- **L3d** — the eight-key model below. The keys are the last structural piece; everything downstream of them is
-  built and verified.
-- **L3c** — grid coupling and the rotate-in-place projection, both of which are defined against the linked pair
-  and so wait on L3d.
+- **L3c** — grid coupling and the rotate-in-place projection. The last of the arrangement work; L3d landed the
+  keys they are defined against.
 - **L4** — the unaudited UI tail: sheets, studios, pickers, and the settings panes that never got a landscape pass.
 
 ## The model
@@ -276,23 +274,30 @@ Kept as the record of what was built and what the device said, because L3d chang
 
 #### L3d — eight keys, and the toggle stops being a merge
 
-The model change, and it is a **re-keying rather than a rewrite**: the projection, the re-derive and the write-back
-are untouched and simply address a different pair.
+The model change, and it was a **re-keying rather than a rewrite**: the projection, the re-derive and the
+write-back were untouched and simply address a different pair.
 
-- [ ] `ArrangementKey` gains the four `*_LINKED` values; DB version 2 → 3 (destructive, no migration to write).
-- [ ] Key resolution becomes `(DeviceConfiguration, independentLayout) → ArrangementKey`, in `core:model` beside
-      `authoredArrangement`. Every surface reads its pair through that one function — six call sites today.
-- [ ] `portraitOfFormFactor` becomes "the portrait key **of this pair**", so the reference of a linked landscape is
-      the linked portrait and never the independent one. This is the single place the two modes could still leak
-      into each other, and the one to get right.
-- [ ] Delete `IndependenceMerge`, `IndependenceMergePicker`, `snapshotArrangement`, `referenceSnapshot`, and
-      `disableIndependentLayout`'s three branches.
-- [ ] Seed an empty independent pair from the linked pair, once, through the existing `copyArrangementIfEmpty`.
-- [ ] The APPS pager's saved lists follow the same eight keys — `AppsOrderRepository` already takes an
-      `ArrangementKey`, so this is the same one-line resolution change.
-- [ ] **Verify on device:** arrange portrait, switch to independent, arrange landscape differently, switch back —
-      the linked pair is exactly as it was left; switch again — the independent pair is exactly as it was left.
-      Neither mode's work is reachable from the other, and no dialog appears in either direction.
+- [x] `ArrangementKey` gains the four `*_LINKED` values; DB version 2 → 3 (destructive, no migration to write).
+- [x] Key resolution is `DeviceConfiguration.arrangementKey(independentLayout)` in `core:model`, and every surface
+      reads its pair through it — six call sites. Three of them (`ContainerSettings`, `Dock`, `GridSize`) had to
+      start reading the flag, since a posture alone no longer names an arrangement.
+- [x] `portraitOfPair` replaces `portraitOfFormFactor` and answers **within the asking key's own mode** — the one
+      place the two pairs could still have met. `ArrangementKeyTest` pins it, along with "the two modes never
+      resolve to the same key" and "every key is reachable", because none of these fail loudly.
+- [x] Deleted: `IndependenceMerge`, `IndependenceMergePicker`, `snapshotArrangement`, `referenceSnapshot`,
+      `oppositeOrientation`, `portraitCounterpart`, and `disableIndependentLayout`'s three branches.
+      `OrientationViewModel` went from three dependencies to one.
+- [x] Seeding an empty independent arrangement is `mirrorArrangementIfEmpty` — the old `snapshotArrangement` with a
+      new job and an emptiness guard. **Verbatim, not projected**: the source is the same posture in the other mode,
+      so it is the same grid, and re-laying would close the gaps being carried over.
+- [x] The APPS pager follows the same eight keys, with the same two-step seed (its linked twin, then its pair's
+      portrait) — trivial there, since an ordered store has no verbatim/projected distinction.
+- [x] **Verified on device** (2026-09-09, Pixel Fold emulator): arrange linked portrait → rotate → switch to
+      independent → edit independent landscape → switch back → rotate. **All four keys diff clean against their
+      pre-switch rows**, and the mirror landed byte-identical rather than re-laid. No dialog appears in either
+      direction. The linked write-back still carries a landscape removal into linked portrait, and the portrait
+      surface draws the independent pair's sixteen apps where the linked pair holds fifteen — so the read side
+      picks the right pair, not just the write side.
 
 #### L3c — coupling and the second mode
 
