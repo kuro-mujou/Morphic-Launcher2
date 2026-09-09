@@ -20,6 +20,7 @@ import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.ItemGesture
 import inkspire.morphic.core.model.PlacementPlan
+import inkspire.morphic.core.model.SyncMode
 import inkspire.morphic.core.model.WidgetContainer
 import inkspire.morphic.core.model.WidgetContainerAxis
 import inkspire.morphic.core.model.WidgetInfo
@@ -27,6 +28,7 @@ import inkspire.morphic.core.model.arrangementKey
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.linkedCounterpart
 import inkspire.morphic.core.model.mainSlot
+import inkspire.morphic.core.model.on
 import inkspire.morphic.core.model.pagerSlot
 import inkspire.morphic.core.model.portraitOfPair
 import inkspire.morphic.core.model.sideSlot
@@ -234,6 +236,17 @@ class HomeViewModel(
         settingsRepository.orientationSettings
             .map { it.independentLayout }
             .stateIn(viewModelScope, SharingStarted.Eagerly, OrientationSettings.Default.independentLayout)
+
+    /**
+     * How a layout is carried between the two orientations while they are kept in step.
+     *
+     * Stored unresolved; `SyncMode.on(device)` is what turns it into the mode actually in force, since a rotation
+     * means nothing on a form factor whose board does not turn.
+     */
+    private val syncMode: StateFlow<SyncMode> =
+        settingsRepository.orientationSettings
+            .map { it.syncMode }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, OrientationSettings.Default.syncMode)
 
     /**
      * Whether the main pager's pages wrap around at the ends.
@@ -466,7 +479,8 @@ class HomeViewModel(
                     // which is what makes an edit there show up here without portrait having had to push it. The
                     // write-back in `applyChanges` is the other half: without it this would overwrite a landscape
                     // drag the next time the device turned.
-                    if (key != reference && layoutRepository.copyArrangement(reference, key, configs)) {
+                    val mode = syncMode.value.on(grids.device)
+                    if (key != reference && layoutRepository.copyArrangement(reference, key, configs, mode)) {
                         return@collect
                     }
                     // **Then three fallbacks, narrowest first, all of them "this arrangement has nothing to draw".**
@@ -959,7 +973,7 @@ class HomeViewModel(
                 // nobody is looking at. Run after the write it follows, so it reads the store rather than the
                 // optimistic map: the two agree by then, and the store is the one holding any ids a structural
                 // change just minted.
-                layoutRepository.writeBackToReference(key) {
+                layoutRepository.writeBackToReference(key, syncMode.value.on(configuration)) {
                     zoneConfigsFor(configuration.portrait).first()
                 }
             } finally {

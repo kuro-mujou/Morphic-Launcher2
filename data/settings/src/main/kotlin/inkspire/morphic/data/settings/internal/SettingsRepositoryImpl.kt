@@ -24,6 +24,7 @@ import inkspire.morphic.core.model.ItemGesture
 import inkspire.morphic.core.model.RotationMode
 import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.SurfaceTransition
+import inkspire.morphic.core.model.SyncMode
 import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.boardRotates
@@ -296,6 +297,9 @@ internal class SettingsRepositoryImpl(
 
     override suspend fun setIndependentLayout(independent: Boolean) =
         update(OrientationSettingsSlice) { copy(independentLayout = independent) }
+
+    override suspend fun setSyncMode(mode: SyncMode) =
+        update(OrientationSettingsSlice) { copy(syncMode = mode) }
 
     override val homeItemGestures: Flow<HomeItemGestures> = dataStore.read(HomeItemGesturesSlice) { it }
 

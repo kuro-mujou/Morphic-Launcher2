@@ -61,6 +61,13 @@ val ArrangementKey.isLinked: Boolean
         this == ArrangementKey.TABLET_PORTRAIT_LINKED ||
         this == ArrangementKey.TABLET_LANDSCAPE_LINKED
 
+/** True for the four arrangements drawn on a screen turned on its side, in either mode. */
+val ArrangementKey.isLandscape: Boolean
+    get() = this == ArrangementKey.PHONE_LANDSCAPE ||
+        this == ArrangementKey.PHONE_LANDSCAPE_LINKED ||
+        this == ArrangementKey.TABLET_LANDSCAPE ||
+        this == ArrangementKey.TABLET_LANDSCAPE_LINKED
+
 /**
  * The portrait arrangement **of this key's own pair** — same form factor, same mode.
  *

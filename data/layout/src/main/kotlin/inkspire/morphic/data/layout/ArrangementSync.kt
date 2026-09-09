@@ -3,6 +3,8 @@ package inkspire.morphic.data.layout
 import inkspire.morphic.core.model.ArrangementKey
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.HomeZone
+import inkspire.morphic.core.model.SyncMode
+import inkspire.morphic.core.model.isLandscape
 import inkspire.morphic.core.model.isLinked
 import inkspire.morphic.core.model.portraitOfPair
 import kotlinx.coroutines.flow.first
@@ -44,6 +46,7 @@ suspend fun LayoutRepository.copyArrangement(
     from: ArrangementKey,
     into: ArrangementKey,
     configs: Map<HomeZone, GridConfig>,
+    mode: SyncMode = SyncMode.REFLOW,
 ): Boolean {
     if (from == into) return false
     val source = placements(from).first()
@@ -51,8 +54,11 @@ suspend fun LayoutRepository.copyArrangement(
 
     val projected = HomeZone.entries.flatMap { zone ->
         val inZone = source.filterValues { it.zone == zone }.mapValues { it.value.placement }
-        ArrangementProjection.project(inZone, configs.getValue(zone))
-            .map { (item, at) -> item to PlacedItem(at, zone) }
+        val grid = configs.getValue(zone)
+        when (mode) {
+            SyncMode.REFLOW -> ArrangementProjection.project(inZone, grid)
+            SyncMode.ROTATE_IN_PLACE -> ArrangementRotation.rotate(inZone, grid, into.isLandscape)
+        }.map { (item, at) -> item to PlacedItem(at, zone) }
     }
     // **Skipped when it would change nothing**, which matters because the re-derive on entry is unconditional:
     // without this, every configuration change rewrites the whole target and Room re-emits a map identical to the
@@ -106,16 +112,20 @@ suspend fun LayoutRepository.mirrorArrangementIfEmpty(from: ArrangementKey, into
  * reference posture's grids costs a store read that an independent layout, or an edit made *in* portrait, never has
  * any use for.
  *
+ * **The same [mode] the forward derivation used**, or the pair stops round-tripping: an edit turned back by one
+ * transform and re-derived by the other is not the arrangement the user made.
+ *
  * @return whether it wrote.
  */
 suspend fun LayoutRepository.writeBackToReference(
     from: ArrangementKey,
+    mode: SyncMode,
     referenceGrids: suspend () -> Map<HomeZone, GridConfig>,
 ): Boolean {
     if (!from.isLinked) return false
     val reference = from.portraitOfPair
     if (from == reference) return false
-    return copyArrangement(from, reference, referenceGrids())
+    return copyArrangement(from, reference, referenceGrids(), mode)
 }
 
 /**

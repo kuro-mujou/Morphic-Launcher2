@@ -16,6 +16,7 @@ import inkspire.morphic.core.model.ItemGesture
 import inkspire.morphic.core.model.RotationMode
 import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.SurfaceTransition
+import inkspire.morphic.core.model.SyncMode
 import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.icon.IconAppearance
 import inkspire.morphic.core.model.icon.PreviewBackground
@@ -106,6 +107,9 @@ interface SettingsRepository {
      * re-lay against, which is not this module.
      */
     suspend fun setIndependentLayout(independent: Boolean)
+
+    /** Sets how a layout is carried between the two orientations while they are kept in step. */
+    suspend fun setSyncMode(mode: SyncMode)
 
     /**
      * Which swipe directions each home item has taken for itself.

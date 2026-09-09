@@ -149,4 +149,73 @@ class ArrangementProjectionTest {
     }
 
     private fun grid(rows: Int, cols: Int) = GridConfig(rows = rows, cols = cols)
+
+    // ── Rotate in place ──
+
+    /**
+     * **The property the whole mode exists for.** Turning a board out and back must give the arrangement the user
+     * made, coordinates and gaps and spans included — which is what a reflow cannot do and why there are two modes.
+     */
+    @Test
+    fun `a board turned out and back is the arrangement it started as`() {
+        val portrait = GridConfig(rows = 12, cols = 8, cellMultiplier = 2)
+        val landscape = portrait.swap()
+        val source = mapOf(
+            "a" to GridPlacement(0, 0, 0, 2, 2),
+            "gap-after" to GridPlacement(0, 0, 4, 2, 2),
+            "wide" to GridPlacement(0, 4, 2, 2, 4),
+            "tall" to GridPlacement(0, 8, 6, 4, 2),
+            "page two" to GridPlacement(1, 2, 2, 2, 2),
+        )
+
+        val turned = ArrangementRotation.rotate(source, landscape, toLandscape = true)
+        val back = ArrangementRotation.rotate(turned, portrait, toLandscape = false)
+
+        assertEquals(source, back)
+    }
+
+    /** Every item must land inside the target, or the round-trip above would be passing on items nothing draws. */
+    @Test
+    fun `a turned board fits the transposed grid, item for item`() {
+        val portrait = GridConfig(rows = 12, cols = 8, cellMultiplier = 2)
+        val source = mapOf(
+            "a" to GridPlacement(0, 0, 0, 2, 2),
+            "wide" to GridPlacement(0, 4, 2, 2, 4),
+            "corner" to GridPlacement(0, 10, 6, 2, 2),
+        )
+
+        val turned = ArrangementRotation.rotate(source, portrait.swap(), toLandscape = true)
+
+        assertEquals(source.size, turned.size)
+        turned.forEach { (key, at) -> assertTrue("$key fell outside the grid", at.fitsIn(portrait.swap())) }
+    }
+
+    /**
+     * The direction, pinned as a coordinate rather than described: counter-clockwise carries the **bottom** edge to
+     * the **trailing** edge, which is where the rail is. Turning the other way would look equally plausible in a
+     * screenshot and would put the dock on the wrong side.
+     */
+    @Test
+    fun `turning is counter-clockwise, so the bottom row becomes the trailing column`() {
+        val portrait = GridConfig(rows = 8, cols = 4, cellMultiplier = 2)
+        val bottomLeft = mapOf("x" to GridPlacement(0, 6, 0, 2, 2))
+
+        val turned = ArrangementRotation.rotate(bottomLeft, portrait.swap(), toLandscape = true)
+
+        // Bottom-left in portrait becomes top-left in landscape under CCW: the left column becomes the top row.
+        assertEquals(GridPlacement(0, 2, 6, 2, 2), turned.getValue("x"))
+    }
+
+    /** Gaps are the difference from a reflow, so they are asserted rather than assumed. */
+    @Test
+    fun `a turned board keeps the gaps a reflow would close`() {
+        val portrait = GridConfig(rows = 8, cols = 4, cellMultiplier = 2)
+        val gapped = mapOf("far" to GridPlacement(0, 6, 2, 2, 2))
+
+        val turned = ArrangementRotation.rotate(gapped, portrait.swap(), toLandscape = true)
+        val reflowed = ArrangementProjection.project(gapped, portrait.swap())
+
+        assertEquals(GridPlacement(0, 0, 0, 2, 2), reflowed.getValue("far"))
+        assertTrue("a rotation that packs to the origin is a reflow", turned.getValue("far") != reflowed.getValue("far"))
+    }
 }

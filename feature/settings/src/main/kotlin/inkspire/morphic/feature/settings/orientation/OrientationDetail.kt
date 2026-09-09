@@ -6,14 +6,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
 import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitchRow
+import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.RotationMode
+import inkspire.morphic.core.model.SyncMode
+import inkspire.morphic.core.model.boardRotates
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
 import org.koin.androidx.compose.koinViewModel
 
@@ -68,5 +74,31 @@ internal fun OrientationDetail(modifier: Modifier = Modifier) {
             checked = state.settings.independentLayout,
             onCheckedChange = viewModel::setIndependentLayout,
         )
+
+        // **Absent, not disabled**, and twice over: a rotation has no meaning while each orientation keeps its own
+        // layout, and none on a form factor whose board does not turn. Either way the control would be a verb with
+        // nothing behind it.
+        if (!state.settings.independentLayout && currentDeviceConfiguration().boardRotates) {
+            SettingsSectionHeader("When the device turns")
+            val modes = SyncMode.entries
+            MorphicSegmentedButtons(
+                options = modes.map { mode ->
+                    when (mode) {
+                        SyncMode.REFLOW -> "Re-arrange"
+                        SyncMode.ROTATE_IN_PLACE -> "Turn the board"
+                    }
+                },
+                selectedIndex = modes.indexOf(state.settings.syncMode),
+                onSelect = { viewModel.setSyncMode(modes[it]) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = "Re-arrange fills the screen and closes gaps. Turn the board keeps every icon where it was " +
+                    "on the glass, so turning back gives you exactly what you had.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = LocalMorphicColors.current.contentMuted,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+        }
     }
 }

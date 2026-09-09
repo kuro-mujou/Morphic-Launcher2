@@ -3,6 +3,7 @@ package inkspire.morphic.feature.settings.orientation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.model.RotationMode
+import inkspire.morphic.core.model.SyncMode
 import inkspire.morphic.data.settings.OrientationSettings
 import inkspire.morphic.data.settings.SettingsRepository
 import kotlinx.coroutines.flow.SharingStarted
@@ -33,6 +34,11 @@ class OrientationViewModel(
     val state: StateFlow<OrientationState> = settingsRepository.orientationSettings
         .map(::OrientationState)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), OrientationState())
+
+    /** Sets how a layout is carried between the two orientations while they are kept in step. */
+    fun setSyncMode(mode: SyncMode) {
+        viewModelScope.launch { settingsRepository.setSyncMode(mode) }
+    }
 
     /** Locks the launcher to one orientation, or lets it follow the device again. */
     fun setRotationMode(mode: RotationMode) {

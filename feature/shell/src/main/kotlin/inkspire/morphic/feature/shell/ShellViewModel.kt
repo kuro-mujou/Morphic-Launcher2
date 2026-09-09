@@ -10,6 +10,7 @@ import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.arrangementKey
+import inkspire.morphic.core.model.on
 import inkspire.morphic.data.apps.AppInfoOpener
 import inkspire.morphic.data.apps.AppShortcut
 import inkspire.morphic.data.apps.AppShortcuts
@@ -148,7 +149,8 @@ class ShellViewModel(
         val key = configuration.arrangementKey(independentLayout.value)
         viewModelScope.launch {
             layoutRepository.apply(key, listOf(LayoutChange.RemoveFromGrid(item)))
-            layoutRepository.writeBackToReference(key) {
+            val mode = settingsRepository.orientationSettings.first().syncMode.on(configuration)
+            layoutRepository.writeBackToReference(key, mode) {
                 settingsRepository.homeZoneGrids(configuration.portrait).first()
             }
         }

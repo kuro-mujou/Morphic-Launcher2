@@ -102,3 +102,46 @@ private fun GridOccupancy.firstAlignedFree(
     }
     return null
 }
+
+/**
+ * The other way to carry a layout between two orientations: **turn the board with the device**, so every item keeps
+ * its physical position on the glass.
+ *
+ * **Bijective, which is the whole reason it exists beside [ArrangementProjection].** A reflow re-lays in reading
+ * order and cannot put the gaps back; this round-trips exactly — coordinates, gaps and spans — so a user who turns
+ * their phone twice gets the arrangement they started with.
+ *
+ * **It is a bijection only against a transposed grid**, which is why coupling had to land first: the transform maps
+ * a `4×6` board onto a `6×4` one and onto nothing else. Given any other target it would place items outside the
+ * grid, and `GridPlacement`'s own `require`s would not catch it — the coordinates stay non-negative, they are
+ * simply too large.
+ *
+ * **Counter-clockwise, fixed.** Both physical directions produce a landscape screen, but only one arrangement is
+ * stored, so the transform picks one; CCW is the one carrying the bottom edge to the trailing edge, which is where
+ * `SideZoneEdge` puts the rail. The visible consequence is that a dock read left-to-right becomes a rail read
+ * bottom-to-top — what turning the device actually does, and what the option promises.
+ */
+object ArrangementRotation {
+
+    /**
+     * [source]'s items, turned onto [into].
+     *
+     * [toLandscape] picks the direction, and the pivot comes from [into] alone: turning *to* landscape mirrors about
+     * the portrait column count, which is the target's **row** count because the two grids are transposes; turning
+     * back mirrors about the landscape row count, which is the target's **column** count. Deriving both from the
+     * target is what keeps this from needing the source grid it would otherwise have to be trusted to receive.
+     *
+     * Unlike a reflow this cannot clamp an oversized item into place — there is no "somewhere else" for a rotation to
+     * put something — so an item whose turned footprint will not fit is **left out**. That is unreachable on a
+     * coupled pair, where every source item fits by construction; it is here so a mis-wired caller loses one icon
+     * rather than writing a placement no surface can draw.
+     */
+    fun <K> rotate(
+        source: Map<K, GridPlacement>,
+        into: GridConfig,
+        toLandscape: Boolean,
+    ): Map<K, GridPlacement> = source.mapNotNull { (key, at) ->
+        val turned = if (toLandscape) at.rotateForLandscape(into.rows) else at.rotateForPortrait(into.cols)
+        if (turned.fitsIn(into)) key to turned else null
+    }.toMap()
+}
