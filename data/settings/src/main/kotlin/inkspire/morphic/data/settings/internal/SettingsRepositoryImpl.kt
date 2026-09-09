@@ -26,6 +26,7 @@ import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.SurfaceTransition
 import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.blueprint
+import inkspire.morphic.core.model.boardRotates
 import inkspire.morphic.core.model.icon.IconAppearance
 import inkspire.morphic.core.model.icon.PreviewBackground
 import inkspire.morphic.core.model.toGridConfig
@@ -45,7 +46,9 @@ import inkspire.morphic.data.settings.SurfaceMetrics
 import inkspire.morphic.data.settings.SurfacePaging
 import inkspire.morphic.data.settings.SurfaceRegister
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.serializer
@@ -373,9 +376,43 @@ internal class SettingsRepositoryImpl(
 
     override fun gridConfig(slot: GridSlot, device: DeviceConfiguration): Flow<GridConfig> {
         val blueprint = slot.blueprint
-        return dataStore.read(SurfaceMetricsSlice) { metrics ->
-            blueprint.toGridConfig(metrics.gridSize(slot, device, blueprint.defaults.getValue(device)))
+        return combine(
+            dataStore.read(SurfaceMetricsSlice) { it },
+            orientationSettings,
+        ) { metrics, orientation ->
+            val source = couplingSourceOf(slot, device, orientation.independentLayout)
+            val size = metrics.gridSize(slot, source, blueprint.defaults.getValue(source))
+            val config = blueprint.toGridConfig(size)
+            if (source == device) config else config.swap()
         }
+    }
+
+    /**
+     * The posture [slot]'s size is really stored under, for [device] — itself, or the portrait it is coupled to.
+     *
+     * **Coupling is a derivation, not a second stored value**, which is the whole reason this returns a posture
+     * rather than a number: while the two orientations are kept in step a landscape grid *is* portrait's transpose,
+     * so storing it as well would let two settings disagree and would need reconciling on every edit. Derived, the
+     * `4×6 ↔ 6×4` invariant that makes a board rotation reversible holds by construction and cannot drift.
+     *
+     * Three conditions, and each excludes a case where a transpose would be wrong rather than merely unhelpful:
+     * - **linked only** — an independent landscape is a layout of its own and owns its lattice.
+     * - **[DeviceConfiguration.boardRotates] only**, so a phone and not a tablet. A tablet's side zone keeps its
+     *   axis, so nothing there is carried across by turning the board, and coupling would cost it the wider
+     *   landscape default for no round-trip to protect.
+     * - **free-placement grids only** — read off the blueprint rather than listed, so it stays true of whatever
+     *   grids exist. A coordinate is what a transpose acts on; an ordered surface like the APPS pager stores a slot
+     *   and re-paginates per posture, so there is nothing to keep exact.
+     */
+    private fun couplingSourceOf(
+        slot: GridSlot,
+        device: DeviceConfiguration,
+        independentLayout: Boolean,
+    ): DeviceConfiguration {
+        // The posture half: a landscape that turns with its board, while the two orientations are kept in step.
+        val turnsWithTheBoard = !independentLayout && device.isLandscape && device.boardRotates
+        // The grid half: only a coordinate surface has anything a transpose could keep exact.
+        return if (turnsWithTheBoard && slot.blueprint.freePlacement) device.portrait else device
     }
 
     override fun gridCols(slot: GridSlot, device: DeviceConfiguration): Flow<Int> {
@@ -393,9 +430,15 @@ internal class SettingsRepositoryImpl(
         // Not a no-op but a throw: the editor only offers editable grids, so reaching a fixed one means a caller has
         // gone wrong, and silently dropping the write would hide it.
         val range = requireNotNull(slot.blueprint.editRange) { "$slot has no editor, so its size cannot be overridden" }
+        // **A coupled landscape has no override of its own to write**, so the edit lands on the portrait it is
+        // derived from — transposed on the way in and back out again, so the caller still edits in the orientation
+        // it is looking at. The alternative was refusing the edit, which makes a `±` that works upright do nothing
+        // on its side.
+        val source = couplingSourceOf(slot, device, orientationSettings.first().independentLayout)
+        val coupled = source != device
         update(SurfaceMetricsSlice) {
-            withGridOverride(slot, device) {
-                val edited = transform()
+            withGridOverride(slot, source) {
+                val edited = (if (coupled) swapped() else this).transform().let { if (coupled) it.swapped() else it }
                 // Floors only. A maximum depends on measured area and icon size — a runtime question, and the reason
                 // `GridEditRange` carries no maxima at all.
                 //

@@ -88,3 +88,22 @@ fun DeviceConfiguration.sideZoneEdge(layout: HomeLayout): SideZoneEdge {
         HomeLayout.LIST_WITH_WIDGET_AREA -> if (rail) SideZoneEdge.START else SideZoneEdge.TOP
     }
 }
+
+/**
+ * Whether turning this form factor turns the **whole board** — true where the side zone changes axis between the
+ * two orientations, which is the phone and not the tablet.
+ *
+ * A phone's dock is a bottom strip upright and a trailing rail on its side, so the board genuinely rotates with the
+ * device and a layout can be carried across by turning it 90°. A tablet's dock stays a bottom strip, so the main
+ * area rotates over a side zone that did not move — which is not a rotation of anything, and is why the tablet
+ * re-flows instead.
+ *
+ * **Derived from [sideZoneEdge] rather than tested as [DeviceConfiguration.isTablet]**, so the rule cannot drift
+ * from the thing it describes: a posture that gained a rail would start rotating its board without anyone editing
+ * this. `any` over the layouts rather than a chosen one, since both zones are sized here and either changing axis
+ * is enough to make the turn meaningful.
+ */
+val DeviceConfiguration.boardRotates: Boolean
+    get() = HomeLayout.entries.any { layout ->
+        portrait.sideZoneEdge(layout).isStrip != landscape.sideZoneEdge(layout).isStrip
+    }

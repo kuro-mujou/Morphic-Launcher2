@@ -29,5 +29,13 @@ enum class DeviceConfiguration {
      */
     val portrait: DeviceConfiguration get() = if (isTablet) TABLET_PORTRAIT else PHONE_PORTRAIT
 
+    /**
+     * This form factor turned on its side.
+     *
+     * [portrait]'s peer, and needed for the same kind of question asked the other way round: a grid coupled to
+     * portrait's has to be able to name the posture it is the transpose *of*.
+     */
+    val landscape: DeviceConfiguration get() = if (isTablet) TABLET_LANDSCAPE else PHONE_LANDSCAPE
+
     companion object
 }

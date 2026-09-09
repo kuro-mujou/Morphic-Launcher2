@@ -103,6 +103,17 @@ data class GridOverride(
         cols = cols ?: base.cols,
         rows = if (base.rows == null) null else rows ?: base.rows,
     )
+
+    /**
+     * The same override read on a grid turned 90° — the two axes exchanged.
+     *
+     * What makes a coupled landscape editable at all: its counts are stored as portrait's, so an edit made on its
+     * side is swapped in, applied, and swapped back out. **Nulls swap with the numbers**, which is the part that
+     * matters and the part a `copy(cols = rows, rows = cols)` written at a call site would get wrong half the time:
+     * an override of "four columns, rows untouched" turned on its side is "four rows, columns untouched", and
+     * dropping either null would silently pin an axis the user had left following the blueprint.
+     */
+    fun swapped(): GridOverride = GridOverride(cols = rows, rows = cols)
 }
 
 /**
