@@ -34,9 +34,10 @@ and the two are the split `Orientation.kt`'s KDoc already names.
 **The six pinned constants and the gate are gone** — L1 removed them, and every surface now derives its key from
 the reported `DeviceConfiguration`. What remains:
 
-- **L3c** — grid coupling and the rotate-in-place projection. The last of the arrangement work; L3d landed the
-  keys they are defined against.
-- **L4** — the unaudited UI tail: sheets, studios, pickers, and the settings panes that never got a landscape pass.
+- **L4** — the unaudited UI tail. The arrangement work is done: L1 through L3d landed the keys, the projections and
+  the policy, and all of it is verified on the device.
+
+Sheets, studios, pickers, and the settings panes that never got a landscape pass are what remain.
 
 ## The model
 
@@ -184,12 +185,12 @@ Coupling is not the fight with the dock rail it first looks like: the phone blue
 default is `6×4` (24 cells) where portrait's transpose is `5×4` (20). The linked pair trades those four cells for
 an exact round-trip; the independent pair gets them back.
 
-**Open, and it is L3c's to answer: a grid size is not keyed by mode.** `SurfaceMetrics` stores counts per
-`DeviceConfiguration`, which has four values and no notion of linked-versus-independent — so coupling applied
-while linked leaves the transposed count in place after the switch, and the independent landscape inherits `5×4`
-rather than returning to its `6×4` default. The eight-key model does not fix this, because the key it added is
-for *arrangements* and a grid size is not one. Either the metric gains a mode axis, or coupling writes only while
-linked and the independent pair keeps whatever it last had. Do not build coupling before picking one.
+**Answered by deriving rather than storing.** The worry was that `SurfaceMetrics` keys counts per
+`DeviceConfiguration`, which has no notion of mode — so a *stored* coupled count would survive a switch to
+independent and leave that pair on a lattice it never chose. Nothing is stored: while linked, a landscape grid is
+read as portrait's swapped, and an edit made there is swapped into portrait's override. The independent pair reads
+its own stored counts exactly as before, and the transpose invariant cannot drift because there is no second value
+to drift from.
 
 ## The settings
 
@@ -301,14 +302,33 @@ write-back were untouched and simply address a different pair.
 
 #### L3c — coupling and the second mode
 
-**After L3d**, since coupling is defined against the linked pair.
+- [x] **The storage question is answered by not storing it.** Coupling is a *derivation*: `gridConfig` returns the
+      source posture's size swapped, and `updateGrid` swaps the caller's transform in and back out again. Nothing new
+      is stored, `SurfaceMetrics` keeps its shape, and the `4×6 ↔ 6×4` invariant holds by construction rather than
+      being maintained. That also removes the drift the open note warned about — an independent edit can no longer
+      leave the linked pair non-transposed, because the linked pair has no stored landscape count to leave.
+- [x] Grid-size coupling while the linked pair is in use, gated three ways: linked only, `boardRotates` only, and
+      free-placement grids only. `GridOverride.swapped()` exchanges nulls along with the numbers, so an override
+      pinning one axis still pins exactly one after the turn.
+- [x] **Coupling is phone-only**, since a tablet's side zone keeps its axis: nothing there is carried across by
+      turning the board, so coupling would only cost it the wider landscape default. Derived from `sideZoneEdge`
+      (`DeviceConfiguration.boardRotates`) rather than tested as `isTablet`.
+- [x] Rotate-in-place, on `GridPlacement.rotateForLandscape`, offered only where the side zone changes axis. Both
+      directions take their pivot from the **target** grid alone, since the two are transposes — so the source grid
+      is never passed and cannot be passed wrongly.
+- [x] `SyncMode.on(device)` gates it beside the enum rather than at each call site: applied where the grids are not
+      transposes, a rotation drops every item whose turned footprint misses, and silently.
+- [x] **Verified on device** (2026-09-09, Pixel Fold emulator). Coupling: linked landscape draws 5 columns where it
+      drew 6, its editor reads `5×4`, and adding a column there leaves portrait at 5 columns × 6 rows against
+      landscape's `6×5` — the transpose, square and non-square directions both. Rotation: a gap deliberately left at
+      portrait (0,0) appears at landscape (6,0) and three named apps land exactly where `rotateForLandscape(8)` puts
+      them, where a reflow would have packed all four to the origin; an edit made on the turned board, written back
+      through the inverse and re-derived on the next turn, came back byte-identical. The mode control is absent
+      under independence and absent unfolded.
 
-- [ ] Decide where a coupled grid size is stored — see the open note under "Rotate in place requires coupled
-      grids". Do not build coupling first.
-- [ ] Grid-size coupling while the linked pair is in use.
-- [ ] Rotate-in-place, on `GridPlacement.rotateForLandscape`, offered only where the side zone changes axis.
-- [ ] **Verify on device:** editing either orientation's counts transposes the other's while linked and does not
-      while independent; a board rotation round-trips a phone layout exactly, gaps and spans included.
+**What it costs, as a number:** phone landscape's main area is 20 cells coupled where its own blueprint default is
+24. The two side zones already ship as transposes and lose nothing. Pinned in `GridCouplingTest`, so a later
+blueprint edit has to face it rather than silently making a board rotation lossy.
 
 ### L4 — The UI tail
 
