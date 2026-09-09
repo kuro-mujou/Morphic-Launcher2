@@ -22,6 +22,7 @@ internal fun SettingsSectionActions(section: SettingsSection?) {
         SettingsSection.EFFECTS,
         SettingsSection.ICONS,
         SettingsSection.SURFACE_REGISTER,
+        SettingsSection.ORIENTATION,
         SettingsSection.HOME,
         SettingsSection.HOME_GRID,
         SettingsSection.DOCK,

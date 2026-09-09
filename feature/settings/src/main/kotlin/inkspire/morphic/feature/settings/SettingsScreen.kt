@@ -56,6 +56,7 @@ import inkspire.morphic.feature.settings.folder.FolderDetail
 import inkspire.morphic.feature.settings.grid.GridSizeDetail
 import inkspire.morphic.feature.settings.home.HomeDetail
 import inkspire.morphic.feature.settings.iconstudio.IconsDetail
+import inkspire.morphic.feature.settings.orientation.OrientationDetail
 import inkspire.morphic.feature.settings.register.SurfaceRegisterDetail
 import inkspire.morphic.feature.settings.wallpaper.WallpaperDetail
 import org.koin.androidx.compose.koinViewModel
@@ -306,6 +307,7 @@ private fun SettingsDetail(
         SettingsSection.EFFECTS -> EffectsDetail()
         SettingsSection.ICONS -> IconsDetail()
         SettingsSection.SURFACE_REGISTER -> SurfaceRegisterDetail(onOpenSection = onOpenSection)
+        SettingsSection.ORIENTATION -> OrientationDetail()
         SettingsSection.HOME -> HomeDetail(onOpenSection = onOpenSection)
         SettingsSection.HOME_GRID -> GridSizeDetail()
         SettingsSection.DOCK -> DockDetail()

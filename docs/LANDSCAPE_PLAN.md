@@ -207,11 +207,31 @@ Each phase ends verified **on the device**, not on a green build.
 
 ### L3 — Reference, policy, settings
 
-- [ ] `*_SHARED` keys wired; write-back from a non-reference configuration.
-- [ ] The two independence toggles, materialize-on-toggle, and the turn-off chooser.
-- [ ] Grid-size coupling in shared mode; the rotation lock.
-- **Verify:** the full toggle lattice, including the sequence the user named — independence on, edit portrait,
-  rotate, edit landscape, independence off, each of the three chooser answers.
+**Split into three, because it is three ideas and one commit cannot hold them.** L3a first so the settings group
+L3b's toggles need already exists.
+
+#### L3a — the rotation lock
+
+- [x] `RotationMode` in `core:model`; `OrientationSettings` slice in `data:settings`.
+- [x] A new **Orientation** settings section, in the Layout group beside the screen manager.
+- [x] `MainActivity` follows the stored mode via `requestedOrientation`.
+- [ ] **Verify on device:** locking to portrait keeps HOME *and* settings portrait when the device is turned;
+      "Follow device" restores rotation; a lock set while the launcher is backgrounded is in force when it returns.
+
+#### L3b — the sharing policy
+
+- [ ] `*_SHARED` keys wired; the key a surface reads and writes resolved through the policy rather than always
+      being the authored one.
+- [ ] Both independence toggles, materialize-on-toggle, and the turn-off chooser (portrait / landscape / none).
+- [ ] Write-back from a non-reference configuration.
+
+#### L3c — coupling and the second mode
+
+- [ ] Grid-size coupling while sharing.
+- [ ] Rotate-in-place, on `GridPlacement.rotateForLandscape`, offered only where the side zone changes axis.
+
+- **Verify (L3b + L3c):** the full toggle lattice, including the sequence the user named — independence on, edit
+  portrait, rotate, edit landscape, independence off, each of the three chooser answers.
 
 ### L4 — The UI tail
 
@@ -302,6 +322,26 @@ Eight things came out differently from the plan above. Each is a decision, not a
   source item has a zone, so a non-empty source always yields moves.
 - **Neither seed overwrites an existing arrangement**, which is what makes both safe to call on every
   configuration change rather than exactly once, and what stops a rotation undoing work.
+
+### L3a — code complete 2026-09-09, awaiting device verification
+
+`gradle check` green (1068 unit tests, 0 failures); `:app:assembleDebug` green. No new tests: the slice is one
+enum field and the behaviour that matters is a platform call.
+
+- **The lock is applied in `MainActivity`, not in a composable.** `requestedOrientation` belongs to the Activity,
+  and a launcher's window outlives any one surface — settings has to obey the lock exactly as HOME does, and both
+  live inside this Activity.
+- **Collected for the Activity's whole lifetime rather than only while started.** A rotation request made while
+  the launcher is backgrounded is precisely the one that must be in force *before* it is next shown; deferring to
+  `STARTED` would let it come back in the orientation it was locked out of and turn afterwards.
+- **`AUTO` maps to `SCREEN_ORIENTATION_UNSPECIFIED`, not `USER` or `SENSOR`.** It means "ask for nothing", so the
+  device's own rotation setting decides — including the user having auto-rotate off system-wide, which is not a
+  launcher preference's to override.
+- **Three peers rather than a switch plus a hidden chooser.** A user who wants landscape has not turned something
+  on; they have picked one of three, and a segmented row says that.
+- **Adding a section pushed `SettingsSection.meta` onto detekt's complexity bound**, so the two rows that read
+  HOME's pairing (`HOME_GRID`, `DOCK`) became named functions of their own. That was worth doing regardless: their
+  inline branches made a lookup table of eleven entries read as a function with logic in it.
 
 ## Rejected
 

@@ -10,6 +10,7 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.ScreenRotation
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material.icons.outlined.Widgets
@@ -45,6 +46,14 @@ enum class SettingsSection {
 
     /** Which surface each HOME edge opens, in which layout. */
     SURFACE_REGISTER,
+
+    /**
+     * What the launcher does when the device turns or folds.
+     *
+     * In the Layout group and next to [SURFACE_REGISTER] because it answers the same *kind* of question — not how a
+     * surface is arranged, but which arrangement is on screen at all.
+     */
+    ORIENTATION,
 
     /**
      * The HOME surface — **a hub over its two zones**, and the pairing switch that decides what they are.
@@ -136,23 +145,18 @@ internal fun SettingsSection.meta(homeLayout: HomeLayout): SettingsSectionMeta {
             "Screen manager", Icons.Outlined.Dashboard,
         )
 
+        SettingsSection.ORIENTATION -> SettingsSectionMeta(
+            "Orientation", Icons.Outlined.ScreenRotation,
+        )
+
         SettingsSection.HOME -> SettingsSectionMeta(
             // **The one row that does not rename itself**, which is the whole point of the hub: it names a surface,
             // and a surface does not change identity when its arrangement does.
             "Home screen", Icons.Outlined.Home,
         )
-        // Named for the zone rather than the surface, since this is a row *inside* the home screen — naming it
-        // "Home" again would say one thing twice, and this string is the app bar's title once the pane is open.
-        SettingsSection.HOME_GRID -> SettingsSectionMeta(
-            if (isList) "List" else "Grid",
-            if (isList) Icons.AutoMirrored.Outlined.ViewList else Icons.Outlined.GridView,
-        )
+        SettingsSection.HOME_GRID -> mainAreaMeta(isList)
 
-        SettingsSection.DOCK -> if (isList) {
-            SettingsSectionMeta("Widget area", Icons.Outlined.Widgets)
-        } else {
-            SettingsSectionMeta("Dock", Icons.Outlined.Dock)
-        }
+        SettingsSection.DOCK -> sideZoneMeta(isList)
 
         SettingsSection.APPS -> SettingsSectionMeta(
             "App screen", Icons.Outlined.Apps,
@@ -166,6 +170,29 @@ internal fun SettingsSection.meta(homeLayout: HomeLayout): SettingsSectionMeta {
             "Extras", Icons.Outlined.Tune,
         )
     }
+}
+
+/**
+ * HOME's **main area** row, named for what the current pairing makes it.
+ *
+ * Named for the zone rather than the surface, since this is a row *inside* the home screen — naming it "Home" again
+ * would say one thing twice, and this string is the app bar's title once the pane is open.
+ *
+ * Split out of [meta] with [sideZoneMeta] because those two are the only rows that read the pairing at all: leaving
+ * their branches inline made a lookup table of eleven entries read as a function with logic in it, and pushed it
+ * past detekt's complexity bound the moment a twelfth section arrived.
+ */
+private fun mainAreaMeta(isList: Boolean): SettingsSectionMeta = if (isList) {
+    SettingsSectionMeta("List", Icons.AutoMirrored.Outlined.ViewList)
+} else {
+    SettingsSectionMeta("Grid", Icons.Outlined.GridView)
+}
+
+/** HOME's **side zone** row, named for what the current pairing makes it — [mainAreaMeta]'s twin. */
+private fun sideZoneMeta(isList: Boolean): SettingsSectionMeta = if (isList) {
+    SettingsSectionMeta("Widget area", Icons.Outlined.Widgets)
+} else {
+    SettingsSectionMeta("Dock", Icons.Outlined.Dock)
 }
 
 /**
@@ -187,6 +214,7 @@ internal val SettingsSection.parent: SettingsSection?
         SettingsSection.EFFECTS,
         SettingsSection.ICONS,
         SettingsSection.SURFACE_REGISTER,
+        SettingsSection.ORIENTATION,
         SettingsSection.HOME,
         SettingsSection.APPS,
         SettingsSection.FOLDER,
@@ -220,6 +248,7 @@ internal val settingsGroups: List<SettingsGroup> = listOf(
         "Layout",
         listOf(
             SettingsSection.SURFACE_REGISTER,
+            SettingsSection.ORIENTATION,
             // **One row per surface.** `HOME_GRID` and `DOCK` sat here until the hub existed, which made the list
             // split HOME by *zone* while it split APPS not at all — and forced two of its rows to rename themselves
             // as a setting in another section changed. They are reached through `HOME` now.

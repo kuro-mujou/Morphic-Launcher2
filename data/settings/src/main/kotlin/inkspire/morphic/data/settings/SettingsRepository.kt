@@ -13,6 +13,7 @@ import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.ItemGesture
+import inkspire.morphic.core.model.RotationMode
 import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.SurfaceTransition
 import inkspire.morphic.core.model.VerticalEdge
@@ -85,6 +86,17 @@ interface SettingsRepository {
 
     /** Switches the A–Z strip's look; whether it is drawn at all is [setAlphabetStripEnabled]'s. */
     suspend fun setAlphabetStripStyle(style: AlphabetStripStyle)
+
+    /** What the launcher does when the device turns or folds — see [OrientationSettings]. */
+    val orientationSettings: Flow<OrientationSettings>
+
+    /**
+     * Sets which orientations the launcher allows itself to be drawn in.
+     *
+     * Stored rather than applied here: turning it into a `requestedOrientation` is the Activity's, since it is the
+     * only thing that has one.
+     */
+    suspend fun setRotationMode(mode: RotationMode)
 
     /**
      * Which swipe directions each home item has taken for itself.

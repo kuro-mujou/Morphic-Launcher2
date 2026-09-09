@@ -11,6 +11,7 @@ import inkspire.morphic.feature.settings.home.HomeHubViewModel
 import inkspire.morphic.feature.settings.iconstudio.IconStudioRoute
 import inkspire.morphic.feature.settings.iconstudio.IconStudioViewModel
 import inkspire.morphic.feature.settings.iconstudio.IconsViewModel
+import inkspire.morphic.feature.settings.orientation.OrientationViewModel
 import inkspire.morphic.feature.settings.register.SurfaceRegisterViewModel
 import inkspire.morphic.feature.settings.wallpaper.WallpaperViewModel
 import inkspire.morphic.feature.settings.wallpaperstudio.WallpaperStudioViewModel
@@ -37,6 +38,7 @@ val settingsSurfaceModule = module {
     viewModel { AppsSectionViewModel(get(), get()) }
     viewModel { FolderViewModel(get(), get()) }
     viewModel { ExtrasViewModel(get()) }
+    viewModel { OrientationViewModel(get()) }
     viewModel { EffectsViewModel(get(), get()) }
     viewModel { IconsViewModel(get(), get()) }
 

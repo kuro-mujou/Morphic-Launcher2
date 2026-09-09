@@ -21,6 +21,7 @@ import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.HorizontalPaddingRange
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.ItemGesture
+import inkspire.morphic.core.model.RotationMode
 import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.SurfaceTransition
 import inkspire.morphic.core.model.VerticalEdge
@@ -37,6 +38,7 @@ import inkspire.morphic.data.settings.IconOverride
 import inkspire.morphic.data.settings.IconPreset
 import inkspire.morphic.data.settings.IconPresets
 import inkspire.morphic.data.settings.IconStudioWorkspace
+import inkspire.morphic.data.settings.OrientationSettings
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.settings.SideBinding
 import inkspire.morphic.data.settings.SurfaceMetrics
@@ -188,6 +190,13 @@ private val AlphabetStripSlice = SettingsSlice(
     default = AlphabetStrip.Default,
 )
 
+/** What the launcher does when the device turns or folds: one key, one blob. */
+private val OrientationSettingsSlice = SettingsSlice(
+    name = "orientation_settings",
+    serializer = serializer<OrientationSettings>(),
+    default = OrientationSettings.Default,
+)
+
 /** Which swipe directions each home item has taken for itself: one key, one blob, sparse inside. */
 private val HomeItemGesturesSlice = SettingsSlice(
     name = "home_item_gestures",
@@ -276,6 +285,11 @@ internal class SettingsRepositoryImpl(
 
     override suspend fun setAlphabetStripStyle(style: AlphabetStripStyle) =
         update(AlphabetStripSlice) { copy(style = style) }
+
+    override val orientationSettings: Flow<OrientationSettings> = dataStore.read(OrientationSettingsSlice) { it }
+
+    override suspend fun setRotationMode(mode: RotationMode) =
+        update(OrientationSettingsSlice) { copy(rotation = mode) }
 
     override val homeItemGestures: Flow<HomeItemGestures> = dataStore.read(HomeItemGesturesSlice) { it }
 
