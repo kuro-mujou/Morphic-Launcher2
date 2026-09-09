@@ -17,13 +17,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -55,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.component.color.ColorPalettes
 import inkspire.morphic.core.designsystem.component.color.PalettePresetBrowser
+import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.model.wallpaper.WallpaperColorMode
 import inkspire.morphic.core.model.wallpaper.WallpaperDesign
@@ -124,7 +124,7 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
                 onClick = onBack,
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .statusBarsPadding()
+                    .uiInsetsPadding(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
                     .padding(12.dp),
             )
 
@@ -138,14 +138,14 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
                 enabled = state.shot?.draft == false && !state.applying,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .statusBarsPadding()
+                    .uiInsetsPadding(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
                     .padding(12.dp),
             )
 
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .navigationBarsPadding(),
+                    .uiInsetsPadding(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 // Above the bar rather than in it: the Style panel is two rows — its tabs and the control they choose —

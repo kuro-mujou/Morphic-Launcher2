@@ -3,11 +3,10 @@ package inkspire.morphic.feature.settings.wallpaper
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
@@ -38,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
+import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.data.wallpaper.NormalizedCropRect
 import org.koin.androidx.compose.koinViewModel
@@ -143,7 +143,7 @@ fun WallpaperCropScreen(
                 onClick = onDone,
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .statusBarsPadding()
+                    .uiInsetsPadding(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
                     .padding(8.dp),
             ) {
                 Icon(Icons.Filled.Close, contentDescription = "Cancel", tint = Color.White)
@@ -164,7 +164,7 @@ fun WallpaperCropScreen(
                 enabled = current != null && !state.busy,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
+                    .uiInsetsPadding(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)
                     .padding(bottom = 24.dp),
             ) {
                 Text(if (state.busy) "Saving…" else "Save")
