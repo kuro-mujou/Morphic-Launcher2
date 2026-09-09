@@ -220,10 +220,14 @@ L3b's toggles need already exists.
 
 #### L3b — the sharing policy
 
-- [ ] `*_SHARED` keys wired; the key a surface reads and writes resolved through the policy rather than always
-      being the authored one.
-- [ ] Both independence toggles, materialize-on-toggle, and the turn-off chooser (portrait / landscape / none).
-- [ ] Write-back from a non-reference configuration.
+- [x] `*_SHARED` keys wired — as **snapshots**, not as continuously-maintained references; see the progress note.
+- [x] The `independentLayout` toggle, its snapshot-on-enable, and the turn-off chooser
+      (portrait / landscape / neither).
+- [x] Write-back from a non-reference posture, and the unconditional re-derive on entry that pairs with it.
+- [ ] `independentFormFactor` — **deferred, and it needs one decision**; see the progress note.
+- [ ] **Verify on device:** the sequence named in the plan — independence on, edit portrait, rotate, edit landscape,
+      independence off, each of the three chooser answers. Plus the default path: with independence off, a portrait
+      edit shows up in landscape on the next rotate, and a landscape edit survives rotating away and back.
 
 #### L3c — coupling and the second mode
 
@@ -342,6 +346,45 @@ enum field and the behaviour that matters is a platform call.
 - **Adding a section pushed `SettingsSection.meta` onto detekt's complexity bound**, so the two rows that read
   HOME's pairing (`HOME_GRID`, `DOCK`) became named functions of their own. That was worth doing regardless: their
   inline branches made a lookup table of eleven entries read as a function with logic in it.
+
+### L3b — code complete 2026-09-09, awaiting device verification
+
+`gradle check` green (1090 unit tests, 8 of them new, 0 failures); `:app:assembleDebug` green.
+
+- **The `*_SHARED` keys are snapshots, not maintained references** — the one real departure from the model above.
+  While the postures are kept in step, portrait *is* the reference, so a third row-set holding the same layout
+  would be one more thing to keep in step for no gain. `PHONE_SHARED` is written **once**, when independence is
+  switched on, and read **once**, if the user later switches it off and picks "neither". That is the whole of its
+  job — and it is exactly what makes that third answer mean something rather than being a euphemism for
+  "portrait".
+- **Sharing changes what is *written*, never what is read.** A surface still reads its own posture's key, so the
+  read path is untouched from L1. Being in step is two hooks instead: an unconditional re-derive when a
+  non-reference posture is entered, and a write-back into portrait after an edit made away from it. Each is
+  useless alone — without the re-derive a portrait edit never reaches landscape; without the write-back the next
+  rotation overwrites a landscape edit.
+- **The re-derive is unconditional, so it needed a no-op guard.** `copyArrangement` compares against what the
+  target already holds and skips the write, or every configuration change would rewrite the whole posture and have
+  Room re-emit a map identical to the one on screen.
+- **`snapshot` must not project, and that is the subtle one.** Source and target describe the same grid, so
+  re-laying would close the gaps the snapshot exists to preserve — a snapshot that tidies what it is preserving is
+  not one. `snapshot preserves gaps where copy would close them` is the test that pins it.
+- **Turning independence off writes only portrait.** Landscape rebuilds itself from portrait the next time it is
+  drawn, so setting the reference right and clearing the flag is the entire operation; writing landscape here too
+  would be a second answer to one question. The flag is cleared **last**, so nothing re-derives from a portrait
+  that is still mid-merge.
+- **`ArrangementSync` became extension functions on `LayoutRepository`**, matching `SettingsRepository.homeZoneGrids`
+  written in the same change for the same reason: both compose what a repository already offers and hold no state,
+  so an injectable object is a dependency every caller carries for nothing. detekt made the case — as a class it
+  pushed `HomeViewModel` to nine constructor parameters, and the alternatives were a bundle invented for a single
+  consumer or a baseline entry for new code.
+- **`independentFormFactor` is deferred because it needs a decision, not because it is large.** With orientation,
+  portrait is the natural reference. Between a phone and a tablet there is no canonical one, so "keep them in
+  step" has no defined direction until someone picks it — and it only ever matters on a device that can be both.
+
+**Known consequence, documented rather than solved:** replacing a posture's arrangement drops the placement of any
+item the winning side does not have, while leaving that item's *definition* alone. A folder made only in landscape,
+with "portrait" chosen at merge time, therefore survives as a row nothing draws. That is what the user asked for by
+naming a winner; collecting the orphan is a separate cleanup, alongside the empty-folder auto-dissolve.
 
 ## Rejected
 

@@ -21,5 +21,13 @@ enum class DeviceConfiguration {
     /** True for the two tablet configurations. */
     val isTablet: Boolean get() = this == TABLET_PORTRAIT || this == TABLET_LANDSCAPE
 
+    /**
+     * This form factor held upright.
+     *
+     * Portrait is the reference posture while the two are kept in step, so anything writing *into* the reference
+     * needs the grids it will be drawn against — which are this configuration's, not the one on screen.
+     */
+    val portrait: DeviceConfiguration get() = if (isTablet) TABLET_PORTRAIT else PHONE_PORTRAIT
+
     companion object
 }

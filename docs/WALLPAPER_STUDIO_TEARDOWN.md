@@ -601,6 +601,55 @@ the gallery, but its closest neighbor is `RIBBON_FLOW` and its source is unread)
 `shad/earth2`, `pixelmania/rastersin`, and `layers/tabulum`. The gallery sheet is worth rebuilding rather than
 recording here — it is a hundred and forty images and one script over `arts/*/*_thumb.png`.
 
+#### `MARBLE` — a design from neither reference
+
+The first design in the catalog that came from **neither** the reference studio's 22 nor gart's gallery: it arrived as
+a published Kotlin implementation of the textbook Perlin marble, brought in by the author, and was rebuilt here rather
+than adopted. The catalog's first design that imitates a **material** — everything else is a field, a shape or a mark,
+and stone is none of those. Catalog is **32**.
+
+**Four things in the source did not survive, and each is a rule this codebase already had written down:**
+
+| Finding | Detail |
+|---|---|
+| **It is built on value noise** | Picking a number *at* each lattice point puts the structure on the integer grid, which is the argument in `PerlinNoise2d`'s own KDoc against exactly this. Rebuilt on the gradient noise already here — and low turbulence, where the veins are nearly ruled, is the one setting where the comb of squares would have had nowhere to hide |
+| **It names three colors — a body, a mottle and a vein** | `MondrianGenerator`'s three primaries, a second time. The palette is what carries color in this studio, so the whole picture is **one position on the ramp** instead: the body wanders over the first `MottleSpan` of it, a vein pulls that position to the far end, and the stops in between land where marble actually wants them — the blush around a vein rather than a fourth flat color. `colorLayout` then flips which end the veins take, which is a Carrara and a black-and-gold from one generator |
+| **Its vein threshold is inverted** | `smoothstep(1 - veinWidth, 1, |sin|)` at `veinWidth = 0.15` makes everything below `|sin| = 0.85` the *vein* color — 85% of the frame, so the published parameters draw thin pale bands on dark ground while the comment beside them says "small marble values = dark veins". It is not a typo one notices from the code: the render is a plausible stone either way |
+| **Its distortion is a domain warp on top of the phase turbulence** | The two are the same mechanism at two scales, and one fbm with enough octaves is both — so `DomainWarp` is not used here, and there is one knob rather than two that overlap |
+
+**Two departures of our own, and both were found by looking at the render rather than by reading anything:**
+
+- **A vein is a crisp core inside a soft halo; a single smoothstep across its width is not a vein.** That is what the
+  first build drew, and at a phone's size it reads as an *airbrushed wave* — with the darkness arriving gradually
+  there is no line anywhere, only a smudge. Real veining is a hard mineral seam that has stained the stone either side
+  of it, so the profile is full depth inside `CoreShare` of the reach and `HaloWeight` of it out to the reach itself.
+  `MarbleGeneratorTest` asserts the asymmetry rather than the shape: the inner half of the reach must spend more depth
+  than the outer one, which is the one thing a single smoothstep cannot do.
+- **`depth` lights the vein's *shoulder*, not the frame.** Lighting by the ridge field's slope alone was the first
+  attempt; the slope falls off only as `|sin|` climbs, so the shading spreads across the whole gap between two veins
+  and the picture comes out as **pleated fabric** — which, with the veins' own softness, is what the very first render
+  was. Confined to a band `ShoulderReach` wide around each seam it is a bevel on the seam instead. It is also a nudge
+  along the **ramp** rather than a brightness: scaling the resolved color (`Shades`) brightens by clamping channels
+  toward white, so a saturated palette's relief would drift its hue.
+
+Three smaller ones, each of which had a knob doing less than it claimed:
+
+| Finding | Detail |
+|---|---|
+| **The turbulence has to be measured in vein *periods*** | `PlasmaGenerator`'s lesson, and the vein count spans a ten-fold range here — so a push in frame units is an imperceptible nudge at one vein and total noise at ten, one slider quietly changing what the slider beside it means |
+| **Gradient noise's nominal range is nowhere near its useful one** | Measured over 400k samples: one octave spans `±0.66` between its 1st and 99th percentiles and the three-octave average only `±0.45`. Folded in raw, a body given a third of the palette to cloud through spent a *seventh* of it, and the stone came out a flat cream — the knob was not dead, it was scaled into invisibility. `NoiseGain` opens the reading to what the field actually reaches |
+| **The hairline set read as engraving** | Two causes. Its period multiplier must **not** be a whole number, or every hairline lands on a coarse vein and the second system disappears; and it has to be **gated by the body's own cloud**, so fine veining comes and goes in patches the way it follows mineral banding, rather than ruling the whole frame at even spacing |
+
+`taper` earns a knob here that `IMPASTO` could not give it: it thins a vein *and* fades it, off one field, because a
+vein at a fifth of its width and full depth is a drawn line rather than rock.
+
+**The method note from the Impasto pass paid for itself, second use, and would have paid twice.** The first render was
+made on the device — three minutes for the build, a `MediaStore` folder to clear by hand, a pull, and a look — and it
+was the pleated-fabric one. Everything after it was settled in a **Python replica of `PerlinNoise2d` plus the marble
+math**, iterating on contact sheets in seconds; the settled constants were then ported back and confirmed on the
+device once. The replica's permutation table is not Kotlin's, so it reproduces the design's *statistics* and not its
+pixels — which is all a look-and-judge loop needs, and worth saying because it is the reason the two renders differ.
+
 ---
 
 ## Revised plan (supersedes the W5 "done" framing — W5 was the *engine*, not the *studio*)

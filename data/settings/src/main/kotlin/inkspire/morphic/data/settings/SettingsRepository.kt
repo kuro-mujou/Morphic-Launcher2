@@ -99,6 +99,15 @@ interface SettingsRepository {
     suspend fun setRotationMode(mode: RotationMode)
 
     /**
+     * Sets whether landscape keeps a layout of its own.
+     *
+     * Only the flag: what happens to the *arrangements* when it changes — snapshotting the reference on the way in,
+     * and copying a chosen winner on the way out — belongs to whoever owns the placement stores and the grids to
+     * re-lay against, which is not this module.
+     */
+    suspend fun setIndependentLayout(independent: Boolean)
+
+    /**
      * Which swipe directions each home item has taken for itself.
      *
      * Read by home when it composes its cells: an item's claimed set becomes the `edgeActions` its gesture contract

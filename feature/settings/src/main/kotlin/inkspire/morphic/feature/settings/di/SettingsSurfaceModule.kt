@@ -38,7 +38,7 @@ val settingsSurfaceModule = module {
     viewModel { AppsSectionViewModel(get(), get()) }
     viewModel { FolderViewModel(get(), get()) }
     viewModel { ExtrasViewModel(get()) }
-    viewModel { OrientationViewModel(get()) }
+    viewModel { OrientationViewModel(get(), get(), get()) }
     viewModel { EffectsViewModel(get(), get()) }
     viewModel { IconsViewModel(get(), get()) }
 

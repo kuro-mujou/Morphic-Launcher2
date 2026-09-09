@@ -117,5 +117,6 @@ object Generators {
         WallpaperDesign.IMPASTO -> ImpastoGenerator
         WallpaperDesign.SPRAY -> SprayGenerator
         WallpaperDesign.PLANET -> PlanetGenerator
+        WallpaperDesign.MARBLE -> MarbleGenerator
     }
 }

@@ -19,7 +19,7 @@ import inkspire.morphic.core.model.authoredArrangement
 import inkspire.morphic.core.model.indexRanges
 import inkspire.morphic.core.model.labelCollator
 import inkspire.morphic.core.model.matchesLabel
-import inkspire.morphic.core.model.portraitCounterpart
+import inkspire.morphic.core.model.portraitOfFormFactor
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.apps.category.AppCategorizer
@@ -28,6 +28,7 @@ import inkspire.morphic.data.layout.AppsOrderRepository
 import inkspire.morphic.data.layout.AppsPagerChange
 import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.layout.reconcileReportedOrder
+import inkspire.morphic.data.settings.OrientationSettings
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.feature.apps.layout.alphabet.LetterBucket
 import inkspire.morphic.feature.apps.layout.alphabet.LetterIndex
@@ -508,6 +509,15 @@ class AppsViewModel(
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), AppsState())
 
+    /**
+     * Whether the APPS pager keeps a list of its own per posture — the same setting HOME's placements follow, since
+     * "landscape has its own layout" is one answer for the launcher rather than one per surface.
+     */
+    private val independentLayout: StateFlow<Boolean> =
+        settingsRepository.orientationSettings
+            .map { it.independentLayout }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, OrientationSettings.Default.independentLayout)
+
     init {
         // The cache is offline-first, so the surface renders from it immediately and this only tops it up. Done
         // here rather than assumed of whoever ran first, so the surface stands alone and can be opened without home
@@ -525,12 +535,19 @@ class AppsViewModel(
                 .collect { (apps, fit) ->
                     if (fit != null) {
                         val key = fit.device.authoredArrangement
-                        // Seeded before the sync rather than instead of it: the projection gives this posture the
-                        // arrangement the user actually made, and the sync then appends anything installed since.
-                        // Both are no-ops once the list exists, so this is safe on every capacity change.
-                        key.portraitCounterpart?.let { from ->
-                            appsOrderRepository.seedPagerIfEmpty(key, from, fit.config.perPage)
+                        val reference = key.portraitOfFormFactor
+                        if (independentLayout.value && key != reference) {
+                            // Independent: this posture is its own, so only ever *seeded* from portrait, and only
+                            // when it has nothing. The projection gives it the arrangement the user actually made
+                            // rather than the alphabet `syncPager` would otherwise fill it with.
+                            appsOrderRepository.seedPagerIfEmpty(key, reference, fit.config.perPage)
+                        } else if (key != reference) {
+                            // Kept in step: rebuilt from portrait on arrival, unconditionally — the pager's half of
+                            // what `HomeViewModel` does for the placements, and no-op when the two already agree.
+                            appsOrderRepository.copyPager(reference, key, fit.config.perPage)
                         }
+                        // Always last, and never skipped: whichever of the two ran, an app installed since the
+                        // source list was made is still missing from it.
                         appsOrderRepository.syncPager(key, fit.config.perPage, apps.map { it.componentKey })
                     }
                 }
@@ -828,8 +845,16 @@ class AppsViewModel(
         // Taking it from a fit measured for the *previous* posture would cascade the drop through a page size the
         // user never saw, which is why this goes through [fittedPager]'s agreement rather than straight to the report.
         val fit = pagerFit.value?.takeIf { it.device == device.value } ?: return
+        val key = fit.device.authoredArrangement
         viewModelScope.launch {
-            appsOrderRepository.applyPager(fit.device.authoredArrangement, fit.config.perPage, changes)
+            appsOrderRepository.applyPager(key, fit.config.perPage, changes)
+            // **Carried back into portrait while the two are kept in step**, or the next rotation would rebuild this
+            // posture from a portrait that never heard about the drop. The capacity is the one measured *here*, which
+            // is sound because page boundaries in this store are advisory — see `copyPager`.
+            val reference = key.portraitOfFormFactor
+            if (!independentLayout.value && key != reference) {
+                appsOrderRepository.copyPager(key, reference, fit.config.perPage)
+            }
         }
     }
 

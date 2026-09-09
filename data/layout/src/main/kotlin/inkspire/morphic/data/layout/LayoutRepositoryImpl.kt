@@ -56,6 +56,22 @@ internal class LayoutRepositoryImpl(
                 widgetContainers.map { it.toEntry() }).toMap()
         }
 
+    override suspend fun replacePlacements(arrangement: ArrangementKey, placements: Map<GridItem, PlacedItem>) {
+        withContext(dispatchers.io) {
+            // Cleared per table rather than through `RemoveFromGrid`, which drops an item from every arrangement.
+            // These five `clearArrangement` queries existed unused until this; they are what makes "replace" a
+            // replace rather than a merge over whatever the target happened to be holding.
+            daos.appPlacement.clearArrangement(arrangement)
+            daos.folderPlacement.clearArrangement(arrangement)
+            daos.widgetPlacement.clearArrangement(arrangement)
+            daos.iconContainerPlacement.clearArrangement(arrangement)
+            daos.widgetContainerPlacement.clearArrangement(arrangement)
+            placements.forEach { (item, placed) ->
+                applyChange(arrangement, LayoutChange.Move(item, placed.placement, placed.zone))
+            }
+        }
+    }
+
     override fun folders(): Flow<List<Folder>> =
         combine(daos.folder.observeAll(), daos.folderItem.observeAll()) { folders, items -> foldersOf(folders, items) }
 

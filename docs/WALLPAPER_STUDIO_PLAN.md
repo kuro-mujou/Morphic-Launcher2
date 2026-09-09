@@ -319,6 +319,16 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     and the transition split in two — a new design or seed still **dissolves**, a knob under a finger **swaps**, since
     fading each intermediate render into the last smears a drag into a trail. Apply refuses a draft, so the check
     button greys while one is showing.
+  - **W13 — Marble. ✅ (2026-09-09)** One design, catalog **32**, and the first from **neither** reference — a published
+    Kotlin implementation of the textbook Perlin marble, brought in by the author and rebuilt rather than adopted. The
+    catalog's first design that imitates a **material**: `|sin|` of a turbulent coordinate, so the veins are one bent
+    set rather than independent squiggles, with the whole picture spent as *one position on the palette's ramp* and
+    `colorLayout` choosing which end the veins take (a Carrara, or a black-and-gold). Four things in the source did not
+    survive — value noise, three hard-coded colors, an **inverted** vein threshold, and a domain warp that duplicates
+    the phase turbulence — and two departures were found only by looking at the render: a vein is a crisp core inside a
+    soft halo, and `depth` lights the seam's *shoulder* rather than the frame. **The Impasto pass's method note paid for
+    itself**: the one device render made before the Python replica existed is the one that came out as pleated fabric.
+    Full record: [WALLPAPER_STUDIO_TEARDOWN.md](WALLPAPER_STUDIO_TEARDOWN.md) → `MARBLE`.
   - **W11 — the design-by-design quality pass. In progress — 16 of their 22 driven.** The engine and the panel are
     built, so what is left is per design: open theirs, render ours, compare, fix one. The **checklist of which
     designs have actually been driven** (and which were built from a one-line note instead) is in

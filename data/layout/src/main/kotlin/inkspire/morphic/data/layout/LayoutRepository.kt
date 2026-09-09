@@ -54,4 +54,20 @@ interface LayoutRepository {
      * the batch.
      */
     suspend fun apply(arrangement: ArrangementKey, changes: List<LayoutChange>)
+
+    /**
+     * Makes [placements] the **whole** of [arrangement]'s layout, dropping whatever was placed there before.
+     *
+     * The one write that is not a [LayoutChange], and deliberately so: every change is a verb applied *to* an
+     * arrangement, while this replaces the arrangement itself. Expressing it as changes would need a "remove
+     * everything" op that no user action produces and that `RemoveFromGrid` must not become — that one detaches an
+     * item from *every* arrangement, which is the opposite of what is wanted here.
+     *
+     * **Definitions are untouched.** Only the five `*_placement` tables are cleared, so folders, widgets and
+     * containers survive. The consequence, and it is silent: an item placed in [arrangement] but absent from
+     * [placements] keeps its definition and loses its position, which leaves a folder nothing draws. That can only
+     * happen when the two arrangements have genuinely diverged — i.e. after independence — and it is what the
+     * caller asked for by naming a winner.
+     */
+    suspend fun replacePlacements(arrangement: ArrangementKey, placements: Map<GridItem, PlacedItem>)
 }

@@ -46,6 +46,63 @@ val DeviceConfiguration.authoredArrangement: ArrangementKey
  * arranged. Null for the two `*_SHARED` keys as well — a reference layout is the thing others are seeded *from*,
  * so being seeded from a posture would invert it.
  */
+/**
+ * The other orientation of the same form factor, or null for a `*_SHARED` key, which has no orientation to be the
+ * other of.
+ *
+ * [portraitCounterpart]'s two-way twin: that one names the source a posture is seeded *from*, this one names the
+ * posture that has to be brought along when the two are kept in step.
+ */
+val ArrangementKey.oppositeOrientation: ArrangementKey?
+    get() = when (this) {
+        ArrangementKey.PHONE_PORTRAIT -> ArrangementKey.PHONE_LANDSCAPE
+        ArrangementKey.PHONE_LANDSCAPE -> ArrangementKey.PHONE_PORTRAIT
+        ArrangementKey.TABLET_PORTRAIT -> ArrangementKey.TABLET_LANDSCAPE
+        ArrangementKey.TABLET_LANDSCAPE -> ArrangementKey.TABLET_PORTRAIT
+        ArrangementKey.PHONE_SHARED, ArrangementKey.TABLET_SHARED -> null
+    }
+
+/**
+ * This form factor's **reference snapshot** — where the shared arrangement is parked while the postures are being
+ * edited independently.
+ *
+ * It holds nothing while the two postures are kept in step, because the reference *is* the portrait posture then;
+ * writing a third copy of the same layout would be a row-set to keep in step for no gain. It is written once, when
+ * independence is switched on, and read once, if the user later switches independence off and asks to keep neither
+ * posture. That is the whole of its job, and it is what makes that third answer mean anything.
+ */
+val ArrangementKey.referenceSnapshot: ArrangementKey
+    get() = when (this) {
+        ArrangementKey.PHONE_PORTRAIT,
+        ArrangementKey.PHONE_LANDSCAPE,
+        ArrangementKey.PHONE_SHARED,
+        -> ArrangementKey.PHONE_SHARED
+
+        ArrangementKey.TABLET_PORTRAIT,
+        ArrangementKey.TABLET_LANDSCAPE,
+        ArrangementKey.TABLET_SHARED,
+        -> ArrangementKey.TABLET_SHARED
+    }
+
+/**
+ * The portrait posture of this key's form factor — the reference while the two are kept in step.
+ *
+ * Total where [portraitCounterpart] is nullable, because the caller here is asking "which posture is the source?"
+ * rather than "does this one need seeding?", and every key has an answer to the first.
+ */
+val ArrangementKey.portraitOfFormFactor: ArrangementKey
+    get() = when (this) {
+        ArrangementKey.PHONE_PORTRAIT,
+        ArrangementKey.PHONE_LANDSCAPE,
+        ArrangementKey.PHONE_SHARED,
+        -> ArrangementKey.PHONE_PORTRAIT
+
+        ArrangementKey.TABLET_PORTRAIT,
+        ArrangementKey.TABLET_LANDSCAPE,
+        ArrangementKey.TABLET_SHARED,
+        -> ArrangementKey.TABLET_PORTRAIT
+    }
+
 val ArrangementKey.portraitCounterpart: ArrangementKey?
     get() = when (this) {
         ArrangementKey.PHONE_LANDSCAPE -> ArrangementKey.PHONE_PORTRAIT

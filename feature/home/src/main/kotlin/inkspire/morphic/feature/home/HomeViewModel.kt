@@ -27,12 +27,11 @@ import inkspire.morphic.core.model.authoredArrangement
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.mainSlot
 import inkspire.morphic.core.model.pagerSlot
-import inkspire.morphic.core.model.portraitCounterpart
+import inkspire.morphic.core.model.portraitOfFormFactor
 import inkspire.morphic.core.model.sideSlot
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.apps.AppShortcuts
-import inkspire.morphic.data.layout.ArrangementProjection
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.GridOccupancy
 import inkspire.morphic.data.layout.GridReflow
@@ -41,10 +40,14 @@ import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.layout.PlacedItem
 import inkspire.morphic.data.layout.WidgetSpan
+import inkspire.morphic.data.layout.copyArrangement
+import inkspire.morphic.data.layout.copyArrangementIfEmpty
 import inkspire.morphic.data.layout.reconcileReportedOrder
 import inkspire.morphic.data.layout.settleDock
+import inkspire.morphic.data.settings.OrientationSettings
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.settings.SurfaceRegister
+import inkspire.morphic.data.settings.homeZoneGrids
 import inkspire.morphic.data.widgets.AppWidgetHostController
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -204,19 +207,28 @@ class HomeViewModel(
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     private val zoneConfigs: Flow<Map<HomeZone, GridConfig>?> =
-        device.flatMapLatest { current ->
-            if (current == null) {
-                flowOf(null)
-            } else {
-                combine(
-                    settingsRepository.gridConfig(GridSlot.HOME_MAIN, current),
-                    settingsRepository.gridConfig(GridSlot.HOME_DOCK, current),
-                    settingsRepository.gridConfig(GridSlot.HOME_WIDGET_AREA, current),
-                ) { main, dock, widgetArea ->
-                    mapOf(HomeZone.MAIN to main, HomeZone.DOCK to dock, HomeZone.WIDGET_AREA to widgetArea)
-                }
-            }
-        }
+        device.flatMapLatest { current -> if (current == null) flowOf(null) else zoneConfigsFor(current) }
+
+    /**
+     * Every HOME zone's grid for **any** configuration, not only the reported one.
+     *
+     * Split out because writing *into* the reference posture needs that posture's grids while a different one is on
+     * screen: a drag made in landscape is projected back into portrait, and projecting it against the landscape
+     * grids it came from would lay it out for a screen nobody is looking at.
+     */
+    private fun zoneConfigsFor(configuration: DeviceConfiguration): Flow<Map<HomeZone, GridConfig>> =
+        settingsRepository.homeZoneGrids(configuration)
+
+    /**
+     * Whether landscape keeps a layout of its own.
+     *
+     * Read here rather than in the seed collector alone because both halves of "kept in step" consult it — the
+     * re-derive on entry and the write-back on edit — and the second is not in a flow at all.
+     */
+    private val independentLayout: StateFlow<Boolean> =
+        settingsRepository.orientationSettings
+            .map { it.independentLayout }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, OrientationSettings.Default.independentLayout)
 
     /**
      * Whether the main pager's pages wrap around at the ends.
@@ -435,12 +447,22 @@ class HomeViewModel(
             var refreshed = false
             device.filterNotNull()
                 .combine(zoneConfigs.filterNotNull()) { current, configs -> current.authoredArrangement to configs }
+                .combine(independentLayout) { (key, configs), independent -> Triple(key, configs, independent) }
                 .distinctUntilChanged()
-                .collect { (key, configs) ->
-                    // **The projection is tried first, and the A-Z seed is the fallback.** Both are "this posture has
-                    // nothing", so whichever runs first makes the other a no-op — and filling a rotated screen with
-                    // the alphabet when the user already has a home screen one turn away is the wrong answer.
-                    if (seedFromPortrait(key, configs)) return@collect
+                .collect { (key, configs, independent) ->
+                    // **Kept in step means re-derived on arrival, not copied on every edit.** While the postures share
+                    // one layout, entering a non-reference one rebuilds it from portrait *unconditionally* — which is
+                    // what makes a portrait edit show up here without portrait having had to push it. The write-back
+                    // in `applyChanges` is the other half: without it this would overwrite a landscape drag the next
+                    // time the device turned.
+                    val reference = key.portraitOfFormFactor
+                    if (!independent && key != reference && layoutRepository.copyArrangement(reference, key, configs)) {
+                        return@collect
+                    }
+                    // **Then the seed, and the A-Z fallback behind it.** All three are "this posture has nothing to
+                    // draw"; filling a rotated screen with the alphabet when the user has a home screen one turn away
+                    // is the wrong answer, so the alphabet goes last.
+                    if (layoutRepository.copyArrangementIfEmpty(reference, key, configs)) return@collect
                     if (!refreshed) {
                         appRepository.refresh()
                         refreshed = true
@@ -909,6 +931,7 @@ class HomeViewModel(
     fun applyChanges(changes: List<LayoutChange>) {
         if (changes.isEmpty()) return
         val key = arrangement ?: return
+        val configuration = device.value ?: return
         placements.value = placements.value.withApplied(changes)
         writesInFlight++
         viewModelScope.launch {
@@ -917,10 +940,33 @@ class HomeViewModel(
                 if (changes.any { it !is LayoutChange.Move && it !is LayoutChange.RemoveFromGrid }) {
                     placements.value = layoutRepository.placements(key).first()
                 }
+                writeBackToReference(key, configuration)
             } finally {
                 writesInFlight--
             }
         }
+    }
+
+    /**
+     * Carries an edit made away from the reference posture back into it, while the two are kept in step.
+     *
+     * **Without this, the edit would not survive the next rotation.** The re-derive in [init] rebuilds a
+     * non-reference posture from portrait on arrival, so a landscape drag that never reached portrait is overwritten
+     * the moment the device turns back and forth. Portrait itself needs no such step, being what everything else is
+     * derived *from*.
+     *
+     * Projected against **portrait's** grids rather than the ones on screen, which is why [zoneConfigsFor] takes a
+     * configuration: laying a landscape arrangement out against landscape's lattice and storing it as portrait's
+     * would write positions for a screen nobody is looking at.
+     *
+     * Runs after the write it follows, so it reads the store rather than the optimistic map — the two agree by then,
+     * and the store is the one that has folded in any ids a structural change minted.
+     */
+    private suspend fun writeBackToReference(key: ArrangementKey, configuration: DeviceConfiguration) {
+        if (independentLayout.value) return
+        val reference = key.portraitOfFormFactor
+        if (key == reference) return
+        layoutRepository.copyArrangement(key, reference, zoneConfigsFor(configuration.portrait).first())
     }
 
     /**
@@ -1157,43 +1203,6 @@ class HomeViewModel(
             is HomeItem.IconContainer ->
                 dragged.asIconItem()?.let { listOf(LayoutChange.AddToIconContainer(target.container.id, it)) }
         }
-    }
-
-    /**
-     * Seeds [key]'s arrangement by re-laying the portrait one it does not yet have a layout of its own beside —
-     * what a first rotation shows instead of a blank screen.
-     *
-     * **Every zone, each into its own grid.** A dock is a separate coordinate space from the main area, so they are
-     * projected separately against [configs]; running them together would pack dock items into home cells. A zone
-     * the source has nothing in contributes nothing, which is how the dock stays empty on a launcher whose dock is
-     * empty — and why no separate "did anything move?" guard is needed, since a source with items in it always
-     * yields moves.
-     *
-     * Reported as a boolean rather than silently doing nothing, because the caller's next move is the alphabet seed
-     * and only one of the two may run. Returns false when there is nothing to project *or* when [key] already holds
-     * a layout — this never overwrites an arrangement someone has made, which is also what makes it safe to call on
-     * every configuration change rather than once.
-     *
-     * The **grid the source was arranged against is not consulted**, and does not need to be: reading order comes
-     * off the placements themselves, and where they land is entirely the target grid's business. See
-     * [ArrangementProjection].
-     */
-    private suspend fun seedFromPortrait(key: ArrangementKey, configs: Map<HomeZone, GridConfig>): Boolean {
-        val from = key.portraitCounterpart ?: return false
-        if (layoutRepository.placements(key).first().isNotEmpty()) return false
-        val source = layoutRepository.placements(from).first()
-        if (source.isEmpty()) return false
-
-        // Driven by the **zones**, not by [configs]' entries, and `getValue` is the point rather than an oversight:
-        // iterating the map would silently drop the items of any zone missing from it, where this fails loudly at
-        // the one place that could be wrong. Every source item has a zone, so this covers all of them.
-        val moves = HomeZone.entries.flatMap { zone ->
-            val inZone = source.filterValues { it.zone == zone }.mapValues { it.value.placement }
-            ArrangementProjection.project(inZone, configs.getValue(zone))
-                .map { (item, at) -> LayoutChange.Move(item, at, zone) }
-        }
-        layoutRepository.apply(key, moves)
-        return true
     }
 
     /**

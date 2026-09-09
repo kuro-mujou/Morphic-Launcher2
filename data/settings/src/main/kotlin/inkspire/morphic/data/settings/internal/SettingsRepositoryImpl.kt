@@ -291,6 +291,9 @@ internal class SettingsRepositoryImpl(
     override suspend fun setRotationMode(mode: RotationMode) =
         update(OrientationSettingsSlice) { copy(rotation = mode) }
 
+    override suspend fun setIndependentLayout(independent: Boolean) =
+        update(OrientationSettingsSlice) { copy(independentLayout = independent) }
+
     override val homeItemGestures: Flow<HomeItemGestures> = dataStore.read(HomeItemGesturesSlice) { it }
 
     override suspend fun setItemGesture(item: GridItem, gesture: ItemGesture, action: GestureAction?) =

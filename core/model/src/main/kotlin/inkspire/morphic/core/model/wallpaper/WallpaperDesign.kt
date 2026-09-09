@@ -272,4 +272,15 @@ enum class WallpaperDesign {
      */
     @SerialName("planet")
     PLANET,
+
+    /**
+     * A stone slab — a clouded body cut by veins that wander across it — the marble. The catalog's first design that
+     * imitates a **material** rather than composing marks: [PLASMA]'s nearest relative and the opposite of it in
+     * intent, since that one reads a summed-sine field through a looped palette for the interference itself, where
+     * this reads `|sin|` of a *turbulent* coordinate for the one thing the interference cannot draw — a narrow dark
+     * line with pale rock either side of it. [DesignParams.colorLayout] picks which end of the palette the veins take,
+     * which is what separates a Carrara from a black-and-gold.
+     */
+    @SerialName("marble")
+    MARBLE,
 }

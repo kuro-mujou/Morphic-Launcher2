@@ -66,6 +66,22 @@ interface AppsOrderRepository {
     suspend fun seedPagerIfEmpty(arrangement: ArrangementKey, from: ArrangementKey, perPage: Int): Boolean
 
     /**
+     * Makes [arrangement]'s list [from]'s, whatever it held before — the sync rather than the seed.
+     *
+     * [seedPagerIfEmpty]'s unguarded twin, for the postures that are being *kept in step* rather than started off.
+     * Two methods rather than a flag, for the reason those two things are different questions: one asks "has this
+     * posture ever been used", the other asserts "these two agree".
+     *
+     * **[perPage] need not be the target's capacity.** Page boundaries are advisory in this store — every read
+     * re-paginates through `normalizePages` at the reader's own capacity — so what actually crosses over is the
+     * order. That is what lets a write-back from landscape use the capacity it measured there.
+     *
+     * @return whether it wrote. False when the two already agree, which keeps an unconditional re-derive from
+     *   re-emitting the surface on every capacity change.
+     */
+    suspend fun copyPager(from: ArrangementKey, into: ArrangementKey, perPage: Int): Boolean
+
+    /**
      * Applies [changes] in order to [arrangement]'s list, at page capacity [perPage].
      *
      * The whole batch is one read-modify-write, so a drop that spans stores (a merge is a folder insert, two

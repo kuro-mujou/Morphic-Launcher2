@@ -57,14 +57,30 @@ internal class AppsOrderRepositoryImpl(
     override suspend fun seedPagerIfEmpty(arrangement: ArrangementKey, from: ArrangementKey, perPage: Int): Boolean =
         withContext(dispatchers.io) {
             if (daos.pagerItem.get(arrangement).isNotEmpty()) return@withContext false
-            val source = daos.pagerItem.get(from).toPages().flatItems()
-            if (source.isEmpty()) return@withContext false
-            // One page in, `normalizePages` out: the surplus cascades forward at the target's capacity, which is
-            // exactly the re-pagination. Passing no existing rows is what makes every entry a fresh insert — there
-            // is nothing here to re-slot, since the guard above proved this arrangement empty.
-            persist(arrangement, normalizePages(listOf(source), perPage), existing = emptyList())
-            true
+            copyPagerRows(from, arrangement, perPage)
         }
+
+    override suspend fun copyPager(from: ArrangementKey, into: ArrangementKey, perPage: Int): Boolean =
+        withContext(dispatchers.io) { copyPagerRows(from, into, perPage) }
+
+    /**
+     * The shared body of [seedPagerIfEmpty] and [copyPager]: [from]'s entries, in order, re-paginated into [into].
+     *
+     * One page in, `normalizePages` out — the surplus cascades forward at [perPage], which is exactly the
+     * re-pagination. The existing rows are passed so entries already present are re-slotted rather than duplicated;
+     * `@Upsert` matches on the surrogate id, and an id of 0 for an entry that is already there would be rejected by
+     * the per-arrangement unique index.
+     */
+    private suspend fun copyPagerRows(from: ArrangementKey, into: ArrangementKey, perPage: Int): Boolean {
+        if (from == into) return false
+        val source = daos.pagerItem.get(from).toPages().flatItems()
+        if (source.isEmpty()) return false
+        val existing = daos.pagerItem.get(into)
+        val next = normalizePages(listOf(source), perPage)
+        if (next == existing.toPages()) return false
+        persist(into, next, existing)
+        return true
+    }
 
     override suspend fun applyPager(arrangement: ArrangementKey, perPage: Int, changes: List<AppsPagerChange>) {
         if (changes.isEmpty()) return

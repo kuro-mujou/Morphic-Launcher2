@@ -12,4 +12,6 @@ dependencies {
     implementation(projects.core.database)  // placement DAOs + entities
 
     testImplementation(libs.junit)
+    // `ArrangementSync` is the module's first suspending API, so its spec is the first to need `runTest`.
+    testImplementation(libs.kotlinx.coroutines.test)
 }
