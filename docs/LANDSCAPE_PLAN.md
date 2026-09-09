@@ -1,4 +1,4 @@
-# Landscape Plan — one arrangement key, a reference layout, and two projections
+# Landscape Plan — one arrangement key per mode, a reference layout, and two projections
 
 **Goal:** make the launcher correct in landscape on both form factors, and give the user control over whether
 landscape is *the portrait layout adjusted* or *a layout of its own*.
@@ -31,76 +31,99 @@ and the two are the split `Orientation.kt`'s KDoc already names.
 
 ## What is actually missing
 
-Five constants and a gate:
+**The six pinned constants and the gate are gone** — L1 removed them, and every surface now derives its key from
+the reported `DeviceConfiguration`. What remains:
 
-| Where | What it pins |
-|---|---|
-| `HomeViewModel.ORIENTATION` | every home placement read and write |
-| `HomeViewModel.drawsStoredPlacements` | disables `fitMainTo`/`fitDockTo` whenever the device is rotated |
-| `AppsViewModel.ORIENTATION` | the APPS pager's saved list |
-| `ShellViewModel.ORIENTATION` | removal writes |
-| `DockViewModel.ORIENTATION` | the dock settings section's writes |
-| `GridSizeViewModel.ORIENTATION` | the grid editor's displaced `Move`s |
-
-…plus an unaudited UI tail (sheets, studios, pickers, the settings panes that never got a landscape pass).
+- **L3d** — the eight-key model below. The keys are the last structural piece; everything downstream of them is
+  built and verified.
+- **L3c** — grid coupling and the rotate-in-place projection, both of which are defined against the linked pair
+  and so wait on L3d.
+- **L4** — the unaudited UI tail: sheets, studios, pickers, and the settings panes that never got a landscape pass.
 
 ## The model
 
-### The key: `ArrangementKey`, six values
+### The key: `ArrangementKey`, eight values
 
-The placement column stops being `orientation` and becomes `arrangement`. Six values, in `core:model` beside
+The placement column stops being `orientation` and becomes `arrangement`. Eight values, in `core:model` beside
 `DeviceConfiguration`:
 
 ```
-PHONE_PORTRAIT   PHONE_LANDSCAPE   PHONE_SHARED
-TABLET_PORTRAIT  TABLET_LANDSCAPE  TABLET_SHARED
+PHONE_PORTRAIT   PHONE_LANDSCAPE     PHONE_PORTRAIT_LINKED   PHONE_LANDSCAPE_LINKED
+TABLET_PORTRAIT  TABLET_LANDSCAPE    TABLET_PORTRAIT_LINKED  TABLET_LANDSCAPE_LINKED
 ```
 
-The four concrete keys are **authored** arrangements — what a drag writes when that configuration owns its own
-layout. The two `*_SHARED` keys are **reference** arrangements: one per form factor, holding the layout that
-every configuration of that form factor projects from while sharing is on.
+Three axes, all of them real: **form factor** × **orientation** × **mode**. The first four are the layouts a
+posture owns while it is being arranged on its own; the `*_LINKED` four are the layouts of the same eight
+postures while the two orientations are kept in step.
+
+**The mode is an axis, not an overlay, and that is the whole change.** An earlier cut had six keys, with the two
+`*_SHARED` ones holding a reference snapshot while sharing wrote through the *authored* keys. That made the two
+modes share storage, so every flip of the switch had to decide which layout survived — and every answer destroyed
+one. See "Rejected" for the table of what each answer cost. Separating the modes means the toggle stops being a
+merge and becomes a **view switch**: each pair keeps sitting where it was, and flipping back shows it again.
+
+**`*_LINKED` rather than `*_SHARED`.** "Shared" reads as one row-set two postures read, which is exactly what
+these are not — they are two row-sets kept in step with each other. The name has to say the second thing, or the
+next reader looks for the single row-set that does not exist.
+
+**Landscape needs its own row-set in *both* modes, which is why this is eight and not six.** A linked landscape
+still has to hold real coordinates: the surface draws from them and a drop lands in them. Deriving landscape at
+render time was rejected earlier for exactly that reason, and it is why the linked landscape previously had to
+squat on the authored `PHONE_LANDSCAPE` key. That squatting was the collision.
 
 **Renamed rather than re-interpreted**, per the standing rule that a semantic break takes a new name — the old
 column meant "which orientation", the new one means "which arrangement", and re-reading one as the other would
-fail silently. `version = 1` with `fallbackToDestructiveMigration(dropAllTables = true)` is already set, so the
-bump costs nothing and there is no migration to write. Affects the five `*_placement` tables and
-`apps_pager_item` (whose per-orientation unique indices become per-arrangement).
+fail silently. `fallbackToDestructiveMigration(dropAllTables = true)` is already set, so the bump (2 → 3) costs
+nothing and there is no migration to write. Affects the five `*_placement` tables and `apps_pager_item` (whose
+per-arrangement unique indices simply gain values).
 
 **`Orientation` survives, scoped to wallpaper.** The rotating pair is genuinely two images per orientation and
-has nothing to do with arrangements. After this, `Orientation` is `data:wallpaper`'s type and nothing else's —
-which is what stops it drifting back into being a second, weaker arrangement key.
+has nothing to do with arrangements. `Orientation` is `data:wallpaper`'s type and nothing else's — which is what
+stops it drifting back into being a second, weaker arrangement key.
 
-### Two policies, one lattice
+### One policy, and the form factors are simply separate
 
-Both of the user's settings ask the same question — *do these two configurations share an arrangement, or get one
-each?* — so they are one policy over one key, not two features.
+`independentLayout` picks which **pair** of keys every surface reads and writes. That is its whole job.
 
-| `independentLayout` | `independentFormFactor` | Authored keys in play |
+| `independentLayout` | Keys in play on a phone | Kept in step |
 |---|---|---|
-| off | off | one (`PHONE_SHARED` ≡ `TABLET_SHARED`, kept in step) |
-| on | off | two — portrait and landscape, shared across form factors |
-| off | on | two — `PHONE_SHARED` and `TABLET_SHARED`, independent of each other |
-| on | on | four — every configuration authored |
+| off (default) | `PHONE_PORTRAIT_LINKED`, `PHONE_LANDSCAPE_LINKED` | yes, with each other |
+| on | `PHONE_PORTRAIT`, `PHONE_LANDSCAPE` | no |
 
-Both default **off**: a fresh install has one arrangement, and rotating or unfolding shows it adjusted.
+Default **off**: a fresh install has one layout, and rotating shows it re-arranged to fit.
 
-### The reference is portrait
+**`independentFormFactor` is dropped rather than deferred.** Under this model a phone and a tablet already own
+separate keys in both modes — there is no pair holding them together, so there is nothing for the toggle to turn
+off. Keeping them in step would need a *third* mode and four more keys, to answer a question nobody asked: the
+earlier note deferring it said it "needs a decision, not because it is large", and the decision is that a
+foldable's two form factors are two screens and are arranged as such.
 
-Stated by the user and load-bearing: *"we use portrait as our main reference layout"*. A `*_SHARED` arrangement is
-held in **portrait terms** and projected into landscape for drawing. A drag performed in landscape while sharing
-is projected **back** into the reference.
+### The reference is portrait, within a pair
 
-### Materialize on toggle, never continuously
+Stated by the user and load-bearing: *"we use portrait as our main reference layout"*. While the linked pair is in
+use, `*_PORTRAIT_LINKED` is the reference: it is held in portrait terms, projected into `*_LANDSCAPE_LINKED` for
+drawing, and a drag performed in linked landscape is projected **back** into it.
 
-When independence is turned on, the projection is materialized **once** into the authored keys it just created —
-which is exactly the behavior asked for ("the first rotate after turning the toggle on still shows the adjusted
-layout"). The authored keys do **not** exist before that, and the shared layout is **not** copied into them
-eagerly. Copying eagerly would mean every drag writing five rows, with a bug in any copy staying invisible until
-the toggle flipped weeks later.
+This is unchanged machinery — `ArrangementProjection`, `copyArrangement`, the unconditional re-derive on entry and
+the write-back on edit all keep working, pointed at a different pair. **That is the strongest argument for the
+model: it is a re-keying, not a rewrite.**
 
-Turning independence back **off** asks which arrangement becomes the new reference: **portrait / landscape /
-none** (none keeps the reference untouched since the toggle went on). All three are well-defined precisely
-because the reference was left alone while independence was on.
+### The toggle copies nothing, and asks nothing
+
+Switching `independentLayout` changes which pair is read. Neither pair is written, neither is cleared, and there
+is no question to put to the user — so the merge chooser goes, and with it `IndependenceMerge`,
+`snapshotArrangement`, `referenceSnapshot`, and the orphaned-folder consequence that came out of naming a winner.
+
+One copy remains, and it is a seed rather than a merge: **an independent pair with nothing in it is seeded once
+from the linked pair** (`copyArrangementIfEmpty`, which exists). Otherwise the first flip of the switch would show
+the alphabet instead of the layout the user was just looking at. It is non-destructive by construction — it only
+ever writes into a key holding nothing — and it runs in one direction, because the linked pair always has
+something and never needs seeding.
+
+**There is deliberately no way to promote one mode's layout into the other.** "Make my independent landscape the
+shared one" was what the old chooser's *Landscape* answer did, and it is the answer that overwrote a layout the
+user did not name. If it turns out to be missed it comes back as an explicit action with a visible name, not as a
+side effect of a switch.
 
 ## The projection
 
@@ -149,36 +172,40 @@ rotate the main area over a dock that did not move. Tablet sync therefore uses r
 Derived from `sideZoneEdge` rather than tested as `isTablet`, so the rule cannot drift from the thing it
 describes.
 
-### Rotate in place requires coupled grids, and is only offered in shared mode
+### Rotate in place requires coupled grids, and is only offered on the linked pair
 
 The transform is a bijection **only** when the target grid is the source's transpose: `4×6` portrait ↔ `6×4`
-landscape. So in **shared** mode the grid sizes are coupled — editing one orientation's counts transposes the
-other's — and rotate-in-place becomes available. In **independent** mode each configuration owns its grid size
-freely (`4×6` portrait against `5×8` landscape is legitimate), no transpose exists, and rotate-in-place is
-therefore **absent**, not disabled.
+landscape. So while the **linked** pair is in use the grid sizes are coupled — editing one orientation's counts
+transposes the other's — and rotate-in-place becomes available. On the **independent** pair each posture owns its
+grid size freely (`4×6` portrait against `5×8` landscape is legitimate), no transpose exists, and rotate-in-place
+is therefore **absent**, not disabled. Coupling is tied to the linked pair rather than merely to the mode picker,
+per the user's answer: coupled whenever the two are kept in step.
 
 Coupling is not the fight with the dock rail it first looks like: the phone blueprints are *already* transposes
 (`DockGrid`'s own comment says so). What coupling costs is landscape density — phone landscape's blueprint
-default is `6×4` (24 cells) where portrait's transpose is `5×4` (20). Shared mode trades those four cells for an
-exact round-trip; independent mode gets them back.
+default is `6×4` (24 cells) where portrait's transpose is `5×4` (20). The linked pair trades those four cells for
+an exact round-trip; the independent pair gets them back.
 
-Turning independence on materializes each authored key's **grid size** alongside its arrangement, so a layout
-keeps the lattice it was built against.
+**Open, and it is L3c's to answer: a grid size is not keyed by mode.** `SurfaceMetrics` stores counts per
+`DeviceConfiguration`, which has four values and no notion of linked-versus-independent — so coupling applied
+while linked leaves the transposed count in place after the switch, and the independent landscape inherits `5×4`
+rather than returning to its `6×4` default. The eight-key model does not fix this, because the key it added is
+for *arrangements* and a grid size is not one. Either the metric gains a mode axis, or coupling writes only while
+linked and the independent pair keeps whatever it last had. Do not build coupling before picking one.
 
 ## The settings
 
-A new **Orientation** group. Three controls, plus the mode picker:
+A new **Orientation** group. Three controls:
 
 - **Rotation** — `AUTO` (follow the device, default) / `PORTRAIT` / `LANDSCAPE`, the latter two locking via
   `activity.requestedOrientation`. L1's only use of that API was pinning its crop screen; L2 letterboxes there
   instead, so this is the first real consumer.
-- **Independent layout** (default off) — splits portrait from landscape.
-- **Independent foldable setup** (default off) — splits phone from tablet. Present only on a device that can be
-  both; a phone that cannot unfold has nothing to independent-ise.
+- **Independent layout** (default off) — switches which pair of keys the surfaces read. **No dialog either way**,
+  which is the visible half of the eight-key model: there is nothing to merge, so there is nothing to ask.
 - **Sync mode** — Reflow / Rotate in place. Shown only while `independentLayout` is off *and* the side zone
   changes axis on this form factor. Absent, not disabled, both times.
 
-Turning `independentLayout` off raises the **portrait / landscape / none** chooser described above.
+**Independent foldable setup is gone**, per "One policy, and the form factors are simply separate".
 
 ## Phases
 
@@ -225,32 +252,58 @@ L3b's toggles need already exists.
 - [ ] **Still unverified:** a lock set while the launcher is backgrounded being in force when it returns, and
       `AUTO` declining to rotate while the system's own auto-rotate is off.
 
-#### L3b — the sharing policy
+#### L3b — the sharing policy (built on six keys; **superseded by L3d**)
+
+Kept as the record of what was built and what the device said, because L3d changes the keys and not the machinery
+— every line below that is not about `*_SHARED` survives the re-key.
 
 - [x] `*_SHARED` keys wired — as **snapshots**, not as continuously-maintained references; see the progress note.
+      **L3d deletes these**: the snapshot exists only to answer a chooser that stops being asked.
 - [x] The `independentLayout` toggle, its snapshot-on-enable, and the turn-off chooser
-      (portrait / landscape / neither).
+      (portrait / landscape / neither). **The chooser goes in L3d.**
 - [x] Write-back from a non-reference posture, and the unconditional re-derive on entry that pairs with it.
-- [ ] `independentFormFactor` — **deferred, and it needs one decision**; see the progress note.
+      **Kept** — L3d points the same two hooks at the linked pair.
 - [x] **The default path verified on device** (2026-09-09): a landscape drag wrote back into portrait *on the drop*
       rather than on the next rotation, the re-derive carried a portrait edit into landscape, and three rotations
       either way produced no drift — the no-op guard holds.
-- [x] **Independence and the chooser verified as far as they go:** the toggle writes `PHONE_SHARED` on enable, and
-      the dialog offers its three answers with Cancel leaving independence on.
-- [x] **Independence holds a posture apart for removals**, verified after the fix below: removing in landscape
-      leaves portrait whole, and with the two shared it reaches portrait without resurrecting on the next rotation.
-- [ ] **Still open — structural additions.** A folder made under independence still takes its apps off the other
-      posture without giving it the folder; see "2b" below, which needs a decision.
-- [ ] **Still unverified:** the KEEP_PORTRAIT and KEEP_LANDSCAPE answers, which need a run that does not trip the
-      bug above.
+- [x] **Independence holds a posture apart for removals**, verified after the fixes below: removing in landscape
+      leaves portrait whole, and with the two kept in step it reaches portrait without resurrecting on the next
+      rotation. A folder made in landscape under independence leaves portrait untouched.
+- [~] `independentFormFactor` — **dropped**, not deferred; see "One policy, and the form factors are simply
+      separate".
+- [~] The KEEP_PORTRAIT / KEEP_LANDSCAPE chooser answers were never verified, and now never will be — L3d removes
+      them.
+
+#### L3d — eight keys, and the toggle stops being a merge
+
+The model change, and it is a **re-keying rather than a rewrite**: the projection, the re-derive and the write-back
+are untouched and simply address a different pair.
+
+- [ ] `ArrangementKey` gains the four `*_LINKED` values; DB version 2 → 3 (destructive, no migration to write).
+- [ ] Key resolution becomes `(DeviceConfiguration, independentLayout) → ArrangementKey`, in `core:model` beside
+      `authoredArrangement`. Every surface reads its pair through that one function — six call sites today.
+- [ ] `portraitOfFormFactor` becomes "the portrait key **of this pair**", so the reference of a linked landscape is
+      the linked portrait and never the independent one. This is the single place the two modes could still leak
+      into each other, and the one to get right.
+- [ ] Delete `IndependenceMerge`, `IndependenceMergePicker`, `snapshotArrangement`, `referenceSnapshot`, and
+      `disableIndependentLayout`'s three branches.
+- [ ] Seed an empty independent pair from the linked pair, once, through the existing `copyArrangementIfEmpty`.
+- [ ] The APPS pager's saved lists follow the same eight keys — `AppsOrderRepository` already takes an
+      `ArrangementKey`, so this is the same one-line resolution change.
+- [ ] **Verify on device:** arrange portrait, switch to independent, arrange landscape differently, switch back —
+      the linked pair is exactly as it was left; switch again — the independent pair is exactly as it was left.
+      Neither mode's work is reachable from the other, and no dialog appears in either direction.
 
 #### L3c — coupling and the second mode
 
-- [ ] Grid-size coupling while sharing.
-- [ ] Rotate-in-place, on `GridPlacement.rotateForLandscape`, offered only where the side zone changes axis.
+**After L3d**, since coupling is defined against the linked pair.
 
-- **Verify (L3b + L3c):** the full toggle lattice, including the sequence the user named — independence on, edit
-  portrait, rotate, edit landscape, independence off, each of the three chooser answers.
+- [ ] Decide where a coupled grid size is stored — see the open note under "Rotate in place requires coupled
+      grids". Do not build coupling first.
+- [ ] Grid-size coupling while the linked pair is in use.
+- [ ] Rotate-in-place, on `GridPlacement.rotateForLandscape`, offered only where the side zone changes axis.
+- [ ] **Verify on device:** editing either orientation's counts transposes the other's while linked and does not
+      while independent; a board rotation round-trips a phone layout exactly, gaps and spans included.
 
 ### L4 — The UI tail
 
@@ -362,7 +415,14 @@ enum field and the behaviour that matters is a platform call.
   HOME's pairing (`HOME_GRID`, `DOCK`) became named functions of their own. That was worth doing regardless: their
   inline branches made a lookup table of eleven entries read as a function with logic in it.
 
-### L3b — code complete 2026-09-09, awaiting device verification
+### L3b — code complete 2026-09-09, verified, and **superseded by L3d**
+
+The six-key model this describes is replaced by the eight-key one above; the machinery it built is not.
+Read it for why the write-back and the re-derive are shaped as they are — those keep working, pointed at
+the linked pair. The `*_SHARED` snapshot and the merge chooser are what L3d deletes, and the first bullet
+below is the argument that turned out to be wrong: a third row-set was not "one more thing to keep in step
+for no gain", it was the mode axis, and folding it into the authored keys is what made every toggle
+destructive.
 
 `gradle check` green (1090 unit tests, 8 of them new, 0 failures); `:app:assembleDebug` green.
 
@@ -448,23 +508,23 @@ Two things the fix flushed out, both worth keeping:
 - **A definition outliving its last placement needs collecting.** That state was already reachable and observed: a
   folder with both members and no placement under any key.
 
-#### 2b. Still open — a structural change made under independence reaches the other posture anyway
+#### 2b. Filing an app into a folder or container is scoped too — fixed, with one bound left
 
-**The original repro's app loss was `CreateFolder`, not `RemoveFromGrid`**, and scoping removal does not close it.
-Folder and container *membership* has no arrangement column, so filing an app into one must detach it from every
-grid — that part is right, and a per-posture detach would leave portrait drawing an app that a landscape folder also
-contains.
+**The original repro's app loss was `CreateFolder`, not `RemoveFromGrid`**, so scoping removal did not close it: a
+folder made in landscape took both apps off portrait's grid and gave portrait no folder in exchange.
 
-What is missing is the other half: the new folder is placed **only** in the posture it was made in. While the two
-are kept in step the write-back carries it across; under **independence** nothing does, so the other posture loses
-the apps and gains no folder. The same holds for any structural addition — a new icon container, a placed widget.
+**Fixed** by the user's rule, applied to filing as well as removal — `CreateFolder`, `AddToFolder`, `ReorderFolder`
+and the container detaches now delete the placement of the arrangement being applied and no other. Verified both
+ways on device: with the postures independent, a folder made in landscape leaves portrait at sixteen apps
+untouched; with them kept in step, the write-back replaces the reference a moment later and portrait ends up
+holding the folder instead (checked in the database — the folder is placed under both keys).
 
-Three answers, none obviously right, and it is the user's call:
-
-1. **Place it in every arrangement**, finding a free cell in each posture's own grid. Needs those grids, which
-   `data:layout` deliberately does not resolve — so they arrive as a parameter, as `copyArrangement`'s do.
-2. **Accept the loss and make it visible**, by telling the user a folder made here does not exist over there.
-3. **Give membership an arrangement column**, which makes folders genuinely per-posture and is a storage change.
+**The bound that remains is storage, not policy.** `folder_item` is uniquely indexed on `component` and
+`icon_container_item` on `component` and `folderId`, so an app belongs to at most one folder and one container for
+the whole launcher. Two postures can therefore hold different **arrangements** of the same groups, but not
+different **groups**: filing an app into a folder in landscape takes it out of whatever folder portrait had it in.
+Making that independent means an arrangement column on those two tables, which is a real storage change and has no
+demand behind it yet. Recorded on `LayoutChange`'s KDoc, where the next person to file something will read it.
 
 #### Not reached, and why
 
@@ -481,6 +541,20 @@ grid either way) and wrong as a *name*, since the arrangement key inherits it. W
 
 ## Rejected
 
+- **Six keys, with the two `*_SHARED` ones holding a reference snapshot.** Built, shipped to the emulator, and
+  replaced. It made the two modes write the *same four row-sets*, so the toggle was a merge and every answer
+  destroyed a layout the user had made:
+
+  | Toggle | What it destroyed |
+  |---|---|
+  | on → edit landscape → off, "Portrait" | the independent landscape |
+  | on → edit landscape → off, "Landscape" | the portrait layout |
+  | on → edit both → off, "Neither" | the portrait edits made since the toggle |
+  | off → on again | the earlier independent landscape, overwritten by the re-derive |
+
+  There is no path through that switch preserving both, which is what "the share layout disturbs the independent
+  layout" names. Splitting the mode onto its own axis removes the question instead of answering it, and deletes
+  the chooser, the snapshot and the orphan case with it.
 - **Keying arrangements on `Orientation` (two values).** Correct on any single device, and it is what the tree
   has — but a foldable changes `DeviceConfiguration` without changing `Orientation`, so folded and unfolded would
   silently share one arrangement with no way to separate them. Rejected once the foldable policy was in scope.
