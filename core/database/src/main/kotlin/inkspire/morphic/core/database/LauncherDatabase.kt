@@ -75,7 +75,7 @@ import inkspire.morphic.core.database.entity.WidgetPlacementEntity
         CategoryItemEntity::class,
         HomeListItemEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 @TypeConverters(

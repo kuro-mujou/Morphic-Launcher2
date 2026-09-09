@@ -21,6 +21,17 @@ import inkspire.morphic.core.model.WidgetInfo
  * **Key-free by design.** A change says *what* to do; the caller scopes *which* arrangement via
  * [LayoutRepository.apply]`(arrangement, …)`, so the same command replays into any [ArrangementKey]'s rows.
  *
+ * **Every *placement* these write or delete belongs to that one arrangement**, filing included: putting an app into
+ * a folder or a container takes it off the grid it was dropped on and no other, because a posture the user is
+ * arranging separately did not ask. Where the two are kept in step, the write-back replaces the reference wholesale
+ * a moment later and carries the result across.
+ *
+ * **Membership is the exception, and it is a storage fact rather than a decision.** `folder_item` is uniquely
+ * indexed on `component` and `icon_container_item` on `component` and `folderId`, so an app belongs to at most one
+ * folder and one container *for the whole launcher*. Two postures can therefore hold different **arrangements** of
+ * the same groups, but not different **groups** — filing an app into a folder in landscape takes it out of whatever
+ * folder portrait had it in. Making that independent means an arrangement column on those two tables.
+ *
  * **Thirteen ops, not nineteen.** Repeating the same four verbs once per item type is what makes nineteen; because
  * the model already unifies those types, the duplication collapses:
  * - **Move ×5 → 1.** `MoveApp/MoveFolder/MoveWidget/MoveWidgetContainer/MoveIconContainer` were an identical

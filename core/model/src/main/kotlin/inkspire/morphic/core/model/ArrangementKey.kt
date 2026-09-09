@@ -3,113 +3,102 @@ package inkspire.morphic.core.model
 /**
  * Which stored arrangement — *which item sits where* — a surface reads and writes.
  *
- * Deliberately not [DeviceConfiguration], which keys *configuration*: how big a grid is, how large its icons are.
- * The two look like the same four postures and are not, because an arrangement may be authored **once** and drawn
- * in every posture. [PHONE_SHARED] and [TABLET_SHARED] are that once: a reference layout belonging to no posture,
- * which each posture of its form factor projects from. Folding those two roles into one enum would make "the
- * layout every posture shares" unrepresentable, and the alternative — a nullable posture meaning "shared" — puts
- * the distinction in a null check rather than in the type.
+ * Three axes, all of them real: **form factor** × **orientation** × **mode**. The first two say which screen is
+ * being drawn; the third says whether the user is arranging that screen on its own or keeping it in step with the
+ * other orientation.
  *
- * **One reference per form factor, not one overall.** A phone window and a tablet window divide into different
- * lattices, so a single reference would have to be projected into both anyway; and a foldable changes form factor
- * without the user having asked for anything, so the two need to be separable.
+ * Deliberately not [DeviceConfiguration], which keys *configuration*: how big a grid is, how large its icons are.
+ * A configuration has no mode, which is exactly why these are two types rather than one with four values.
+ *
+ * **The mode is an axis, so the two modes never share a row.** That is what makes switching `independentLayout` a
+ * choice of which pair to read rather than a merge of two layouts into one — and a merge is a question with no
+ * good answer, since every way of resolving it discards a layout the user made.
+ *
+ * **`LINKED` and not `SHARED`:** these are two row-sets kept in step with each other, not one row-set two postures
+ * read. A linked landscape holds coordinates of its own because the surface draws from them and a drop lands in
+ * them, which is why it cannot be derived at render time. Full model in `docs/LANDSCAPE_PLAN.md`.
+ *
+ * These names are **persisted** — they key the five `*_placement` tables and `apps_pager_item` — so renaming a
+ * value is a storage migration.
  */
 enum class ArrangementKey {
     PHONE_PORTRAIT,
     PHONE_LANDSCAPE,
-    PHONE_SHARED,
+    PHONE_PORTRAIT_LINKED,
+    PHONE_LANDSCAPE_LINKED,
     TABLET_PORTRAIT,
     TABLET_LANDSCAPE,
-    TABLET_SHARED,
+    TABLET_PORTRAIT_LINKED,
+    TABLET_LANDSCAPE_LINKED,
 }
 
 /**
- * The arrangement this configuration authors when it owns a layout of its own.
+ * The arrangement this configuration reads and writes, given whether the user keeps the two orientations apart.
  *
- * The bridge between the two keys the launcher uses, and the *only* honest one: a configuration maps to exactly
- * one authored arrangement, while the reverse does not hold — no configuration maps to a `*_SHARED` key, which is
- * chosen by policy rather than read off the window.
+ * **The one bridge between the two keys**, and every surface goes through it — six call sites. Taking
+ * `independentLayout` as a parameter rather than reading it here is what keeps `core:model` free of the settings
+ * layer, and it makes the dependency visible at each call: a surface that resolves a key without the flag is a
+ * surface writing into the wrong mode.
  */
-val DeviceConfiguration.authoredArrangement: ArrangementKey
+fun DeviceConfiguration.arrangementKey(independentLayout: Boolean): ArrangementKey = when (this) {
+    DeviceConfiguration.PHONE_PORTRAIT ->
+        if (independentLayout) ArrangementKey.PHONE_PORTRAIT else ArrangementKey.PHONE_PORTRAIT_LINKED
+
+    DeviceConfiguration.PHONE_LANDSCAPE ->
+        if (independentLayout) ArrangementKey.PHONE_LANDSCAPE else ArrangementKey.PHONE_LANDSCAPE_LINKED
+
+    DeviceConfiguration.TABLET_PORTRAIT ->
+        if (independentLayout) ArrangementKey.TABLET_PORTRAIT else ArrangementKey.TABLET_PORTRAIT_LINKED
+
+    DeviceConfiguration.TABLET_LANDSCAPE ->
+        if (independentLayout) ArrangementKey.TABLET_LANDSCAPE else ArrangementKey.TABLET_LANDSCAPE_LINKED
+}
+
+/** True for the four arrangements whose orientation is kept in step with its partner. */
+val ArrangementKey.isLinked: Boolean
+    get() = this == ArrangementKey.PHONE_PORTRAIT_LINKED ||
+        this == ArrangementKey.PHONE_LANDSCAPE_LINKED ||
+        this == ArrangementKey.TABLET_PORTRAIT_LINKED ||
+        this == ArrangementKey.TABLET_LANDSCAPE_LINKED
+
+/**
+ * The portrait arrangement **of this key's own pair** — same form factor, same mode.
+ *
+ * The reference a linked landscape re-derives from and writes back into, and the source an independent landscape
+ * is seeded from. **Same mode is the load-bearing half**: answering `PHONE_PORTRAIT` for a linked landscape would
+ * have the shared layout rebuilt out of a layout the user is arranging separately, which is precisely the leak the
+ * mode axis was added to close. It is also the only place in the launcher where the two modes could still meet.
+ */
+val ArrangementKey.portraitOfPair: ArrangementKey
     get() = when (this) {
-        DeviceConfiguration.PHONE_PORTRAIT -> ArrangementKey.PHONE_PORTRAIT
-        DeviceConfiguration.PHONE_LANDSCAPE -> ArrangementKey.PHONE_LANDSCAPE
-        DeviceConfiguration.TABLET_PORTRAIT -> ArrangementKey.TABLET_PORTRAIT
-        DeviceConfiguration.TABLET_LANDSCAPE -> ArrangementKey.TABLET_LANDSCAPE
+        ArrangementKey.PHONE_PORTRAIT, ArrangementKey.PHONE_LANDSCAPE -> ArrangementKey.PHONE_PORTRAIT
+        ArrangementKey.PHONE_PORTRAIT_LINKED, ArrangementKey.PHONE_LANDSCAPE_LINKED ->
+            ArrangementKey.PHONE_PORTRAIT_LINKED
+
+        ArrangementKey.TABLET_PORTRAIT, ArrangementKey.TABLET_LANDSCAPE -> ArrangementKey.TABLET_PORTRAIT
+        ArrangementKey.TABLET_PORTRAIT_LINKED, ArrangementKey.TABLET_LANDSCAPE_LINKED ->
+            ArrangementKey.TABLET_PORTRAIT_LINKED
     }
 
 /**
- * The portrait arrangement of the same form factor, or null when this **is** one.
+ * The **same posture's** arrangement in linked mode, or null when this key already is one.
  *
- * What a posture with no layout of its own is seeded from, and portrait is the source rather than "whichever one
- * has something in it" because a launcher is set up in portrait: it is the arrangement a user has actually
- * arranged. Null for the two `*_SHARED` keys as well — a reference layout is the thing others are seeded *from*,
- * so being seeded from a posture would invert it.
- */
-/**
- * The other orientation of the same form factor, or null for a `*_SHARED` key, which has no orientation to be the
- * other of.
+ * What an independent arrangement is seeded from the first time the user flips the toggle, so the switch shows the
+ * layout they were just looking at rather than the alphabet. Same posture means the same grid, which is why that
+ * seed is a verbatim copy rather than a projection — see `LayoutRepository.mirrorArrangementIfEmpty`.
  *
- * [portraitCounterpart]'s two-way twin: that one names the source a posture is seeded *from*, this one names the
- * posture that has to be brought along when the two are kept in step.
+ * One direction only, and there is no inverse: the linked pair is where a launcher starts, so it always has
+ * something and never needs seeding from anywhere.
  */
-val ArrangementKey.oppositeOrientation: ArrangementKey?
+val ArrangementKey.linkedCounterpart: ArrangementKey?
     get() = when (this) {
-        ArrangementKey.PHONE_PORTRAIT -> ArrangementKey.PHONE_LANDSCAPE
-        ArrangementKey.PHONE_LANDSCAPE -> ArrangementKey.PHONE_PORTRAIT
-        ArrangementKey.TABLET_PORTRAIT -> ArrangementKey.TABLET_LANDSCAPE
-        ArrangementKey.TABLET_LANDSCAPE -> ArrangementKey.TABLET_PORTRAIT
-        ArrangementKey.PHONE_SHARED, ArrangementKey.TABLET_SHARED -> null
-    }
-
-/**
- * This form factor's **reference snapshot** — where the shared arrangement is parked while the postures are being
- * edited independently.
- *
- * It holds nothing while the two postures are kept in step, because the reference *is* the portrait posture then;
- * writing a third copy of the same layout would be a row-set to keep in step for no gain. It is written once, when
- * independence is switched on, and read once, if the user later switches independence off and asks to keep neither
- * posture. That is the whole of its job, and it is what makes that third answer mean anything.
- */
-val ArrangementKey.referenceSnapshot: ArrangementKey
-    get() = when (this) {
-        ArrangementKey.PHONE_PORTRAIT,
-        ArrangementKey.PHONE_LANDSCAPE,
-        ArrangementKey.PHONE_SHARED,
-        -> ArrangementKey.PHONE_SHARED
-
-        ArrangementKey.TABLET_PORTRAIT,
-        ArrangementKey.TABLET_LANDSCAPE,
-        ArrangementKey.TABLET_SHARED,
-        -> ArrangementKey.TABLET_SHARED
-    }
-
-/**
- * The portrait posture of this key's form factor — the reference while the two are kept in step.
- *
- * Total where [portraitCounterpart] is nullable, because the caller here is asking "which posture is the source?"
- * rather than "does this one need seeding?", and every key has an answer to the first.
- */
-val ArrangementKey.portraitOfFormFactor: ArrangementKey
-    get() = when (this) {
-        ArrangementKey.PHONE_PORTRAIT,
-        ArrangementKey.PHONE_LANDSCAPE,
-        ArrangementKey.PHONE_SHARED,
-        -> ArrangementKey.PHONE_PORTRAIT
-
-        ArrangementKey.TABLET_PORTRAIT,
-        ArrangementKey.TABLET_LANDSCAPE,
-        ArrangementKey.TABLET_SHARED,
-        -> ArrangementKey.TABLET_PORTRAIT
-    }
-
-val ArrangementKey.portraitCounterpart: ArrangementKey?
-    get() = when (this) {
-        ArrangementKey.PHONE_LANDSCAPE -> ArrangementKey.PHONE_PORTRAIT
-        ArrangementKey.TABLET_LANDSCAPE -> ArrangementKey.TABLET_PORTRAIT
-        ArrangementKey.PHONE_PORTRAIT,
-        ArrangementKey.TABLET_PORTRAIT,
-        ArrangementKey.PHONE_SHARED,
-        ArrangementKey.TABLET_SHARED,
+        ArrangementKey.PHONE_PORTRAIT -> ArrangementKey.PHONE_PORTRAIT_LINKED
+        ArrangementKey.PHONE_LANDSCAPE -> ArrangementKey.PHONE_LANDSCAPE_LINKED
+        ArrangementKey.TABLET_PORTRAIT -> ArrangementKey.TABLET_PORTRAIT_LINKED
+        ArrangementKey.TABLET_LANDSCAPE -> ArrangementKey.TABLET_LANDSCAPE_LINKED
+        ArrangementKey.PHONE_PORTRAIT_LINKED,
+        ArrangementKey.PHONE_LANDSCAPE_LINKED,
+        ArrangementKey.TABLET_PORTRAIT_LINKED,
+        ArrangementKey.TABLET_LANDSCAPE_LINKED,
         -> null
     }

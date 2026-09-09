@@ -9,7 +9,7 @@ import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.SideZoneEdge
-import inkspire.morphic.core.model.authoredArrangement
+import inkspire.morphic.core.model.arrangementKey
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.sideSlot
 import inkspire.morphic.core.model.sideZone
@@ -19,6 +19,7 @@ import inkspire.morphic.data.layout.DockEdit
 import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.layout.settleDock
 import inkspire.morphic.data.settings.GridOverride
+import inkspire.morphic.data.settings.OrientationSettings
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.feature.settings.icons.IconSizingEdits
 import inkspire.morphic.feature.settings.icons.SamplePreviewApp
@@ -89,6 +90,18 @@ class DockViewModel(
     internal val sample = SamplePreviewApp(appRepository, viewModelScope)
 
     private val device = MutableStateFlow<DeviceConfiguration?>(null)
+
+    /**
+     * Whether the two orientations keep separate layouts — the other half of the arrangement key.
+     *
+     * The editor's `±` writes *placements* as well as a count, so it has to name the arrangement those items live
+     * in, and that is the posture crossed with the mode. `Eagerly` for [layout]'s reason: the writes below read it
+     * with no UI subscriber behind them.
+     */
+    private val independentLayout: StateFlow<Boolean> =
+        settingsRepository.orientationSettings
+            .map { it.independentLayout }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, OrientationSettings.Default.independentLayout)
 
     /**
      * Which pairing HOME is drawing — the one input that changes *which zone* this section edits.
@@ -262,10 +275,11 @@ class DockViewModel(
         val nextRows = if (isRow) fromRows + delta else fromRows
 
         viewModelScope.launch {
+            val key = configuration.arrangementKey(independentLayout.value)
             val zoneConfig = zoneSlot.blueprint.toGridConfig(
                 zoneSlot.blueprint.defaults.getValue(configuration).copy(cols = nextCols, rows = nextRows),
             )
-            val placed = layoutRepository.placements(configuration.authoredArrangement).first()
+            val placed = layoutRepository.placements(key).first()
             // **Only the dock has a placement half today, and that is a gap rather than a rule.** `settleDock` evicts
             // to HOME's main area, which exists to be evicted onto only when it is a coordinate grid; the widget area
             // sits beside a *list*, which has nowhere to put a widget. It is also moot until widgets exist — nothing
@@ -284,9 +298,9 @@ class DockViewModel(
             // sees a grid too small for its contents.
             if (add) {
                 writeSize(configuration, nextCols, nextRows)
-                if (moves.isNotEmpty()) layoutRepository.apply(configuration.authoredArrangement, moves)
+                if (moves.isNotEmpty()) layoutRepository.apply(key, moves)
             } else {
-                if (moves.isNotEmpty()) layoutRepository.apply(configuration.authoredArrangement, moves)
+                if (moves.isNotEmpty()) layoutRepository.apply(key, moves)
                 writeSize(configuration, nextCols, nextRows)
             }
         }

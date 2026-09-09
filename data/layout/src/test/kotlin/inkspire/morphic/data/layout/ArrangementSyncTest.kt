@@ -94,17 +94,31 @@ class ArrangementSyncTest {
     }
 
     @Test
-    fun `snapshot preserves gaps where copy would close them`() = runTest {
-        // The whole reason snapshot is not copy: source and target describe the same grid, so re-laying would tidy
-        // away the arrangement the snapshot exists to preserve.
+    fun `mirror preserves gaps where copy would close them`() = runTest {
+        // The whole reason the mode seed is not a copy: source and target are the same posture in the two modes, so
+        // they describe the same grid, and re-laying would tidy away the arrangement it exists to carry over.
         val gapped = mapOf(app("a") to at(0, 2, 2))
-        val repository = FakeLayoutRepository(portrait to gapped)
+        val repository = FakeLayoutRepository(ArrangementKey.PHONE_PORTRAIT_LINKED to gapped)
 
-        assertTrue(repository.snapshotArrangement(portrait, ArrangementKey.PHONE_SHARED))
-        assertEquals(gapped, repository.stored.getValue(ArrangementKey.PHONE_SHARED))
+        assertTrue(repository.mirrorArrangementIfEmpty(ArrangementKey.PHONE_PORTRAIT_LINKED, portrait))
+        assertEquals(gapped, repository.stored.getValue(portrait))
 
         repository.copyArrangement(portrait, landscape, grids(rows = 4, cols = 4))
         assertEquals(mapOf(app("a") to at(0, 0, 0)), repository.stored.getValue(landscape))
+    }
+
+    @Test
+    fun `mirror refuses a target that already holds a layout`() = runTest {
+        // The guard that makes the mode seed safe on every configuration change rather than exactly once: flipping
+        // the toggle back and forth must not overwrite the layout the user made on the independent pair.
+        val theirs = mapOf(app("theirs") to at(0, 2, 2))
+        val repository = FakeLayoutRepository(
+            ArrangementKey.PHONE_PORTRAIT_LINKED to mapOf(app("linked") to at(0, 0, 0)),
+            portrait to theirs,
+        )
+
+        assertFalse(repository.mirrorArrangementIfEmpty(ArrangementKey.PHONE_PORTRAIT_LINKED, portrait))
+        assertEquals(theirs, repository.stored.getValue(portrait))
     }
 
     @Test

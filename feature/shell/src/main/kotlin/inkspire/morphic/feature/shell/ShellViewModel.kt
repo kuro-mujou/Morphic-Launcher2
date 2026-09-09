@@ -9,7 +9,7 @@ import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.Orientation
-import inkspire.morphic.core.model.authoredArrangement
+import inkspire.morphic.core.model.arrangementKey
 import inkspire.morphic.data.apps.AppInfoOpener
 import inkspire.morphic.data.apps.AppShortcut
 import inkspire.morphic.data.apps.AppShortcuts
@@ -145,10 +145,10 @@ class ShellViewModel(
      */
     fun removeFromHome(item: GridItem) {
         val configuration = device.value ?: return
-        val key = configuration.authoredArrangement
+        val key = configuration.arrangementKey(independentLayout.value)
         viewModelScope.launch {
             layoutRepository.apply(key, listOf(LayoutChange.RemoveFromGrid(item)))
-            layoutRepository.writeBackToReference(key, independentLayout.value) {
+            layoutRepository.writeBackToReference(key) {
                 settingsRepository.homeZoneGrids(configuration.portrait).first()
             }
         }

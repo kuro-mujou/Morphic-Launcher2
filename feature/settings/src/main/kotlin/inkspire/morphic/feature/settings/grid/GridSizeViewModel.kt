@@ -11,7 +11,7 @@ import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.IconSizing
-import inkspire.morphic.core.model.authoredArrangement
+import inkspire.morphic.core.model.arrangementKey
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.mainSlot
 import inkspire.morphic.core.model.pagerSlot
@@ -22,6 +22,7 @@ import inkspire.morphic.data.layout.GridReflow
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.settings.GridOverride
+import inkspire.morphic.data.settings.OrientationSettings
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.feature.settings.icons.IconSizingEdits
 import inkspire.morphic.feature.settings.icons.SamplePreviewApp
@@ -108,6 +109,18 @@ class GridSizeViewModel(
     internal val sample = SamplePreviewApp(appRepository, viewModelScope)
 
     private val device = MutableStateFlow<DeviceConfiguration?>(null)
+
+    /**
+     * Whether the two orientations keep separate layouts — the other half of the arrangement key.
+     *
+     * The editor's `±` writes *placements* as well as a count, so it has to name the arrangement those items live
+     * in, and that is the posture crossed with the mode. `Eagerly` for [layout]'s reason: the writes below read it
+     * with no UI subscriber behind them.
+     */
+    private val independentLayout: StateFlow<Boolean> =
+        settingsRepository.orientationSettings
+            .map { it.independentLayout }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, OrientationSettings.Default.independentLayout)
 
     /**
      * Which pairing HOME is drawing — the one input that changes *which grid* this section edits.
@@ -267,7 +280,7 @@ class GridSizeViewModel(
         )
 
         viewModelScope.launch {
-            val key = configuration.authoredArrangement
+            val key = configuration.arrangementKey(independentLayout.value)
             val moves = placementMoves(key, edge, add, nextConfig)
             if (add) {
                 writeSize(configuration, nextCols, nextRows)

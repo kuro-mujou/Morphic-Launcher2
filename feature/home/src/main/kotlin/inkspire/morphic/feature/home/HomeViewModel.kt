@@ -23,11 +23,12 @@ import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.core.model.WidgetContainer
 import inkspire.morphic.core.model.WidgetContainerAxis
 import inkspire.morphic.core.model.WidgetInfo
-import inkspire.morphic.core.model.authoredArrangement
+import inkspire.morphic.core.model.arrangementKey
 import inkspire.morphic.core.model.blueprint
+import inkspire.morphic.core.model.linkedCounterpart
 import inkspire.morphic.core.model.mainSlot
 import inkspire.morphic.core.model.pagerSlot
-import inkspire.morphic.core.model.portraitOfFormFactor
+import inkspire.morphic.core.model.portraitOfPair
 import inkspire.morphic.core.model.sideSlot
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
@@ -42,6 +43,7 @@ import inkspire.morphic.data.layout.PlacedItem
 import inkspire.morphic.data.layout.WidgetSpan
 import inkspire.morphic.data.layout.copyArrangement
 import inkspire.morphic.data.layout.copyArrangementIfEmpty
+import inkspire.morphic.data.layout.mirrorArrangementIfEmpty
 import inkspire.morphic.data.layout.reconcileReportedOrder
 import inkspire.morphic.data.layout.settleDock
 import inkspire.morphic.data.layout.writeBackToReference
@@ -134,7 +136,7 @@ class HomeViewModel(
      * Null until the surface reports, and every write path returns on null rather than guessing a key: a placement
      * written under the wrong one is not a misdraw that rotating back undoes, it is a row in the wrong table.
      */
-    private val arrangement: ArrangementKey? get() = device.value?.authoredArrangement
+    private val arrangement: ArrangementKey? get() = device.value?.arrangementKey(independentLayout.value)
 
     /**
      * Which pairing HOME is drawing, from the surface register.
@@ -456,20 +458,24 @@ class HomeViewModel(
                     // `device`, so combining them made a pair that could disagree: `combine` emits on the latest of
                     // each, and a posture change fires it once with the *new* key and the *previous* posture's grids
                     // before the new grids arrive. That window is one emission wide and always taken.
-                    val key = grids.device.authoredArrangement
+                    val key = grids.device.arrangementKey(independent)
                     val configs = grids.byZone
-                    // **Kept in step means re-derived on arrival, not copied on every edit.** While the postures share
-                    // one layout, entering a non-reference one rebuilds it from portrait *unconditionally* — which is
-                    // what makes a portrait edit show up here without portrait having had to push it. The write-back
-                    // in `applyChanges` is the other half: without it this would overwrite a landscape drag the next
-                    // time the device turned.
-                    val reference = key.portraitOfFormFactor
-                    if (!independent && key != reference && layoutRepository.copyArrangement(reference, key, configs)) {
+                    val reference = key.portraitOfPair
+                    // **Kept in step means re-derived on arrival, not copied on every edit.** Entering a linked
+                    // posture that is not the reference rebuilds it from the linked portrait *unconditionally* —
+                    // which is what makes an edit there show up here without portrait having had to push it. The
+                    // write-back in `applyChanges` is the other half: without it this would overwrite a landscape
+                    // drag the next time the device turned.
+                    if (key != reference && layoutRepository.copyArrangement(reference, key, configs)) {
                         return@collect
                     }
-                    // **Then the seed, and the A-Z fallback behind it.** All three are "this posture has nothing to
-                    // draw"; filling a rotated screen with the alphabet when the user has a home screen one turn away
-                    // is the wrong answer, so the alphabet goes last.
+                    // **Then three fallbacks, narrowest first, all of them "this arrangement has nothing to draw".**
+                    // The mirror comes before the projection because it is the *same posture* in the other mode, so
+                    // it is exact where a projection re-lays; and both come before the alphabet, because handing a
+                    // user A-Z when their own layout is one toggle or one turn away is the wrong answer.
+                    key.linkedCounterpart?.let { linked ->
+                        if (layoutRepository.mirrorArrangementIfEmpty(linked, key)) return@collect
+                    }
                     if (layoutRepository.copyArrangementIfEmpty(reference, key, configs)) return@collect
                     if (!refreshed) {
                         appRepository.refresh()
@@ -511,7 +517,7 @@ class HomeViewModel(
         // reflow of nothing reports no change and writes nothing.
         viewModelScope.launch {
             device.filterNotNull()
-                .map { it.authoredArrangement }
+                .combine(independentLayout) { current, independent -> current.arrangementKey(independent) }
                 .distinctUntilChanged()
                 .collectLatest { key ->
                     placements.value = emptyMap()
@@ -953,7 +959,7 @@ class HomeViewModel(
                 // nobody is looking at. Run after the write it follows, so it reads the store rather than the
                 // optimistic map: the two agree by then, and the store is the one holding any ids a structural
                 // change just minted.
-                layoutRepository.writeBackToReference(key, independentLayout.value) {
+                layoutRepository.writeBackToReference(key) {
                     zoneConfigsFor(configuration.portrait).first()
                 }
             } finally {

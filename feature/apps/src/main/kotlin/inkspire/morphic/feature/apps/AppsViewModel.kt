@@ -15,11 +15,13 @@ import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.VerticalEdge
-import inkspire.morphic.core.model.authoredArrangement
+import inkspire.morphic.core.model.arrangementKey
 import inkspire.morphic.core.model.indexRanges
+import inkspire.morphic.core.model.isLinked
 import inkspire.morphic.core.model.labelCollator
+import inkspire.morphic.core.model.linkedCounterpart
 import inkspire.morphic.core.model.matchesLabel
-import inkspire.morphic.core.model.portraitOfFormFactor
+import inkspire.morphic.core.model.portraitOfPair
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.apps.category.AppCategorizer
@@ -348,7 +350,7 @@ class AppsViewModel(
     private val pagerItems: Flow<List<List<IconItem>>> =
         fittedPager.flatMapLatest { fit ->
             if (fit == null) flowOf(emptyList())
-            else appsOrderRepository.pagerPages(fit.device.authoredArrangement, fit.config.perPage)
+            else appsOrderRepository.pagerPages(fit.device.arrangementKey(independentLayout.value), fit.config.perPage)
         }
 
     /**
@@ -534,17 +536,24 @@ class AppsViewModel(
             combine(sortedApps, fittedPager) { apps, fit -> apps to fit }
                 .collect { (apps, fit) ->
                     if (fit != null) {
-                        val key = fit.device.authoredArrangement
-                        val reference = key.portraitOfFormFactor
-                        if (independentLayout.value && key != reference) {
-                            // Independent: this posture is its own, so only ever *seeded* from portrait, and only
-                            // when it has nothing. The projection gives it the arrangement the user actually made
-                            // rather than the alphabet `syncPager` would otherwise fill it with.
-                            appsOrderRepository.seedPagerIfEmpty(key, reference, fit.config.perPage)
-                        } else if (key != reference) {
-                            // Kept in step: rebuilt from portrait on arrival, unconditionally — the pager's half of
-                            // what `HomeViewModel` does for the placements, and no-op when the two already agree.
-                            appsOrderRepository.copyPager(reference, key, fit.config.perPage)
+                        val key = fit.device.arrangementKey(independentLayout.value)
+                        val reference = key.portraitOfPair
+                        if (key.isLinked) {
+                            // Kept in step: rebuilt from the linked portrait on arrival, unconditionally — the
+                            // pager's half of what `HomeViewModel` does for the placements, and no-op when the two
+                            // already agree.
+                            if (key != reference) appsOrderRepository.copyPager(reference, key, fit.config.perPage)
+                        } else {
+                            // Independent: this arrangement is its own, so it is only ever *seeded*, and only when it
+                            // has nothing. Its linked twin first — same posture, so the order carries exactly — then
+                            // its own pair's portrait. Either beats the alphabet `syncPager` would otherwise fill it
+                            // with. `seedPagerIfEmpty` is a no-op once one of them has landed.
+                            key.linkedCounterpart?.let {
+                                appsOrderRepository.seedPagerIfEmpty(key, it, fit.config.perPage)
+                            }
+                            if (key != reference) {
+                                appsOrderRepository.seedPagerIfEmpty(key, reference, fit.config.perPage)
+                            }
                         }
                         // Always last, and never skipped: whichever of the two ran, an app installed since the
                         // source list was made is still missing from it.
@@ -845,14 +854,14 @@ class AppsViewModel(
         // Taking it from a fit measured for the *previous* posture would cascade the drop through a page size the
         // user never saw, which is why this goes through [fittedPager]'s agreement rather than straight to the report.
         val fit = pagerFit.value?.takeIf { it.device == device.value } ?: return
-        val key = fit.device.authoredArrangement
+        val key = fit.device.arrangementKey(independentLayout.value)
         viewModelScope.launch {
             appsOrderRepository.applyPager(key, fit.config.perPage, changes)
             // **Carried back into portrait while the two are kept in step**, or the next rotation would rebuild this
             // posture from a portrait that never heard about the drop. The capacity is the one measured *here*, which
             // is sound because page boundaries in this store are advisory — see `copyPager`.
-            val reference = key.portraitOfFormFactor
-            if (!independentLayout.value && key != reference) {
+            val reference = key.portraitOfPair
+            if (key.isLinked && key != reference) {
                 appsOrderRepository.copyPager(key, reference, fit.config.perPage)
             }
         }

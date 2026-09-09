@@ -21,6 +21,9 @@ interface WidgetPlacementDao {
     @Query("DELETE FROM widget_placement WHERE appWidgetId = :appWidgetId")
     suspend fun deleteByWidgetId(appWidgetId: Int)
 
+    @Query("DELETE FROM widget_placement WHERE appWidgetId = :appWidgetId AND arrangement = :arrangement")
+    suspend fun delete(appWidgetId: Int, arrangement: ArrangementKey)
+
     @Query("DELETE FROM widget_placement WHERE appWidgetId = :appWidgetId AND arrangement = :arrangement AND zone = :zone")
     suspend fun deleteZone(appWidgetId: Int, arrangement: ArrangementKey, zone: HomeZone)
 

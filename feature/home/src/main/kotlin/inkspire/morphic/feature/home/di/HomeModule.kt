@@ -30,5 +30,5 @@ val homeModule = module {
     // gesture, which is exactly the case the `NavEntry` ViewModel-store decorator exists to keep separate.
     viewModel { parameters -> GestureActionViewModel(parameters.get(), parameters.get(), get(), get(), get()) }
     viewModel { WidgetPickerViewModel(get()) }
-    viewModel { (route: ContainerSettingsRoute) -> ContainerSettingsViewModel(route, get(), get(), get()) }
+    viewModel { (route: ContainerSettingsRoute) -> ContainerSettingsViewModel(route, get(), get(), get(), get()) }
 }

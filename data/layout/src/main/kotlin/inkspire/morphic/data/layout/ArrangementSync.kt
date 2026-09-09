@@ -3,16 +3,17 @@ package inkspire.morphic.data.layout
 import inkspire.morphic.core.model.ArrangementKey
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.HomeZone
-import inkspire.morphic.core.model.portraitOfFormFactor
+import inkspire.morphic.core.model.isLinked
+import inkspire.morphic.core.model.portraitOfPair
 import kotlinx.coroutines.flow.first
 
 /**
  * Carrying one HOME arrangement's items into another posture's rows.
  *
  * **One operation behind four callers**, which is why it lives here rather than private to the surface that needed
- * it first: a posture with nothing seeds itself from portrait, a posture drawn while the two are kept in step
- * re-derives on entry, a drag made away from portrait writes back into it, and the independence toggle copies in
- * whichever direction the user picked. All four are "take that arrangement, lay it out here".
+ * it first: a posture with nothing seeds itself from its pair's portrait, a linked posture re-derives on entry, a
+ * drag made away from the reference writes back into it, and an independent posture first used is mirrored from its
+ * linked twin. All four are "take that arrangement, put it here" — three re-laying it, one not.
  *
  * **Extensions rather than an injectable class**, for `SettingsRepository.homeZoneGrids`' reason: these compose
  * what [LayoutRepository] already offers and hold no state of their own, so an object would be a dependency every
@@ -63,16 +64,23 @@ suspend fun LayoutRepository.copyArrangement(
 }
 
 /**
- * Copies [from]'s placements into [into] **unchanged** — no projection, no re-lay.
+ * Copies [from]'s placements into [into] **unchanged** — no projection, no re-lay — and only when [into] is empty.
  *
- * The reference snapshot, and the one carry that must *not* project: source and target describe the same grid, and
- * running them through [ArrangementProjection] would close the gaps the user deliberately left. A snapshot that
- * quietly tidies the layout it is preserving is not a snapshot.
+ * **The mode seed.** Flipping `independentLayout` on for the first time finds the independent pair empty; without
+ * this the user would be handed the alphabet instead of the layout they were looking at a moment earlier. Source
+ * and target are the *same posture* in the two modes, so they describe the same grid — which is why this must not
+ * project: running it through [ArrangementProjection] would close the gaps the user deliberately left, and a seed
+ * that tidies the layout it is preserving is not one.
  *
- * @return whether it wrote, false when [from] holds nothing.
+ * That same-grid fact is the whole difference from [copyArrangementIfEmpty], which crosses orientations and so has
+ * no choice but to re-lay. Both are guarded on emptiness for [copyArrangementIfEmpty]'s reason: it is what makes
+ * them safe to call on every configuration change rather than exactly once, and what stops a seed undoing work.
+ *
+ * @return whether it wrote, false when [into] already holds something or [from] holds nothing.
  */
-suspend fun LayoutRepository.snapshotArrangement(from: ArrangementKey, into: ArrangementKey): Boolean {
+suspend fun LayoutRepository.mirrorArrangementIfEmpty(from: ArrangementKey, into: ArrangementKey): Boolean {
     if (from == into) return false
+    if (placements(into).first().isNotEmpty()) return false
     val source = placements(from).first()
     if (source.isEmpty()) return false
     replacePlacements(into, source)
@@ -90,6 +98,10 @@ suspend fun LayoutRepository.snapshotArrangement(from: ArrangementKey, into: Arr
  * implementations of "make portrait agree" that could drift, which is exactly the divergence this codebase keeps
  * paying for.
  *
+ * **Whether it applies is read off the key, not passed in.** An independent arrangement has no reference to write
+ * back to, and the key already says which mode it belongs to — so a caller cannot get the two out of step by
+ * handing over the wrong flag.
+ *
  * [referenceGrids] is a lambda rather than a value because most calls return before needing it — resolving the
  * reference posture's grids costs a store read that an independent layout, or an edit made *in* portrait, never has
  * any use for.
@@ -98,11 +110,10 @@ suspend fun LayoutRepository.snapshotArrangement(from: ArrangementKey, into: Arr
  */
 suspend fun LayoutRepository.writeBackToReference(
     from: ArrangementKey,
-    independent: Boolean,
     referenceGrids: suspend () -> Map<HomeZone, GridConfig>,
 ): Boolean {
-    if (independent) return false
-    val reference = from.portraitOfFormFactor
+    if (!from.isLinked) return false
+    val reference = from.portraitOfPair
     if (from == reference) return false
     return copyArrangement(from, reference, referenceGrids())
 }

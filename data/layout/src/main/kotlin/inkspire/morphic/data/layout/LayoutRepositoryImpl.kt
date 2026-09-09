@@ -58,9 +58,10 @@ internal class LayoutRepositoryImpl(
 
     override suspend fun replacePlacements(arrangement: ArrangementKey, placements: Map<GridItem, PlacedItem>) {
         withContext(dispatchers.io) {
-            // Cleared per table rather than through `RemoveFromGrid`, which drops an item from every arrangement.
-            // These five `clearArrangement` queries existed unused until this; they are what makes "replace" a
-            // replace rather than a merge over whatever the target happened to be holding.
+            // Cleared per table rather than item by item through `RemoveFromGrid`, which would also collect a
+            // definition whose last placement this clear is about to restore. These five `clearArrangement` queries
+            // existed unused until this; they are what makes "replace" a replace rather than a merge over whatever
+            // the target happened to be holding.
             daos.appPlacement.clearArrangement(arrangement)
             daos.folderPlacement.clearArrangement(arrangement)
             daos.widgetPlacement.clearArrangement(arrangement)
@@ -118,6 +119,68 @@ internal class LayoutRepositoryImpl(
         daos.iconContainer.deleteUnplaced()
     }
 
+    /**
+     * Drops [item]'s placement in [arrangement] and no other.
+     *
+     * Taking something off the screen you are looking at says nothing about the screen you are not. While the
+     * launcher had one arrangement the distinction did not exist; once L1 gave it several, a global delete meant
+     * removing an icon in landscape silently took it off portrait too.
+     *
+     * The definition outlives the placement and is collected by [dropUnplacedDefinitions] once no posture places it
+     * — a sweep rather than a check here, because [replacePlacements] can strip the last one as well.
+     *
+     * **Widgets and widget containers are deliberately still global.** Destroying a widget is only half the job —
+     * the `AppWidgetHost` unbind is `data:widgets`' half — and no caller can decide whether to unbind without being
+     * told whether another posture still holds it. See [LayoutChange.RemoveFromGrid].
+     */
+    private suspend fun removeFromGrid(arrangement: ArrangementKey, item: GridItem) = when (item) {
+        is GridItem.App -> daos.appPlacement.delete(item.component, arrangement)
+        is GridItem.Folder -> daos.folderPlacement.delete(item.folderId, arrangement)
+        is GridItem.IconContainer -> daos.iconContainerPlacement.delete(item.containerId, arrangement)
+        is GridItem.WidgetContainer -> daos.widgetContainer.delete(item.containerId)
+        is GridItem.Widget -> daos.widget.delete(item.appWidgetId)
+    }
+
+    /**
+     * Mints a folder over [change]'s apps and places it.
+     *
+     * The folded apps leave **this posture's** grid, scoped for [removeFromGrid]'s reason: an independent landscape
+     * is not entitled to rearrange portrait. Where the two are kept in step the write-back replaces the reference
+     * wholesale a moment later, so it ends up holding the folder rather than the loose apps.
+     */
+    private suspend fun createFolder(arrangement: ArrangementKey, change: LayoutChange.CreateFolder) {
+        val folderId = daos.folder.insert(FolderEntity(label = change.label))
+        daos.folderItem.detachAll(change.apps)
+        daos.folderItem.upsert(change.apps.toFolderItems(folderId))
+        change.apps.forEach { daos.appPlacement.delete(it, arrangement) }
+        daos.folderPlacement.upsert(
+            listOf(GridItem.Folder(folderId).toEntity(arrangement, change.zone, change.at)),
+        )
+    }
+
+    /** Appends [change]'s app to its folder, and off this posture's grid — [createFolder]'s scoping, for its reason. */
+    private suspend fun addToFolder(arrangement: ArrangementKey, change: LayoutChange.AddToFolder) {
+        daos.folderItem.detachAll(listOf(change.app))
+        val next = (daos.folderItem.maxSortOrder(change.folderId) ?: -1) + 1
+        daos.folderItem.upsert(listOf(FolderItemEntity(change.folderId, change.app, next)))
+        daos.appPlacement.delete(change.app, arrangement)
+    }
+
+    /**
+     * Makes [change]'s apps the whole of its folder's membership, in the order given.
+     *
+     * **It detaches placements as well**, which a reorder appears not to need: this is also how the drag path *adds*
+     * a member, since it carries the whole reported order. Before removal was scoped, that detach came from the
+     * `RemoveFromGrid` beside it, which now rightly clears only the posture the drop happened on. A pure reorder
+     * names apps that are already members and hold no cell, so the delete does nothing there.
+     */
+    private suspend fun reorderFolder(arrangement: ArrangementKey, change: LayoutChange.ReorderFolder) {
+        daos.folderItem.clearFolder(change.folderId)
+        daos.folderItem.detachAll(change.apps)
+        daos.folderItem.upsert(change.apps.toFolderItems(change.folderId))
+        change.apps.forEach { daos.appPlacement.delete(it, arrangement) }
+    }
+
     private suspend fun applyChange(arrangement: ArrangementKey, change: LayoutChange) {
         when (change) {
             // ── Placement: upsert into the matching per-type table for this arrangement ──
@@ -138,25 +201,7 @@ internal class LayoutRepositoryImpl(
                     daos.widgetContainerPlacement.upsert(listOf(item.toEntity(arrangement, change.zone, change.to)))
             }
 
-            // ── Remove from home = drop **this arrangement's** placement ──
-            // Taking an item off the screen you are looking at says nothing about the screen you are not. While the
-            // launcher had one arrangement this distinction did not exist; once L1 gave it several, a global delete
-            // meant removing an icon in landscape silently took it off portrait too.
-            //
-            // The definition outlives the placement and is collected by [dropUnplacedDefinitions] once no posture
-            // places it — here rather than inline, because `replacePlacements` can strip the last placement too.
-            //
-            // **Widgets and widget containers are deliberately still global**, and it is not an oversight: destroying
-            // a widget is only half of it, the `AppWidgetHost` unbind being `data:widgets`' half, and a caller cannot
-            // know whether to unbind without knowing whether some other posture still holds the widget. Making these
-            // per-arrangement means answering that first — see RemoveFromGrid's KDoc.
-            is LayoutChange.RemoveFromGrid -> when (val item = change.item) {
-                is GridItem.App -> daos.appPlacement.delete(item.component, arrangement)
-                is GridItem.Folder -> daos.folderPlacement.delete(item.folderId, arrangement)
-                is GridItem.IconContainer -> daos.iconContainerPlacement.delete(item.containerId, arrangement)
-                is GridItem.WidgetContainer -> daos.widgetContainer.delete(item.containerId)
-                is GridItem.Widget -> daos.widget.delete(item.appWidgetId)
-            }
+            is LayoutChange.RemoveFromGrid -> removeFromGrid(arrangement, change.item)
 
             // ── A newly bound widget: its definition, then where it sits ──
             // In that order, because the placement is the row a surface joins *through* the definition — writing
@@ -172,57 +217,32 @@ internal class LayoutRepositoryImpl(
             }
 
             // ── Folders ──
-            is LayoutChange.CreateFolder -> {
-                val folderId = daos.folder.insert(FolderEntity(label = change.label))
-                daos.folderItem.detachAll(change.apps)
-                daos.folderItem.upsert(change.apps.toFolderItems(folderId))
-                // The folded apps now live inside the folder, so they leave the grid (an app is in one place).
-                change.apps.forEach { daos.appPlacement.deleteByComponent(it) }
-                daos.folderPlacement.upsert(
-                    listOf(GridItem.Folder(folderId).toEntity(arrangement, change.zone, change.at)),
-                )
-            }
+            is LayoutChange.CreateFolder -> createFolder(arrangement, change)
 
-            is LayoutChange.AddToFolder -> {
-                daos.folderItem.detachAll(listOf(change.app))
-                val next = (daos.folderItem.maxSortOrder(change.folderId) ?: -1) + 1
-                daos.folderItem.upsert(listOf(FolderItemEntity(change.folderId, change.app, next)))
-                // The app moved into the folder, so it leaves the grid (no-op if it came from another folder).
-                daos.appPlacement.deleteByComponent(change.app)
-            }
+            is LayoutChange.AddToFolder -> addToFolder(arrangement, change)
 
             is LayoutChange.RemoveFromFolder -> daos.folderItem.remove(change.folderId, change.app)
 
-            is LayoutChange.ReorderFolder -> {
-                daos.folderItem.clearFolder(change.folderId)
-                daos.folderItem.detachAll(change.apps)
-                daos.folderItem.upsert(change.apps.toFolderItems(change.folderId))
-                // **Every grid, as `CreateFolder` and `AddToFolder` already do**, because folder membership has no
-                // arrangement column: an app inside a folder cannot also be sitting on another posture's grid. This
-                // op is how the drag path *adds* a member (it carries the whole reported order), so before removal
-                // became per-arrangement the detach came from the `RemoveFromGrid` beside it — which now rightly
-                // only clears the posture the drop happened on. A pure reorder names apps that are already members
-                // and have no placements, so it stays a no-op there.
-                change.apps.forEach { daos.appPlacement.deleteByComponent(it) }
-            }
+            is LayoutChange.ReorderFolder -> reorderFolder(arrangement, change)
 
             // ── Icon containers ──
             is LayoutChange.CreateIconContainer -> {
                 val id = daos.iconContainer.insert(IconContainerEntity(arrangementSpec = change.arrangement))
-                setIconContainerItems(id, change.items)
+                setIconContainerItems(arrangement, id, change.items)
                 daos.iconContainerPlacement.upsert(
                     listOf(GridItem.IconContainer(id).toEntity(arrangement, change.zone, change.at)),
                 )
             }
 
-            is LayoutChange.AddToIconContainer -> addToIconContainer(change)
+            is LayoutChange.AddToIconContainer -> addToIconContainer(arrangement, change)
 
             is LayoutChange.RemoveFromIconContainer -> when (val item = change.item) {
                 is IconItem.App -> daos.iconContainerItem.removeByComponent(item.component)
                 is IconItem.Folder -> daos.iconContainerItem.removeByFolder(item.folderId)
             }
 
-            is LayoutChange.ReorderIconContainer -> setIconContainerItems(change.containerId, change.items)
+            is LayoutChange.ReorderIconContainer ->
+                setIconContainerItems(arrangement, change.containerId, change.items)
 
             is LayoutChange.SetIconContainerScales ->
                 daos.iconContainer.setScales(change.containerId, change.iconScalePercent, change.spacingScalePercent)
@@ -233,7 +253,7 @@ internal class LayoutRepositoryImpl(
             // ── Widget containers ──
             is LayoutChange.CreateWidgetContainer -> {
                 val id = daos.widgetContainer.insert(WidgetContainerEntity(axis = change.axis))
-                change.widgetIds.forEach { detachWidget(it) }
+                change.widgetIds.forEach { detachWidget(arrangement, it) }
                 daos.widgetContainerItem.upsert(
                     change.widgetIds.mapIndexed { i, w -> WidgetContainerItemEntity(id, w, i) },
                 )
@@ -247,7 +267,7 @@ internal class LayoutRepositoryImpl(
                 // what a surface joins *through* the definition, so writing it first would emit a container holding
                 // a widget that resolves to nothing for as long as the two writes are apart.
                 daos.widget.upsert(change.widget.toEntity())
-                detachWidget(change.widget.appWidgetId)
+                detachWidget(arrangement, change.widget.appWidgetId)
                 val next = (daos.widgetContainerItem.maxSortOrder(change.containerId) ?: -1) + 1
                 daos.widgetContainerItem.upsert(
                     listOf(WidgetContainerItemEntity(change.containerId, change.widget.appWidgetId, next)),
@@ -289,9 +309,11 @@ internal class LayoutRepositoryImpl(
      * synthetic key making it worse: `folder_item`'s composite key at least matches when the app is already in the
      * target folder.
      *
-     * **And it enforces "an item lives in exactly one place."** [LayoutChange.AddToFolder] deletes the folded app's
-     * grid placement for this reason; the container ops did not, so an app dragged into one rendered **twice** — in
-     * the container and still in the cell it came from.
+     * **And it enforces "an item lives in exactly one place *on this posture*."** [LayoutChange.AddToFolder] deletes
+     * the folded app's grid placement for this reason; the container ops did not, so an app dragged into one rendered
+     * **twice** — in the container and still in the cell it came from. Scoped to the arrangement being applied, since
+     * filing something here is not a statement about a posture the user may be arranging separately; membership
+     * itself stays global, which is the bound on how independent two postures can be (see [LayoutChange]).
      *
      * A folder needs no folder-membership detach, since folders never nest. Neither kind is taken out of the
      * `Surface.APPS` stores: that arrangement is independent of HOME's, so an app may sit in both.
@@ -321,10 +343,10 @@ internal class LayoutRepositoryImpl(
      * already holds must append it to what *remains*, not leave a gap where its old row was. The insert path gets
      * the same for free, since [setIconContainerItems] detaches every item it writes.
      */
-    private suspend fun addToIconContainer(change: LayoutChange.AddToIconContainer) {
+    private suspend fun addToIconContainer(arrangement: ArrangementKey, change: LayoutChange.AddToIconContainer) {
         val index = change.index
         if (index == null) {
-            detachIconItem(change.item)
+            detachIconItem(arrangement, change.item)
             val next = (daos.iconContainerItem.maxSortOrder(change.containerId) ?: -1) + 1
             daos.iconContainerItem.upsert(listOf(change.item.toRow(change.containerId, next)))
             return
@@ -334,26 +356,27 @@ internal class LayoutRepositoryImpl(
         // rather than one past it — the list it was dropped onto is the one it is no longer part of.
         val without = current.filterNot { it == change.item }
         setIconContainerItems(
+            arrangement = arrangement,
             containerId = change.containerId,
             items = without.toMutableList().also { it.add(index.coerceIn(0, it.size), change.item) },
         )
     }
 
-    private suspend fun setIconContainerItems(containerId: Long, items: List<IconItem>) {
+    private suspend fun setIconContainerItems(arrangement: ArrangementKey, containerId: Long, items: List<IconItem>) {
         daos.iconContainerItem.clearContainer(containerId)
-        items.forEach { detachIconItem(it) }
+        items.forEach { detachIconItem(arrangement, it) }
         daos.iconContainerItem.upsert(items.mapIndexed { i, item -> item.toRow(containerId, i) })
     }
 
-    private suspend fun detachIconItem(item: IconItem) = when (item) {
+    private suspend fun detachIconItem(arrangement: ArrangementKey, item: IconItem) = when (item) {
         is IconItem.App -> {
-            daos.appPlacement.deleteByComponent(item.component)
+            daos.appPlacement.delete(item.component, arrangement)
             daos.folderItem.removeByComponent(item.component)
             daos.iconContainerItem.removeByComponent(item.component)
         }
 
         is IconItem.Folder -> {
-            daos.folderPlacement.deleteByFolderId(item.folderId)
+            daos.folderPlacement.delete(item.folderId, arrangement)
             daos.iconContainerItem.removeByFolder(item.folderId)
         }
     }
@@ -368,9 +391,9 @@ internal class LayoutRepositoryImpl(
      * The widget's **definition row is deliberately untouched**: it is still bound and still ours, it has only moved.
      * Destroying a widget is [LayoutChange.RemoveFromGrid] plus the host's own unbind, never this.
      */
-    private suspend fun detachWidget(appWidgetId: Int) {
+    private suspend fun detachWidget(arrangement: ArrangementKey, appWidgetId: Int) {
         daos.widgetContainerItem.removeByWidget(appWidgetId)
-        daos.widgetPlacement.deleteByWidgetId(appWidgetId)
+        daos.widgetPlacement.delete(appWidgetId, arrangement)
     }
 }
 

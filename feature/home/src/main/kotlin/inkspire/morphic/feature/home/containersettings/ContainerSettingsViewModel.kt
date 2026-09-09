@@ -10,10 +10,12 @@ import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.WidgetContainerAxis
 import inkspire.morphic.core.model.WidgetInfo
-import inkspire.morphic.core.model.authoredArrangement
+import inkspire.morphic.core.model.arrangementKey
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.LayoutRepository
+import inkspire.morphic.data.settings.OrientationSettings
+import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.widgets.AppWidgetHostController
 import inkspire.morphic.feature.home.ContainerIcon
 import inkspire.morphic.feature.home.HomeViewModel
@@ -22,8 +24,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.text.Collator
@@ -46,6 +50,7 @@ import java.text.Collator
 class ContainerSettingsViewModel(
     private val route: ContainerSettingsRoute,
     private val layoutRepository: LayoutRepository,
+    private val settingsRepository: SettingsRepository,
     private val appRepository: AppRepository,
     private val widgetHost: AppWidgetHostController,
 ) : ViewModel() {
@@ -59,10 +64,23 @@ class ContainerSettingsViewModel(
      */
     private val device = MutableStateFlow<DeviceConfiguration?>(null)
 
+    /**
+     * Whether the two orientations keep separate layouts — half of the arrangement key, alongside [device].
+     *
+     * Read for the same reason [device] is: this screen only ever *looks up* placements, and which rows those are
+     * depends on the mode as much as on the posture. `Eagerly` so [write] can read it without a UI subscriber.
+     */
+    private val independentLayout: StateFlow<Boolean> =
+        settingsRepository.orientationSettings
+            .map { it.independentLayout }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, OrientationSettings.Default.independentLayout)
+
     /** This container's home placements, followed for whichever posture the screen is being drawn on. */
     @OptIn(ExperimentalCoroutinesApi::class)
     private val placements = device.filterNotNull()
-        .flatMapLatest { layoutRepository.placements(it.authoredArrangement) }
+        .combine(independentLayout) { current, independent -> current.arrangementKey(independent) }
+        .distinctUntilChanged()
+        .flatMapLatest { layoutRepository.placements(it) }
 
     val state: StateFlow<ContainerSettingsState> =
         when (route) {
@@ -216,7 +234,7 @@ class ContainerSettingsViewModel(
      * write path for thirteen changes and names the key for the ones that need it.
      */
     private fun write(vararg changes: LayoutChange) {
-        val key = device.value?.authoredArrangement ?: return
+        val key = device.value?.arrangementKey(independentLayout.value) ?: return
         viewModelScope.launch { layoutRepository.apply(key, changes.toList()) }
     }
 
