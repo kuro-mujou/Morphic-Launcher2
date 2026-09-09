@@ -18,14 +18,28 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.backdrop.OnFilm
 import inkspire.morphic.core.designsystem.backdrop.filmBackdrop
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.surface.LockSurfaceGesture
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import inkspire.morphic.core.model.DeviceConfiguration
 
-/** How much of the screen a sheet takes. L1's fraction, from the widget picker this was extracted from. */
-private const val SheetHeightFraction = 0.7f
+/**
+ * How much of the screen a sheet takes.
+ *
+ * **Two fractions, because a fraction is not a constant amount of room.** L1's 0.7 came from the widget picker this
+ * was extracted from, and it is right on a tall screen: the third left over reads as a glimpse of the surface behind,
+ * which is what makes a sheet feel modal rather than like a screen. On a phone in landscape the *same* third is most
+ * of the usable height — 0.7 of ~440dp leaves a panel barely three rows deep, and the glimpse is worth less than the
+ * rows. So a short screen keeps a strip rather than a proportion.
+ *
+ * Not a dp cap, which was the other option: a cap has to be chosen against a font scale and a density, and it stops
+ * being a glimpse on a tablet, where the strip would be a sliver.
+ */
+private val DeviceConfiguration.sheetHeightFraction: Float
+    get() = if (isLandscape) 0.92f else 0.7f
 
 /**
  * A **modal bottom sheet over a launcher surface** — a scrim, a frosted panel, and the modality that makes it one.
@@ -64,7 +78,7 @@ internal fun LauncherBottomSheet(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     onBack: () -> Unit = onDismiss,
-    heightFraction: Float? = SheetHeightFraction,
+    heightFraction: Float? = currentDeviceConfiguration().sheetHeightFraction,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     LockSurfaceGesture(locked = true)
