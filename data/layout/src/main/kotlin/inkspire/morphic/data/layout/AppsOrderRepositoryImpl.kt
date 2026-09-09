@@ -54,6 +54,18 @@ internal class AppsOrderRepositoryImpl(
         }
     }
 
+    override suspend fun seedPagerIfEmpty(arrangement: ArrangementKey, from: ArrangementKey, perPage: Int): Boolean =
+        withContext(dispatchers.io) {
+            if (daos.pagerItem.get(arrangement).isNotEmpty()) return@withContext false
+            val source = daos.pagerItem.get(from).toPages().flatItems()
+            if (source.isEmpty()) return@withContext false
+            // One page in, `normalizePages` out: the surplus cascades forward at the target's capacity, which is
+            // exactly the re-pagination. Passing no existing rows is what makes every entry a fresh insert — there
+            // is nothing here to re-slot, since the guard above proved this arrangement empty.
+            persist(arrangement, normalizePages(listOf(source), perPage), existing = emptyList())
+            true
+        }
+
     override suspend fun applyPager(arrangement: ArrangementKey, perPage: Int, changes: List<AppsPagerChange>) {
         if (changes.isEmpty()) return
         withContext(dispatchers.io) {

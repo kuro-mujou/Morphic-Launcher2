@@ -50,6 +50,22 @@ interface AppsOrderRepository {
     suspend fun syncPager(arrangement: ArrangementKey, perPage: Int, installed: List<ComponentKey>)
 
     /**
+     * Seeds [arrangement]'s list from [from]'s — the same entries in the same order, re-paginated at [perPage].
+     *
+     * What a posture with no saved pager of its own shows on first rotate, instead of the alphabet [syncPager]
+     * would otherwise fill it with. An ordered surface makes this the whole of the projection: there are no
+     * coordinates to re-lay, only a page size to divide by, which `normalizePages` already does on every read.
+     *
+     * Folders come across as themselves. A folder lives in the `folder` table and each list holds a *reference*, so
+     * both postures point at one folder rather than at two copies of it — the same rule as an app appearing once
+     * per list.
+     *
+     * @return true when it wrote. Does nothing and reports false when [arrangement] already holds a list — this
+     *   never overwrites an arrangement someone has made — or when [from] has nothing to give.
+     */
+    suspend fun seedPagerIfEmpty(arrangement: ArrangementKey, from: ArrangementKey, perPage: Int): Boolean
+
+    /**
      * Applies [changes] in order to [arrangement]'s list, at page capacity [perPage].
      *
      * The whole batch is one read-modify-write, so a drop that spans stores (a merge is a folder insert, two

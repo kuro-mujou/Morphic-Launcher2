@@ -19,6 +19,7 @@ import inkspire.morphic.core.model.authoredArrangement
 import inkspire.morphic.core.model.indexRanges
 import inkspire.morphic.core.model.labelCollator
 import inkspire.morphic.core.model.matchesLabel
+import inkspire.morphic.core.model.portraitCounterpart
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.apps.category.AppCategorizer
@@ -523,11 +524,14 @@ class AppsViewModel(
             combine(sortedApps, fittedPager) { apps, fit -> apps to fit }
                 .collect { (apps, fit) ->
                     if (fit != null) {
-                        appsOrderRepository.syncPager(
-                            fit.device.authoredArrangement,
-                            fit.config.perPage,
-                            apps.map { it.componentKey },
-                        )
+                        val key = fit.device.authoredArrangement
+                        // Seeded before the sync rather than instead of it: the projection gives this posture the
+                        // arrangement the user actually made, and the sync then appends anything installed since.
+                        // Both are no-ops once the list exists, so this is safe on every capacity change.
+                        key.portraitCounterpart?.let { from ->
+                            appsOrderRepository.seedPagerIfEmpty(key, from, fit.config.perPage)
+                        }
+                        appsOrderRepository.syncPager(key, fit.config.perPage, apps.map { it.componentKey })
                     }
                 }
         }

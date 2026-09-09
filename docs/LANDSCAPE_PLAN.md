@@ -120,8 +120,9 @@ refusing landscape drags, which is worse. It is a real loss and the doc says so.
 ### Rotate in place
 
 The device turned 90°: the whole board rotates with it, items keeping their physical position on the glass.
-`(row, col, rowSpan, colSpan)` → `(cols − col − colSpan, row, colSpan, rowSpan)`, i.e. L1's
-`GridRect.rotateForLandscape`, which **is** ported for this mode.
+`(row, col, rowSpan, colSpan)` → `(cols − col − colSpan, row, colSpan, rowSpan)`. L1's `GridRect.rotateForLandscape`
+was **already ported** into `core:model` as `GridPlacement.rotateForLandscape` (with `rotateForPortrait` and
+`GridConfig.swap()` beside it) and has had no consumer since; this mode is the one it was waiting for.
 
 - **Bijective, so it round-trips exactly** — a landscape drag projects back into the reference with no loss, gaps
   and spans included. That is the whole reason this mode is worth having.
@@ -197,11 +198,12 @@ Each phase ends verified **on the device**, not on a green build.
 
 ### L2 — The projection
 
-- [ ] `ArrangementProjection` in `data:layout` — both modes, pure, unit-tested including round-trip identity for
-      rotate-in-place and order-preservation for reflow.
-- [ ] Seed an empty authored key from the reference on first use.
-- **Verify:** first rotate now shows the portrait layout adjusted rather than a blank screen, both modes, on
-  home main / dock / widget area, with multi-cell widgets and folders present.
+- [x] `ArrangementProjection` in `data:layout` — **reflow only**, pure, 11 unit tests. Rotate-in-place moved to L3;
+      see the progress note.
+- [x] Seed an empty authored key from its portrait counterpart on first use — HOME (every zone) and the APPS pager.
+- [ ] **Verify on device:** first rotate shows the portrait layout re-laid rather than the alphabet, on home main /
+      dock / widget area, with multi-cell widgets and folders present; and the APPS pager keeps its order rather
+      than reverting to A–Z.
 
 ### L3 — Reference, policy, settings
 
@@ -270,6 +272,36 @@ Eight things came out differently from the plan above. Each is a decision, not a
   it over. Resolved by moving the holder acquisition *and* the device report up to `ContainerSettingsScreen` and
   passing the holder down — which leaves the content function shorter than it started and gives the wrapper an
   honest job ("wire the holder, then theme the content") rather than dodging the threshold.
+
+### L2 — code complete 2026-09-09, awaiting device verification
+
+`gradle check` green (1068 unit tests, 11 of them new, 0 failures); `:app:assembleDebug` green.
+
+- **Rotate-in-place moved to L3, and this is a scope change rather than a slip.** The plan had L2 build both
+  modes, but rotate-in-place is a bijection *only* against a transposed grid, and grid coupling is L3's — so built
+  here it would have had no reachable caller and no way to be exercised outside a unit test. Its primitive is
+  already waiting: `GridPlacement.rotateForLandscape`/`rotateForPortrait` and `GridConfig.swap()` are in
+  `core:model` today, ported from L1 with **no consumer at all**. L3 is where they get one.
+- **The projection could not be `GridReflow`, and that is the finding worth keeping.** `GridReflow.reflow` is a
+  *settle*: whatever still fits keeps its exact cell. Portrait 4 cols settled into landscape 6 would leave every
+  item in columns 0–3 with the gained columns empty. `ArrangementProjection.project` re-lays everything in reading
+  order instead, and `a wider target uses the columns it gained` is the test that pins the difference.
+- **It also could not use `GridOccupancy`'s scan**, which steps one *logical* cell. HOME's grids are
+  `cellMultiplier = 2`, so a dense re-lay would seat items half a cell out — reliably, since every item goes
+  through the scan, where `GridReflow` only sends it strays whose hinted coordinate was already aligned. The
+  projection walks the grid in visual cells and uses `GridOccupancy` as the free-cell index only. That latent
+  misalignment still exists in `GridReflow.rehome`; it is just very hard to reach.
+- **The APPS pager needed seeding too, and got it almost free.** Without it, rotating threw away the user's pager
+  arrangement and `syncPager` refilled the list A–Z. An ordered surface makes the projection trivial — same order,
+  divided by the new page capacity, which `normalizePages` already does — so it is `seedPagerIfEmpty` on the
+  repository. It runs **before** `syncPager` rather than instead of it, so a newly installed app is still appended
+  to the seeded list.
+- **Seeding is driven by `HomeZone.entries` with `getValue`, not by iterating the config map.** Iterating the map
+  would silently drop the items of any zone missing from it; `getValue` fails loudly at the one place that could
+  be wrong. That also removed an unreachable `moves.isEmpty()` guard detekt's `ReturnCount` had flagged — every
+  source item has a zone, so a non-empty source always yields moves.
+- **Neither seed overwrites an existing arrangement**, which is what makes both safe to call on every
+  configuration change rather than exactly once, and what stops a rotation undoing work.
 
 ## Rejected
 

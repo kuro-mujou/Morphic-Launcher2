@@ -37,3 +37,22 @@ val DeviceConfiguration.authoredArrangement: ArrangementKey
         DeviceConfiguration.TABLET_PORTRAIT -> ArrangementKey.TABLET_PORTRAIT
         DeviceConfiguration.TABLET_LANDSCAPE -> ArrangementKey.TABLET_LANDSCAPE
     }
+
+/**
+ * The portrait arrangement of the same form factor, or null when this **is** one.
+ *
+ * What a posture with no layout of its own is seeded from, and portrait is the source rather than "whichever one
+ * has something in it" because a launcher is set up in portrait: it is the arrangement a user has actually
+ * arranged. Null for the two `*_SHARED` keys as well — a reference layout is the thing others are seeded *from*,
+ * so being seeded from a posture would invert it.
+ */
+val ArrangementKey.portraitCounterpart: ArrangementKey?
+    get() = when (this) {
+        ArrangementKey.PHONE_LANDSCAPE -> ArrangementKey.PHONE_PORTRAIT
+        ArrangementKey.TABLET_LANDSCAPE -> ArrangementKey.TABLET_PORTRAIT
+        ArrangementKey.PHONE_PORTRAIT,
+        ArrangementKey.TABLET_PORTRAIT,
+        ArrangementKey.PHONE_SHARED,
+        ArrangementKey.TABLET_SHARED,
+        -> null
+    }

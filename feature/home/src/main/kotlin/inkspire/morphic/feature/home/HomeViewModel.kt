@@ -27,10 +27,12 @@ import inkspire.morphic.core.model.authoredArrangement
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.mainSlot
 import inkspire.morphic.core.model.pagerSlot
+import inkspire.morphic.core.model.portraitCounterpart
 import inkspire.morphic.core.model.sideSlot
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.apps.AppShortcuts
+import inkspire.morphic.data.layout.ArrangementProjection
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.GridOccupancy
 import inkspire.morphic.data.layout.GridReflow
@@ -191,6 +193,30 @@ class HomeViewModel(
         device.flatMapLatest { current ->
             if (current == null) flowOf(null) else settingsRepository.gridConfig(GridSlot.HOME_MAIN, current)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /**
+     * Every HOME zone's grid for the reported device.
+     *
+     * Separate from [pagerConfig] and from [sideSizing] because it answers a question neither does: seeding a
+     * posture's whole arrangement needs *all three* zones' grids at once, where the surface only ever draws the two
+     * its layout pairs. Asking per zone from the drawing flows instead would make the seed depend on which layout
+     * happens to be showing, and a dock placement is a dock placement whichever main area is beside it.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val zoneConfigs: Flow<Map<HomeZone, GridConfig>?> =
+        device.flatMapLatest { current ->
+            if (current == null) {
+                flowOf(null)
+            } else {
+                combine(
+                    settingsRepository.gridConfig(GridSlot.HOME_MAIN, current),
+                    settingsRepository.gridConfig(GridSlot.HOME_DOCK, current),
+                    settingsRepository.gridConfig(GridSlot.HOME_WIDGET_AREA, current),
+                ) { main, dock, widgetArea ->
+                    mapOf(HomeZone.MAIN to main, HomeZone.DOCK to dock, HomeZone.WIDGET_AREA to widgetArea)
+                }
+            }
+        }
 
     /**
      * Whether the main pager's pages wrap around at the ends.
@@ -407,13 +433,20 @@ class HomeViewModel(
         // The app cache is refreshed once, before the first seed, since a seed with an empty cache places nothing.
         viewModelScope.launch {
             var refreshed = false
-            pagerConfig.filterNotNull().collect { config ->
-                if (!refreshed) {
-                    appRepository.refresh()
-                    refreshed = true
+            device.filterNotNull()
+                .combine(zoneConfigs.filterNotNull()) { current, configs -> current.authoredArrangement to configs }
+                .distinctUntilChanged()
+                .collect { (key, configs) ->
+                    // **The projection is tried first, and the A-Z seed is the fallback.** Both are "this posture has
+                    // nothing", so whichever runs first makes the other a no-op — and filling a rotated screen with
+                    // the alphabet when the user already has a home screen one turn away is the wrong answer.
+                    if (seedFromPortrait(key, configs)) return@collect
+                    if (!refreshed) {
+                        appRepository.refresh()
+                        refreshed = true
+                    }
+                    seedIfEmpty(key, configs.getValue(HomeZone.MAIN))
                 }
-                seedIfEmpty(config)
-            }
         }
         // **The vertical list's first-run default: the grid, flattened.** Seeded when the layout is *chosen* rather
         // than at startup, because a list seeded on a launcher whose user never opens that layout would be a snapshot
@@ -1127,6 +1160,43 @@ class HomeViewModel(
     }
 
     /**
+     * Seeds [key]'s arrangement by re-laying the portrait one it does not yet have a layout of its own beside —
+     * what a first rotation shows instead of a blank screen.
+     *
+     * **Every zone, each into its own grid.** A dock is a separate coordinate space from the main area, so they are
+     * projected separately against [configs]; running them together would pack dock items into home cells. A zone
+     * the source has nothing in contributes nothing, which is how the dock stays empty on a launcher whose dock is
+     * empty — and why no separate "did anything move?" guard is needed, since a source with items in it always
+     * yields moves.
+     *
+     * Reported as a boolean rather than silently doing nothing, because the caller's next move is the alphabet seed
+     * and only one of the two may run. Returns false when there is nothing to project *or* when [key] already holds
+     * a layout — this never overwrites an arrangement someone has made, which is also what makes it safe to call on
+     * every configuration change rather than once.
+     *
+     * The **grid the source was arranged against is not consulted**, and does not need to be: reading order comes
+     * off the placements themselves, and where they land is entirely the target grid's business. See
+     * [ArrangementProjection].
+     */
+    private suspend fun seedFromPortrait(key: ArrangementKey, configs: Map<HomeZone, GridConfig>): Boolean {
+        val from = key.portraitCounterpart ?: return false
+        if (layoutRepository.placements(key).first().isNotEmpty()) return false
+        val source = layoutRepository.placements(from).first()
+        if (source.isEmpty()) return false
+
+        // Driven by the **zones**, not by [configs]' entries, and `getValue` is the point rather than an oversight:
+        // iterating the map would silently drop the items of any zone missing from it, where this fails loudly at
+        // the one place that could be wrong. Every source item has a zone, so this covers all of them.
+        val moves = HomeZone.entries.flatMap { zone ->
+            val inZone = source.filterValues { it.zone == zone }.mapValues { it.value.placement }
+            ArrangementProjection.project(inZone, configs.getValue(zone))
+                .map { (item, at) -> LayoutChange.Move(item, at, zone) }
+        }
+        layoutRepository.apply(key, moves)
+        return true
+    }
+
+    /**
      * First-run default: with nothing placed, lay the first apps onto the grid in reading order — one app per
      * *visual* cell, left→right, top→bottom. Fills all but the **last visual row**, so the page keeps slack.
      * This matters: the free-placement push engine rearranges by shoving occupants into empty cells, so a
@@ -1143,8 +1213,7 @@ class HomeViewModel(
      * presentation default worth getting right on its own (with a picker) rather than guessing here. Until then the
      * dock is filled by dragging an app into it, which is the flow that needs proving first.
      */
-    private suspend fun seedIfEmpty(config: GridConfig) {
-        val key = arrangement ?: return
+    private suspend fun seedIfEmpty(key: ArrangementKey, config: GridConfig) {
         if (layoutRepository.placements(key).first().isNotEmpty()) return
         val mult = config.cellMultiplier
         val seedRows = (config.visualRows - 1).coerceAtLeast(1)
