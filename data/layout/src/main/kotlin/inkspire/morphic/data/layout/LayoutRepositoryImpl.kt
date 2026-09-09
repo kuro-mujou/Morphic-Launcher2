@@ -69,6 +69,9 @@ internal class LayoutRepositoryImpl(
             placements.forEach { (item, placed) ->
                 applyChange(arrangement, LayoutChange.Move(item, placed.placement, placed.zone))
             }
+            // After the re-fill, never between: the clear above strips this arrangement's rows, so sweeping mid-way
+            // would collect a folder that is about to be placed again by the very loop that cleared it.
+            dropUnplacedDefinitions()
         }
     }
 
@@ -91,7 +94,28 @@ internal class LayoutRepositoryImpl(
     override suspend fun apply(arrangement: ArrangementKey, changes: List<LayoutChange>) {
         withContext(dispatchers.io) {
             changes.forEach { applyChange(arrangement, it) }
+            dropUnplacedDefinitions()
         }
+    }
+
+    /**
+     * Destroys every folder and icon container that no arrangement places any more.
+     *
+     * **The other half of a per-arrangement removal.** `RemoveFromGrid` drops one posture's placement row, so the
+     * definition has to outlive it — and something then has to notice when the *last* posture lets go, or a folder
+     * survives holding apps that are reachable from nowhere. That state is not hypothetical: it is what a landscape
+     * merge followed by a re-derive from a portrait that never heard about the folder actually produced.
+     *
+     * **A sweep rather than a check at the removal site**, because removal is not the only way the last placement
+     * goes: [replacePlacements] clears an arrangement wholesale, which is how the sharing re-derive writes, and it
+     * would otherwise strip the final row with nobody counting.
+     *
+     * Cheap enough to run after every batch — two deletes over tables holding at most a few dozen rows — and running
+     * it unconditionally is what stops it being a thing callers must remember.
+     */
+    private suspend fun dropUnplacedDefinitions() {
+        daos.folder.deleteUnplaced()
+        daos.iconContainer.deleteUnplaced()
     }
 
     private suspend fun applyChange(arrangement: ArrangementKey, change: LayoutChange) {
@@ -114,19 +138,22 @@ internal class LayoutRepositoryImpl(
                     daos.widgetContainerPlacement.upsert(listOf(item.toEntity(arrangement, change.zone, change.to)))
             }
 
-            // ── Remove from home = drop membership across all arrangements ──
-            // An app detaches (stays installed); a folder/container/widget is destroyed — deleting the parent
-            // row FK-cascades its items and placement. (The AppWidgetHost *unbind* of a destroyed widget is a
-            // data:widgets system action; this only drops our records.)
+            // ── Remove from home = drop **this arrangement's** placement ──
+            // Taking an item off the screen you are looking at says nothing about the screen you are not. While the
+            // launcher had one arrangement this distinction did not exist; once L1 gave it several, a global delete
+            // meant removing an icon in landscape silently took it off portrait too.
             //
-            // A **widget container** cascades its membership rows and nothing else: `widget_container_item` has no
-            // foreign key to the `widget` table, so each contained widget's definition row — and the allocated
-            // appWidgetId behind it — survives its container with nothing left pointing at it. The caller must
-            // remove each contained widget too; see RemoveFromGrid's KDoc.
+            // The definition outlives the placement and is collected by [dropUnplacedDefinitions] once no posture
+            // places it — here rather than inline, because `replacePlacements` can strip the last placement too.
+            //
+            // **Widgets and widget containers are deliberately still global**, and it is not an oversight: destroying
+            // a widget is only half of it, the `AppWidgetHost` unbind being `data:widgets`' half, and a caller cannot
+            // know whether to unbind without knowing whether some other posture still holds the widget. Making these
+            // per-arrangement means answering that first — see RemoveFromGrid's KDoc.
             is LayoutChange.RemoveFromGrid -> when (val item = change.item) {
-                is GridItem.App -> daos.appPlacement.deleteByComponent(item.component)
-                is GridItem.Folder -> daos.folder.delete(item.folderId)
-                is GridItem.IconContainer -> daos.iconContainer.delete(item.containerId)
+                is GridItem.App -> daos.appPlacement.delete(item.component, arrangement)
+                is GridItem.Folder -> daos.folderPlacement.delete(item.folderId, arrangement)
+                is GridItem.IconContainer -> daos.iconContainerPlacement.delete(item.containerId, arrangement)
                 is GridItem.WidgetContainer -> daos.widgetContainer.delete(item.containerId)
                 is GridItem.Widget -> daos.widget.delete(item.appWidgetId)
             }
@@ -170,6 +197,13 @@ internal class LayoutRepositoryImpl(
                 daos.folderItem.clearFolder(change.folderId)
                 daos.folderItem.detachAll(change.apps)
                 daos.folderItem.upsert(change.apps.toFolderItems(change.folderId))
+                // **Every grid, as `CreateFolder` and `AddToFolder` already do**, because folder membership has no
+                // arrangement column: an app inside a folder cannot also be sitting on another posture's grid. This
+                // op is how the drag path *adds* a member (it carries the whole reported order), so before removal
+                // became per-arrangement the detach came from the `RemoveFromGrid` beside it — which now rightly
+                // only clears the posture the drop happened on. A pure reorder names apps that are already members
+                // and have no placements, so it stays a no-op there.
+                change.apps.forEach { daos.appPlacement.deleteByComponent(it) }
             }
 
             // ── Icon containers ──

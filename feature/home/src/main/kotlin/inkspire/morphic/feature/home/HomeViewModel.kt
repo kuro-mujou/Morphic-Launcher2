@@ -44,6 +44,7 @@ import inkspire.morphic.data.layout.copyArrangement
 import inkspire.morphic.data.layout.copyArrangementIfEmpty
 import inkspire.morphic.data.layout.reconcileReportedOrder
 import inkspire.morphic.data.layout.settleDock
+import inkspire.morphic.data.layout.writeBackToReference
 import inkspire.morphic.data.settings.OrientationSettings
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.settings.SurfaceRegister
@@ -947,33 +948,18 @@ class HomeViewModel(
                 if (changes.any { it !is LayoutChange.Move && it !is LayoutChange.RemoveFromGrid }) {
                     placements.value = layoutRepository.placements(key).first()
                 }
-                writeBackToReference(key, configuration)
+                // **Projected against portrait's grids, not the ones on screen** — laying a landscape arrangement
+                // out against landscape's lattice and storing it as portrait's would write positions for a screen
+                // nobody is looking at. Run after the write it follows, so it reads the store rather than the
+                // optimistic map: the two agree by then, and the store is the one holding any ids a structural
+                // change just minted.
+                layoutRepository.writeBackToReference(key, independentLayout.value) {
+                    zoneConfigsFor(configuration.portrait).first()
+                }
             } finally {
                 writesInFlight--
             }
         }
-    }
-
-    /**
-     * Carries an edit made away from the reference posture back into it, while the two are kept in step.
-     *
-     * **Without this, the edit would not survive the next rotation.** The re-derive in [init] rebuilds a
-     * non-reference posture from portrait on arrival, so a landscape drag that never reached portrait is overwritten
-     * the moment the device turns back and forth. Portrait itself needs no such step, being what everything else is
-     * derived *from*.
-     *
-     * Projected against **portrait's** grids rather than the ones on screen, which is why [zoneConfigsFor] takes a
-     * configuration: laying a landscape arrangement out against landscape's lattice and storing it as portrait's
-     * would write positions for a screen nobody is looking at.
-     *
-     * Runs after the write it follows, so it reads the store rather than the optimistic map — the two agree by then,
-     * and the store is the one that has folded in any ids a structural change minted.
-     */
-    private suspend fun writeBackToReference(key: ArrangementKey, configuration: DeviceConfiguration) {
-        if (independentLayout.value) return
-        val reference = key.portraitOfFormFactor
-        if (key == reference) return
-        layoutRepository.copyArrangement(key, reference, zoneConfigsFor(configuration.portrait).first())
     }
 
     /**

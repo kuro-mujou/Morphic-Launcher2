@@ -52,8 +52,20 @@ sealed interface LayoutChange {
     ) : LayoutChange
 
     /**
-     * Detaches [item] from its grid cell. For a [GridItem.Folder] / [GridItem.IconContainer] /
-     * [GridItem.WidgetContainer] the now-unplaced container is destroyed and its membership rows cascade with it.
+     * Detaches [item] from its grid cell **in the arrangement being applied**, and only there. Removing an icon in
+     * landscape says nothing about portrait; the two are separate arrangements of the same items, and while the
+     * launcher had only one this distinction did not exist.
+     *
+     * A [GridItem.Folder] or [GridItem.IconContainer] therefore *survives* the removal while any other posture still
+     * places it, and is destroyed — membership cascading with it — once none does. That collection happens after the
+     * batch rather than here, because an arrangement's last placement can also go through
+     * `LayoutRepository.replacePlacements`.
+     *
+     * **[GridItem.Widget] and [GridItem.WidgetContainer] remain global**, and that asymmetry is on purpose: their
+     * definitions own an allocated `appWidgetId`, so destroying one is meaningless without the `AppWidgetHost` unbind
+     * that only `data:widgets` can perform. Per-arrangement removal would mean telling the caller whether *this* was
+     * the last posture holding the widget, which none of them can currently ask.
+     *
      * The referenced **app stays installed** — this is a layout detach, never an uninstall.
      *
      * **This drops records only; it unbinds nothing.** A [GridItem.Widget]'s definition row goes, but releasing the

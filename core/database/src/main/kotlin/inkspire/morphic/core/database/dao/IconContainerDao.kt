@@ -33,4 +33,12 @@ interface IconContainerDao {
 
     @Query("DELETE FROM icon_container WHERE id = :id")
     suspend fun delete(id: Long)
+
+    /**
+     * Destroys every icon container **no posture places** — [FolderDao.deleteUnplaced]'s counterpart, and simpler
+     * for lacking its second clause: a container is always a standalone grid item, so a placement row is the only
+     * thing that can hold one.
+     */
+    @Query("DELETE FROM icon_container WHERE id NOT IN (SELECT containerId FROM icon_container_placement)")
+    suspend fun deleteUnplaced()
 }

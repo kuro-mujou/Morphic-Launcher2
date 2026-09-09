@@ -25,4 +25,21 @@ interface FolderDao {
 
     @Query("DELETE FROM folder WHERE id = :id")
     suspend fun delete(id: Long)
+
+    /**
+     * Destroys every folder **no posture places and no icon container holds** — what a per-arrangement removal needs
+     * behind it, since dropping one arrangement's placement row can leave a folder reachable from nowhere.
+     *
+     * The icon-container clause is what stops this reaping a folder that is perfectly well held: a folder filed into
+     * a container has no `folder_placement` row at all, its position being the container's. Without that clause the
+     * first sweep would destroy every one of them.
+     */
+    @Query(
+        """
+        DELETE FROM folder
+        WHERE id NOT IN (SELECT folderId FROM folder_placement)
+          AND id NOT IN (SELECT folderId FROM icon_container_item WHERE folderId IS NOT NULL)
+        """,
+    )
+    suspend fun deleteUnplaced()
 }

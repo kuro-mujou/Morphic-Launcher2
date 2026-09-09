@@ -3,7 +3,6 @@ package inkspire.morphic.feature.shell
 import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import inkspire.morphic.core.model.ArrangementKey
 import inkspire.morphic.core.model.BackdropEffect
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DeviceConfiguration
@@ -17,8 +16,11 @@ import inkspire.morphic.data.apps.AppShortcuts
 import inkspire.morphic.data.apps.AppUninstaller
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.LayoutRepository
+import inkspire.morphic.data.layout.writeBackToReference
+import inkspire.morphic.data.settings.OrientationSettings
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.settings.SurfaceRegister
+import inkspire.morphic.data.settings.homeZoneGrids
 import inkspire.morphic.data.wallpaper.WallpaperRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -27,6 +29,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -101,13 +104,24 @@ data class BackdropImages(
  * anybody's to set — it is what the wallpaper happens to be.
  */
 class ShellViewModel(
-    settingsRepository: SettingsRepository,
+    private val settingsRepository: SettingsRepository,
     private val wallpaperRepository: WallpaperRepository,
     private val layoutRepository: LayoutRepository,
     private val appUninstaller: AppUninstaller,
     private val appInfoOpener: AppInfoOpener,
     private val appShortcuts: AppShortcuts,
 ) : ViewModel() {
+
+    /**
+     * Whether landscape keeps a layout of its own — read here for exactly one reason, which is that [removeFromHome]
+     * must not carry a removal into a posture the user is editing separately.
+     *
+     * `Eagerly` because the only reader is a `launch` with no UI subscriber behind it.
+     */
+    private val independentLayout: StateFlow<Boolean> =
+        settingsRepository.orientationSettings
+            .map { it.independentLayout }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, OrientationSettings.Default.independentLayout)
 
     /**
      * **Takes [item] off HOME** — the top-action band's Remove target.
@@ -123,17 +137,20 @@ class ShellViewModel(
      * rather than being deleted from it. It has no grid placement to remove, and the shell cannot see folder
      * membership — that is home's.
      *
-     * **The arrangement it is applied under does not scope it, and that is deliberate rather than an oversight.**
-     * `RemoveFromGrid` deletes an app's placement rows across *every* [ArrangementKey], and destroys a folder or
-     * container outright — "off home" is a statement about the item, not about one posture. The key still has to be
-     * named because [LayoutRepository.apply] is one write path for thirteen changes, most of which do need it; this
-     * is the one that ignores it. Reported rather than assumed all the same, so the day removal *is* scoped the
-     * caller already holds the right answer.
+     * **The arrangement scopes it, and the write-back is what makes that safe.** `RemoveFromGrid` takes the item off
+     * the posture named here and no other — so while the two are kept in step, portrait has to be told, or the
+     * re-derive on the next rotation rebuilds this posture from a portrait that still holds the item and quietly
+     * brings it back. That resurrection is what a scoped removal costs if this second half is left out; it is the
+     * same pairing `HomeViewModel.applyChanges` makes after every drag, through the same extension.
      */
     fun removeFromHome(item: GridItem) {
-        val key = device.value?.authoredArrangement ?: return
+        val configuration = device.value ?: return
+        val key = configuration.authoredArrangement
         viewModelScope.launch {
             layoutRepository.apply(key, listOf(LayoutChange.RemoveFromGrid(item)))
+            layoutRepository.writeBackToReference(key, independentLayout.value) {
+                settingsRepository.homeZoneGrids(configuration.portrait).first()
+            }
         }
     }
 

@@ -21,6 +21,9 @@ interface IconContainerPlacementDao {
     @Query("DELETE FROM icon_container_placement WHERE containerId = :containerId")
     suspend fun deleteByContainerId(containerId: Long)
 
+    @Query("DELETE FROM icon_container_placement WHERE containerId = :containerId AND arrangement = :arrangement")
+    suspend fun delete(containerId: Long, arrangement: ArrangementKey)
+
     @Query(
         "DELETE FROM icon_container_placement " +
             "WHERE containerId = :containerId AND arrangement = :arrangement AND zone = :zone",

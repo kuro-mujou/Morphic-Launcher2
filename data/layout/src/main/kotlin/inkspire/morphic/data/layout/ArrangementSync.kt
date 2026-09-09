@@ -3,6 +3,7 @@ package inkspire.morphic.data.layout
 import inkspire.morphic.core.model.ArrangementKey
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.HomeZone
+import inkspire.morphic.core.model.portraitOfFormFactor
 import kotlinx.coroutines.flow.first
 
 /**
@@ -76,6 +77,34 @@ suspend fun LayoutRepository.snapshotArrangement(from: ArrangementKey, into: Arr
     if (source.isEmpty()) return false
     replacePlacements(into, source)
     return true
+}
+
+/**
+ * Carries an edit made away from the reference posture back into it, while the two are kept in step.
+ *
+ * **Without this the edit does not survive the next rotation**: the re-derive on entry rebuilds a non-reference
+ * posture from portrait, so anything portrait never heard about is overwritten the moment the device turns twice.
+ *
+ * **Extracted on its second caller.** It began private to `HomeViewModel`, where every drag goes; the remove band
+ * is the second, and it lives on `ShellViewModel` because it spans every surface. A near-copy there would be two
+ * implementations of "make portrait agree" that could drift, which is exactly the divergence this codebase keeps
+ * paying for.
+ *
+ * [referenceGrids] is a lambda rather than a value because most calls return before needing it — resolving the
+ * reference posture's grids costs a store read that an independent layout, or an edit made *in* portrait, never has
+ * any use for.
+ *
+ * @return whether it wrote.
+ */
+suspend fun LayoutRepository.writeBackToReference(
+    from: ArrangementKey,
+    independent: Boolean,
+    referenceGrids: suspend () -> Map<HomeZone, GridConfig>,
+): Boolean {
+    if (independent) return false
+    val reference = from.portraitOfFormFactor
+    if (from == reference) return false
+    return copyArrangement(from, reference, referenceGrids())
 }
 
 /**
