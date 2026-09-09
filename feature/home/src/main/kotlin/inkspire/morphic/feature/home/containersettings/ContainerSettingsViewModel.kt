@@ -4,20 +4,26 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.WidgetContainerAxis
 import inkspire.morphic.core.model.WidgetInfo
+import inkspire.morphic.core.model.authoredArrangement
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.widgets.AppWidgetHostController
 import inkspire.morphic.feature.home.ContainerIcon
 import inkspire.morphic.feature.home.HomeViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.text.Collator
@@ -44,6 +50,20 @@ class ContainerSettingsViewModel(
     private val widgetHost: AppWidgetHostController,
 ) : ViewModel() {
 
+    /**
+     * The window configuration the screen is drawn on, or null until it reports.
+     *
+     * Needed for a *read*, not for bookkeeping: the preview shows where the container sits, and where it sits is a
+     * different answer per posture. Reported rather than reached for, as every other surface's is — a state holder
+     * that resolves its own device has a `Context` in it.
+     */
+    private val device = MutableStateFlow<DeviceConfiguration?>(null)
+
+    /** This container's home placements, followed for whichever posture the screen is being drawn on. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val placements = device.filterNotNull()
+        .flatMapLatest { layoutRepository.placements(it.authoredArrangement) }
+
     val state: StateFlow<ContainerSettingsState> =
         when (route) {
             is ContainerSettingsRoute.Icon -> iconState()
@@ -64,7 +84,7 @@ class ContainerSettingsViewModel(
         layoutRepository.iconContainers(),
         layoutRepository.folders(),
         appRepository.observeApps(),
-        layoutRepository.placements(HomeViewModel.ORIENTATION),
+        placements,
     ) { containers, folders, apps, placements ->
         val container = containers.firstOrNull { it.id == route.containerId }
             ?: return@combine ContainerSettingsState()
@@ -188,8 +208,21 @@ class ContainerSettingsViewModel(
         write(LayoutChange.AddToWidgetContainer(route.containerId, widget))
     }
 
+    /**
+     * Applies [changes], scoped to the posture on screen.
+     *
+     * That scope is immaterial to every change this screen makes — container membership rows carry no arrangement,
+     * and `RemoveFromGrid` drops a widget's definition across all of them — but [LayoutRepository.apply] is one
+     * write path for thirteen changes and names the key for the ones that need it.
+     */
     private fun write(vararg changes: LayoutChange) {
-        viewModelScope.launch { layoutRepository.apply(HomeViewModel.ORIENTATION, changes.toList()) }
+        val key = device.value?.authoredArrangement ?: return
+        viewModelScope.launch { layoutRepository.apply(key, changes.toList()) }
+    }
+
+    /** Reports the window configuration the screen is drawn on — see [device]. */
+    fun setDevice(configuration: DeviceConfiguration) {
+        device.value = configuration
     }
 
     private companion object {

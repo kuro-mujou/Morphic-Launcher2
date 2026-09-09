@@ -8,8 +8,8 @@ import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.IconSizing
-import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.SideZoneEdge
+import inkspire.morphic.core.model.authoredArrangement
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.sideSlot
 import inkspire.morphic.core.model.sideZone
@@ -265,7 +265,7 @@ class DockViewModel(
             val zoneConfig = zoneSlot.blueprint.toGridConfig(
                 zoneSlot.blueprint.defaults.getValue(configuration).copy(cols = nextCols, rows = nextRows),
             )
-            val placed = layoutRepository.placements(ORIENTATION).first()
+            val placed = layoutRepository.placements(configuration.authoredArrangement).first()
             // **Only the dock has a placement half today, and that is a gap rather than a rule.** `settleDock` evicts
             // to HOME's main area, which exists to be evicted onto only when it is a coordinate grid; the widget area
             // sits beside a *list*, which has nowhere to put a widget. It is also moot until widgets exist — nothing
@@ -284,9 +284,9 @@ class DockViewModel(
             // sees a grid too small for its contents.
             if (add) {
                 writeSize(configuration, nextCols, nextRows)
-                if (moves.isNotEmpty()) layoutRepository.apply(ORIENTATION, moves)
+                if (moves.isNotEmpty()) layoutRepository.apply(configuration.authoredArrangement, moves)
             } else {
-                if (moves.isNotEmpty()) layoutRepository.apply(ORIENTATION, moves)
+                if (moves.isNotEmpty()) layoutRepository.apply(configuration.authoredArrangement, moves)
                 writeSize(configuration, nextCols, nextRows)
             }
         }
@@ -327,8 +327,6 @@ class DockViewModel(
     }
 
     private companion object {
-        /** Portrait only, matching the home surface itself until it gains orientation support. */
-        val ORIENTATION = Orientation.PORTRAIT
         const val STOP_TIMEOUT_MS = 5_000L
     }
 }

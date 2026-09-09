@@ -3,11 +3,14 @@ package inkspire.morphic.feature.shell
 import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import inkspire.morphic.core.model.ArrangementKey
 import inkspire.morphic.core.model.BackdropEffect
 import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.Orientation
+import inkspire.morphic.core.model.authoredArrangement
 import inkspire.morphic.data.apps.AppInfoOpener
 import inkspire.morphic.data.apps.AppShortcut
 import inkspire.morphic.data.apps.AppShortcuts
@@ -119,10 +122,18 @@ class ShellViewModel(
      * **One bound worth knowing:** an app dragged out of a home *folder* and dropped here goes back to that folder
      * rather than being deleted from it. It has no grid placement to remove, and the shell cannot see folder
      * membership — that is home's.
+     *
+     * **The arrangement it is applied under does not scope it, and that is deliberate rather than an oversight.**
+     * `RemoveFromGrid` deletes an app's placement rows across *every* [ArrangementKey], and destroys a folder or
+     * container outright — "off home" is a statement about the item, not about one posture. The key still has to be
+     * named because [LayoutRepository.apply] is one write path for thirteen changes, most of which do need it; this
+     * is the one that ignores it. Reported rather than assumed all the same, so the day removal *is* scoped the
+     * caller already holds the right answer.
      */
     fun removeFromHome(item: GridItem) {
+        val key = device.value?.authoredArrangement ?: return
         viewModelScope.launch {
-            layoutRepository.apply(ORIENTATION, listOf(LayoutChange.RemoveFromGrid(item)))
+            layoutRepository.apply(key, listOf(LayoutChange.RemoveFromGrid(item)))
         }
     }
 
@@ -167,6 +178,16 @@ class ShellViewModel(
      */
     private val orientation = MutableStateFlow(Orientation.PORTRAIT)
 
+    /**
+     * The window configuration the shell is drawn on, reported for the same reason [orientation] is, and null until
+     * it arrives.
+     *
+     * Separate from [orientation] rather than derived from it, because the two answer different questions and can
+     * disagree: this one comes off the adaptive breakpoints (so it can tell a phone from a tablet), while the
+     * wallpaper's comes off the literal window aspect, which is what decides which of two pictures is on screen.
+     */
+    private val device = MutableStateFlow<DeviceConfiguration?>(null)
+
     val state: StateFlow<ShellState> =
     // Six sources against `combine`'s five, so the two that come from the same store and answer the same
         // question — what is bound to each edge, and how the pagers behind those bindings page — are grouped first.
@@ -183,6 +204,11 @@ class ShellViewModel(
     /** Reports the orientation the shell is being drawn in, so the rotating pair's right half is sampled. */
     fun setOrientation(value: Orientation) {
         orientation.value = value
+    }
+
+    /** Reports the window configuration the shell is being drawn on — see [device] for why it is not [orientation]. */
+    fun setDevice(configuration: DeviceConfiguration) {
+        device.value = configuration
     }
 
     /**
@@ -243,10 +269,5 @@ class ShellViewModel(
         /** Keeps the store subscription alive across a configuration change instead of tearing it down and back up. */
         const val STOP_TIMEOUT_MS = 5_000L
 
-        /**
-         * The orientation layout writes are scoped to. Portrait-only, matching `HomeViewModel`'s own constant — home
-         * does not store per-posture placements yet, and a removal has to name the same tables the placement did.
-         */
-        val ORIENTATION = Orientation.PORTRAIT
     }
 }

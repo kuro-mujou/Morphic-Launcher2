@@ -1,9 +1,9 @@
 package inkspire.morphic.data.layout
 
+import inkspire.morphic.core.model.ArrangementKey
 import inkspire.morphic.core.model.Folder
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.IconContainer
-import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.WidgetContainer
 import inkspire.morphic.core.model.WidgetInfo
 import kotlinx.coroutines.flow.Flow
@@ -29,16 +29,16 @@ import kotlinx.coroutines.flow.Flow
 interface LayoutRepository {
 
     /**
-     * Every item placed on HOME for [orientation], across all zones, keyed by the item. One subscription gives
+     * Every item placed on HOME for [arrangement], across all zones, keyed by the item. One subscription gives
      * the whole home arrangement; the caller groups by [PlacedItem.zone] to render the main area, dock, and
      * widget area. Re-emits on any change applied through [apply].
      */
-    fun placements(orientation: Orientation): Flow<Map<GridItem, PlacedItem>>
+    fun placements(arrangement: ArrangementKey): Flow<Map<GridItem, PlacedItem>>
 
     /** The folder definitions (label + contained apps), independent of where each folder is placed. */
     fun folders(): Flow<List<Folder>>
 
-    /** The icon-container definitions (arrangement + contained [inkspire.morphic.core.model.IconItem]s). */
+    /** The icon-container definitions (their `IconArrangement` + contained [inkspire.morphic.core.model.IconItem]s). */
     fun iconContainers(): Flow<List<IconContainer>>
 
     /** The widget-container definitions (axis + contained widget ids). */
@@ -48,9 +48,10 @@ interface LayoutRepository {
     fun widgets(): Flow<List<WidgetInfo>>
 
     /**
-     * Applies [changes] to [orientation]'s layout as one unit — the single write path. [orientation] scopes
-     * *which* per-orientation tables are touched, so the same command list can be replayed into either
-     * orientation. Ordering is honored: earlier changes are visible to later ones in the batch.
+     * Applies [changes] to [arrangement]'s layout as one unit — the single write path. [arrangement] scopes
+     * *which* rows are touched, so the same command list can be replayed into any of them — which is what lets a
+     * projection be written by replaying it. Ordering is honored: earlier changes are visible to later ones in
+     * the batch.
      */
-    suspend fun apply(orientation: Orientation, changes: List<LayoutChange>)
+    suspend fun apply(arrangement: ArrangementKey, changes: List<LayoutChange>)
 }

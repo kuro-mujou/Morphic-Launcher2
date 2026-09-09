@@ -3,10 +3,10 @@ package inkspire.morphic.data.layout
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
 import inkspire.morphic.core.database.entity.FolderEntity
 import inkspire.morphic.core.database.entity.FolderItemEntity
+import inkspire.morphic.core.model.ArrangementKey
 import inkspire.morphic.core.model.CategoryGroup
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.IconItem
-import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.data.layout.mapper.categoryRowFor
 import inkspire.morphic.data.layout.mapper.idsByItem
 import inkspire.morphic.data.layout.mapper.rowsForCategoryItems
@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
 /**
- * Room-backed [AppsOrderRepository]. All the arrangement thinking is in `AppsPagerPaging.kt` (pure list maths,
+ * Room-backed [AppsOrderRepository]. All the pagination thinking is in `AppsPagerPaging.kt` (pure list maths,
  * unit-tested); this class is the part that cannot be pure — reading rows, minting folder ids, writing back.
  *
  * **Every write is one read-modify-write.** Load the rows once, fold the changes over the in-memory pages, persist
@@ -40,27 +40,27 @@ internal class AppsOrderRepositoryImpl(
     private val dispatchers: AppDispatchers,
 ) : AppsOrderRepository {
 
-    override fun pagerPages(orientation: Orientation, perPage: Int): Flow<List<List<IconItem>>> =
-        daos.pagerItem.observe(orientation).map { rows -> normalizePages(rows.toPages(), perPage) }
+    override fun pagerPages(arrangement: ArrangementKey, perPage: Int): Flow<List<List<IconItem>>> =
+        daos.pagerItem.observe(arrangement).map { rows -> normalizePages(rows.toPages(), perPage) }
 
-    override suspend fun syncPager(orientation: Orientation, perPage: Int, installed: List<ComponentKey>) {
+    override suspend fun syncPager(arrangement: ArrangementKey, perPage: Int, installed: List<ComponentKey>) {
         withContext(dispatchers.io) {
-            val rows = daos.pagerItem.get(orientation)
+            val rows = daos.pagerItem.get(arrangement)
             val current = normalizePages(rows.toPages(), perPage)
             val synced = syncPagerPages(current, installed, perPage)
             // Nothing to do on the overwhelmingly common launch where nothing installed or vanished — and skipping
             // the write matters, since persisting would re-emit the flow and re-render the whole surface.
-            if (synced != current) persist(orientation, synced, rows)
+            if (synced != current) persist(arrangement, synced, rows)
         }
     }
 
-    override suspend fun applyPager(orientation: Orientation, perPage: Int, changes: List<AppsPagerChange>) {
+    override suspend fun applyPager(arrangement: ArrangementKey, perPage: Int, changes: List<AppsPagerChange>) {
         if (changes.isEmpty()) return
         withContext(dispatchers.io) {
-            val rows = daos.pagerItem.get(orientation)
+            val rows = daos.pagerItem.get(arrangement)
             var pages = normalizePages(rows.toPages(), perPage)
             changes.forEach { pages = applyChange(it, pages, perPage) }
-            persist(orientation, normalizePages(pages, perPage), rows)
+            persist(arrangement, normalizePages(pages, perPage), rows)
         }
     }
 
@@ -133,11 +133,11 @@ internal class AppsOrderRepositoryImpl(
     }
 
     /**
-     * Writes [pages] as this orientation's rows: entries that left are deleted, the rest are upserted carrying the
+     * Writes [pages] as this arrangement's rows: entries that left are deleted, the rest are upserted carrying the
      * row id they were read with (see `rowsForPages` — an id of 0 would insert a duplicate).
      */
     private suspend fun persist(
-        orientation: Orientation,
+        arrangement: ArrangementKey,
         pages: List<List<IconItem>>,
         existing: List<inkspire.morphic.core.database.entity.AppsPagerItemEntity>,
     ) {
@@ -145,17 +145,17 @@ internal class AppsOrderRepositoryImpl(
         val kept = pages.flatItems().toSet()
         (ids.keys - kept).forEach { gone ->
             when (gone) {
-                is IconItem.App -> daos.pagerItem.deleteApp(orientation, gone.component)
-                is IconItem.Folder -> daos.pagerItem.deleteFolder(orientation, gone.folderId)
+                is IconItem.App -> daos.pagerItem.deleteApp(arrangement, gone.component)
+                is IconItem.Folder -> daos.pagerItem.deleteFolder(arrangement, gone.folderId)
             }
         }
-        daos.pagerItem.upsert(rowsForPages(pages, orientation, ids))
+        daos.pagerItem.upsert(rowsForPages(pages, arrangement, ids))
     }
 
     // ── Categories ─────────────────────────────────────────────────────────────────────────────────────────────
     //
     // Simpler than the pager throughout, and all of it follows from one difference: a category is a single dense
-    // list with no capacity. Nothing cascades, nothing compacts, and there is no orientation — a category order is
+    // list with no capacity. Nothing cascades, nothing compacts, and there is no key — a category order is
     // one list, not two.
 
     override fun categoryContents(): Flow<List<CategoryContents>> =

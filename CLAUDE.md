@@ -134,29 +134,35 @@ pure enums/data in `core:model` with detection/logic pushed to the appropriate l
 How each surface stores *where its items go*. **Two primitives cover everything** — pick the right one
 when adding any new placement:
 
-- **Coordinate** — item → `GridPlacement` (page/row/col/spans), stored **per orientation**, gaps
+- **Coordinate** — item → `GridPlacement` (page/row/col/spans), stored **per arrangement**, gaps
   allowed. Used **only by HOME** (pager main, dock, widget area) and home folders/containers. Lives in
-  Room `*_placement` tables keyed by owner + orientation, each row carrying a **`zone: HomeZone`**
+  Room `*_placement` tables keyed by owner + `ArrangementKey`, each row carrying a **`zone: HomeZone`**
   (MAIN/DOCK/WIDGET_AREA). The zone is a *column, not part of the key* — which is what lets a drag between zones
   re-stamp the same row instead of needing a new op or a migration.
 - **Order** — item → an ordinal within a bucket (1-D flow); the render layer re-paginates it. Used by
   **everything else**.
 
-| Surface / layout | Kind | Store | Per-orientation |
+| Surface / layout | Kind | Store | Per-arrangement |
 |---|---|---|---|
 | HOME pager / dock / widget area | coordinate | `*_placement` + `zone` | yes |
 | HOME vertical list | order | `home_list_item` | no |
 | APPS vertical list / grid | derived (A–Z) | none | — |
-| APPS pager | paged order (page + in-page slot) | `apps_pager_item` | yes (two lists) |
+| APPS pager | paged order (page + in-page slot) | `apps_pager_item` | yes (one list per key) |
 | APPS pager-w/-category + category card | order within category | `category` + `category_item` | no |
 | Folder contents | order (dense) | `folder_item.sortOrder` | no |
 
 Key rules:
-- Only HOME **coordinate** placements and the **APPS pager** are per-orientation; everything else is a
-  single orientation-independent list.
+- Only HOME **coordinate** placements and the **APPS pager** are per-arrangement; everything else is a
+  single list every arrangement shares.
+- **The arrangement key is `ArrangementKey`, not `Orientation`** — six values (portrait / landscape / shared, per
+  form factor). Two of them are *reference* layouts belonging to no posture, which is what makes this a different
+  type from `DeviceConfiguration` rather than a second name for it. `Orientation` still exists and is the
+  **wallpaper's** alone: it names which of a rotating pair's two images is on screen, and keying a layout on it
+  would silently share one arrangement between a phone and a tablet. Full model:
+  [docs/LANDSCAPE_PLAN.md](docs/LANDSCAPE_PLAN.md).
 - **APPS pager** stores an explicit page + in-page slot — pages are hard boundaries (a move compacts
-  only the source page; overflow cascades forward). It keeps **two saved lists** (portrait + landscape),
-  re-paginated in **repository logic** on first rotate — the DB just holds both lists.
+  only the source page; overflow cascades forward). It keeps **one saved list per key**,
+  re-paginated in **repository logic** on first rotate — the DB just holds them.
 - The two category layouts **share** one `category` + `category_item` store.
 - **Categories (defs + membership) live in Room**, not the settings blob — users create custom ones.
 - L1's conflated `surface` column became `zone`; L1 `Surface{HOME,DOCK,WIDGET_AREA}` split into L2
@@ -174,11 +180,11 @@ Key rules:
 
 **Settled for the APPS pager: it holds folders, and a folder's slot *is* its row.** `apps_pager_item` was keyed on
 `component`, so it could only hold an app, and an APPS-hosted folder had nowhere to store its position. Both were
-answered by one reshape (DB v2): the row became **exactly one of** app-or-folder — `IconContainerItemEntity`'s
+answered by one reshape: the row became **exactly one of** app-or-folder — `IconContainerItemEntity`'s
 shape, which `IconItem`'s KDoc had already predicted by naming "the `Surface.APPS` pager and an `IconContainer`"
 as its two holders. There is no `apps_pager_placement` table and should not be: an ordered surface stores a slot,
 not a coordinate. One difference from `icon_container_item`, and it is silent when wrong — the unique indices are
-scoped **per orientation**, since the pager keeps two saved lists and an app appears once in each.
+scoped **per arrangement**, since the pager keeps a saved list per key and an app appears once in each.
 
 **Settled: neither category layout holds folders, so `category_item` stays keyed on `component`.** The reshape the
 pager needed is **not** owed here — no migration. The **pager** (`PAGER_WITH_CATEGORY`) has one reason: a category

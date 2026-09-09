@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.backdrop.BackdropState
 import inkspire.morphic.core.designsystem.backdrop.Film
 import inkspire.morphic.core.designsystem.backdrop.LocalBackdrop
@@ -120,6 +121,11 @@ fun LauncherShell(
     // Pushed down rather than read in the holder, the same way every surface reports its `DeviceConfiguration`: the
     // rotating wallpaper is two pictures, so "which one" is a question only something holding the window can answer.
     LaunchedEffect(orientation) { viewModel.setOrientation(orientation) }
+
+    // The breakpoint reading of the same window, reported beside it: the arrangement a removal is applied under is
+    // the *device's*, and a device is a form factor crossed with a posture — which the aspect ratio above cannot say.
+    val device = currentDeviceConfiguration()
+    LaunchedEffect(device) { viewModel.setDevice(device) }
 
     // **The widget host listens while the launcher is on screen, and only then.** A provider only pushes updates to
     // a listening host, so a clock stops ticking without this; listening while the launcher is not visible is work

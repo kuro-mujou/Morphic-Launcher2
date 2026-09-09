@@ -18,8 +18,8 @@ import inkspire.morphic.core.model.WidgetInfo
  * shape — no row stores a `LayoutChange`. Keeping it beside the repository (rather than with the plain data
  * models) is the honest home for a write-verb vocabulary. `core:model` is the wrong layer for it.
  *
- * **Orientation-free by design.** A change says *what* to do; the caller scopes *which* orientation via
- * [LayoutRepository.apply]`(orientation, …)`, so the same command replays into either orientation's tables.
+ * **Key-free by design.** A change says *what* to do; the caller scopes *which* arrangement via
+ * [LayoutRepository.apply]`(arrangement, …)`, so the same command replays into any [ArrangementKey]'s rows.
  *
  * **Thirteen ops, not nineteen.** Repeating the same four verbs once per item type is what makes nineteen; because
  * the model already unifies those types, the duplication collapses:

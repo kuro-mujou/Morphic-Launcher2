@@ -13,8 +13,8 @@ import inkspire.morphic.core.model.IconItem
  * placement fields are meaningless for half its callers, which is exactly the kind of conflation L1's 19 ops were
  * refactored out of.
  *
- * **Orientation- and capacity-free by design.** A change says *what* to do; the caller scopes *which* list and
- * *how big a page is* via [AppsOrderRepository.applyPager], mirroring how [LayoutChange] leaves orientation to
+ * **Key- and capacity-free by design.** A change says *what* to do; the caller scopes *which* list and
+ * *how big a page is* via [AppsOrderRepository.applyPager], mirroring how [LayoutChange] leaves the arrangement to
  * [LayoutRepository.apply]. That is what lets the same command replay into either saved list.
  *
  * **Two ops name a neighbor instead of a slot**, and deliberately: [CreateFolder] and [DissolveFolder] both mean

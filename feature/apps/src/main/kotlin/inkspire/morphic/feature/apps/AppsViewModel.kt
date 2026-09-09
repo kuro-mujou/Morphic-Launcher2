@@ -13,9 +13,9 @@ import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.IconSizing
-import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.VerticalEdge
+import inkspire.morphic.core.model.authoredArrangement
 import inkspire.morphic.core.model.indexRanges
 import inkspire.morphic.core.model.labelCollator
 import inkspire.morphic.core.model.matchesLabel
@@ -130,6 +130,18 @@ private data class Searched(
 private data class Indexed(
     val apps: List<AppInfo>,
     val letters: List<LetterBucket>,
+)
+
+/**
+ * A measured page capacity **and the posture it was measured for**, which are one fact.
+ *
+ * The two travel together because the capacity is what the *store* is paginated against, so pairing it with a
+ * different posture's arrangement key re-slots the wrong list. Keeping the device in the report is what lets a
+ * reader tell "measured for the screen I am looking at" from "measured for the one before it" — see `fittedPager`.
+ */
+private data class PagerFit(
+    val device: DeviceConfiguration,
+    val config: GridConfig,
 )
 
 /**
@@ -282,7 +294,22 @@ class AppsViewModel(
      * `DockViewModel.setExtent` being told its row cap. Pushing the blueprint's size down instead would move a
      * decision the store owns into the UI.
      */
-    private val pagerFit = MutableStateFlow<GridConfig?>(null)
+    private val pagerFit = MutableStateFlow<PagerFit?>(null)
+
+    /**
+     * The reported fit, but **only while it is a fit of the device now on screen**.
+     *
+     * A rotation moves the device and the measured capacity in two separate reports, and the capacity's lags — it
+     * waits on the new configuration's stored grid coming back from settings. For those frames the raw [pagerFit]
+     * holds the *previous* posture's capacity while the arrangement key has already moved, and pagination *writes*:
+     * acting on that pair would re-slot the new posture's list at the old one's page size and then rewrite it, which
+     * is exactly the double write [pagerFit] documents as the reason a capacity may not be guessed.
+     *
+     * Carrying the device *inside* the report is what turns that window into a null — "not yet", which every reader
+     * here already handles — rather than into a plausible wrong number.
+     */
+    private val fittedPager: Flow<PagerFit?> =
+        combine(device, pagerFit) { current, fit -> fit?.takeIf { it.device == current } }
 
     /**
      * The **visual column count** of each scrolling APPS grid, by slot — resolved, as the icon sizing is.
@@ -317,9 +344,9 @@ class AppsViewModel(
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     private val pagerItems: Flow<List<List<IconItem>>> =
-        pagerFit.flatMapLatest { config ->
-            if (config == null) flowOf(emptyList())
-            else appsOrderRepository.pagerPages(ORIENTATION, config.perPage)
+        fittedPager.flatMapLatest { fit ->
+            if (fit == null) flowOf(emptyList())
+            else appsOrderRepository.pagerPages(fit.device.authoredArrangement, fit.config.perPage)
         }
 
     /**
@@ -493,10 +520,14 @@ class AppsViewModel(
         // is why there is no separate seed step to drift out of sync with this one. `syncPager` writes nothing when
         // nothing changed, so the common launch costs a read.
         viewModelScope.launch {
-            combine(sortedApps, pagerFit) { apps, config -> apps to config }
-                .collect { (apps, config) ->
-                    if (config != null) {
-                        appsOrderRepository.syncPager(ORIENTATION, config.perPage, apps.map { it.componentKey })
+            combine(sortedApps, fittedPager) { apps, fit -> apps to fit }
+                .collect { (apps, fit) ->
+                    if (fit != null) {
+                        appsOrderRepository.syncPager(
+                            fit.device.authoredArrangement,
+                            fit.config.perPage,
+                            apps.map { it.componentKey },
+                        )
                     }
                 }
         }
@@ -556,8 +587,8 @@ class AppsViewModel(
      * placeholder would write pages nobody chose and then rewrite them. Idempotent, so the surface may report on every
      * recomposition.
      */
-    fun setPagerFit(config: GridConfig) {
-        pagerFit.value = config
+    fun setPagerFit(configuration: DeviceConfiguration, config: GridConfig) {
+        pagerFit.value = PagerFit(configuration, config)
     }
 
     /** Opens the app for [component] (a tap). Fire-and-forget — [AppLauncher] swallows a stale component. */
@@ -790,13 +821,15 @@ class AppsViewModel(
         if (changes.isEmpty()) return
         // The **fitted** capacity, which is the one the pages the user just dropped onto were paginated at. Reading the
         // stored size here instead would compact and cascade against a page size nothing drew.
-        val perPage = pagerFit.value?.perPage ?: return
-        viewModelScope.launch { appsOrderRepository.applyPager(ORIENTATION, perPage, changes) }
+        // Taking it from a fit measured for the *previous* posture would cascade the drop through a page size the
+        // user never saw, which is why this goes through [fittedPager]'s agreement rather than straight to the report.
+        val fit = pagerFit.value?.takeIf { it.device == device.value } ?: return
+        viewModelScope.launch {
+            appsOrderRepository.applyPager(fit.device.authoredArrangement, fit.config.perPage, changes)
+        }
     }
 
     companion object {
-        val ORIENTATION = Orientation.PORTRAIT
-
         /**
          * The APPS grids whose rows come from their content, so only their columns are configurable.
          *

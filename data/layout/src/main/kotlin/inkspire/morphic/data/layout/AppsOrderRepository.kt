@@ -1,8 +1,8 @@
 package inkspire.morphic.data.layout
 
+import inkspire.morphic.core.model.ArrangementKey
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.IconItem
-import inkspire.morphic.core.model.Orientation
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -16,12 +16,12 @@ import kotlinx.coroutines.flow.Flow
  *
  * It serves both APPS order stores: the pager (`apps_pager_item`) and the categories (`category` +
  * `category_item`, shared by the two category layouts). One repository rather than two because they are one
- * surface's arrangement; method names are prefixed by store for that reason.
+ * surface's saved order; method names are prefixed by store for that reason.
  *
- * **Only the pager is per-orientation.** Its methods take an [Orientation] because it keeps two saved lists; the
- * category methods take none, because a category order is a single orientation-independent list (see the
- * arrangement model). That asymmetry is in the signatures on purpose — it is the difference between the stores, not
- * an omission.
+ * **Only the pager is keyed.** Its methods take an [ArrangementKey] because it keeps one saved list per key; the
+ * category methods take none, because a category order is a single list every key shares (see the arrangement
+ * model). That asymmetry is in the signatures on purpose — it is the difference between the stores, not an
+ * omission.
  *
  * **Folder writes live here too**, not only on [LayoutRepository]. A merge on the pager mints a folder, moves two
  * apps into it and re-slots the result; splitting that across two repositories would make one user action two
@@ -31,31 +31,31 @@ import kotlinx.coroutines.flow.Flow
 interface AppsOrderRepository {
 
     /**
-     * The pager's pages for [orientation]: entries in reading order, each page dense from its first slot, re-fitted
+     * The pager's pages for [arrangement]: entries in reading order, each page dense from its first slot, re-fitted
      * to [perPage] on the way out (see `normalizePages`).
      *
      * [perPage] is a parameter rather than repository state because the capacity is the UI's to know — it comes
      * from `AppsPagerGrid` resolved against the detected device, exactly as home pushes its `GridConfig` down. A
      * changed capacity re-collects with the new value and re-fits the saved list.
      */
-    fun pagerPages(orientation: Orientation, perPage: Int): Flow<List<List<IconItem>>>
+    fun pagerPages(arrangement: ArrangementKey, perPage: Int): Flow<List<List<IconItem>>>
 
     /**
-     * Reconciles the stored arrangement with [installed] — appending apps that are new, dropping ones that are
+     * Reconciles [arrangement]'s stored list with [installed] — appending apps that are new, dropping ones that are
      * gone, and seeding the whole list on first run (an empty store makes every app "new").
      *
      * @param installed every installed app in the order new ones should be appended in — the caller's display
      *   order, so the locale-aware A–Z is decided once in the ViewModel rather than re-derived down here.
      */
-    suspend fun syncPager(orientation: Orientation, perPage: Int, installed: List<ComponentKey>)
+    suspend fun syncPager(arrangement: ArrangementKey, perPage: Int, installed: List<ComponentKey>)
 
     /**
-     * Applies [changes] in order to [orientation]'s list, at page capacity [perPage].
+     * Applies [changes] in order to [arrangement]'s list, at page capacity [perPage].
      *
      * The whole batch is one read-modify-write, so a drop that spans stores (a merge is a folder insert, two
      * membership rows and a re-slot) resolves against one consistent view of the pages.
      */
-    suspend fun applyPager(orientation: Orientation, perPage: Int, changes: List<AppsPagerChange>)
+    suspend fun applyPager(arrangement: ArrangementKey, perPage: Int, changes: List<AppsPagerChange>)
 
     /**
      * Every category and the apps filed under it, categories in their stored order.

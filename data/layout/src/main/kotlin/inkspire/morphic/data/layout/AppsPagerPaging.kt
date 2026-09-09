@@ -30,7 +30,7 @@ internal fun List<List<IconItem>>.flatItems(): List<IconItem> = flatten()
  * Applied on every read as well as every write, so the stored rows can never present the UI with a page it cannot
  * render — the capacity is a function of the device and the (future) column setting, and so can change underneath
  * a list that was saved at a different width. That makes this the same code path a future rotate would use to
- * seed the second orientation, which is why it is written as "re-fit these pages" rather than "fix a bad write".
+ * seed another arrangement's list, which is why it is written as "re-fit these pages" rather than "fix a bad write".
  *
  * **Empty pages are dropped, including middle ones.** A page with nothing on it is not a place: the user cannot
  * scroll past it meaningfully and cannot delete it except by dragging something in and out again. Hard boundaries

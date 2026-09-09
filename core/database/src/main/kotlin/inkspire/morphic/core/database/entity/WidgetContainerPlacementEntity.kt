@@ -4,15 +4,15 @@ import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
+import inkspire.morphic.core.model.ArrangementKey
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.HomeZone
-import inkspire.morphic.core.model.Orientation
 
-/** Where a widget container ([containerId]) sits in a home [zone] per [orientation]; position embeds [GridPlacement]. */
+/** Where a widget container ([containerId]) sits in a home [zone] per [arrangement]; position embeds [GridPlacement]. */
 @Entity(
     tableName = "widget_container_placement",
-    primaryKeys = ["containerId", "orientation"],
-    indices = [Index(value = ["orientation", "page"])],
+    primaryKeys = ["containerId", "arrangement"],
+    indices = [Index(value = ["arrangement", "page"])],
     foreignKeys = [
         ForeignKey(
             entity = WidgetContainerEntity::class,
@@ -24,7 +24,7 @@ import inkspire.morphic.core.model.Orientation
 )
 data class WidgetContainerPlacementEntity(
     val containerId: Long,
-    val orientation: Orientation,
+    val arrangement: ArrangementKey,
     val zone: HomeZone = HomeZone.MAIN,
     @Embedded val placement: GridPlacement,
 )

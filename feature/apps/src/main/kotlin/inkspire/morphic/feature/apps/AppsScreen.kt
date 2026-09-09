@@ -422,7 +422,7 @@ private fun pagerCapacity(
         rows = stored.visualRows,
         metrics = state.metricsFor(GridSlot.APPS_PAGER),
     )
-    if (state.pagerConfig != null) LaunchedEffect(fitted) { viewModel.setPagerFit(fitted) }
+    if (state.pagerConfig != null) LaunchedEffect(device, fitted) { viewModel.setPagerFit(device, fitted) }
     return fitted
 }
 

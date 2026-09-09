@@ -101,8 +101,10 @@ gestures are scoped to the icon+label group, not the cell — see the design-sys
 / widget-container / widget definitions; `apply` exhaustive over all 13 ops; twelve DAOs bundled in `LayoutDaos`).
 `CreateFolder`/`AddToFolder` also delete the folded apps' grid placements (an app lives in one place); folder
 delete cascades its membership + placement rows. The APPS pager/category/list **order** stores get their *own*
-repository (not built). Deferred: cross-orientation rotate-seeding (empty-folder auto-dissolve now done, in the
-home layer).
+repository (not built). **Placements are keyed by `ArrangementKey`, not `Orientation`** — six values (portrait /
+landscape / shared, per form factor) so a foldable can hold a folded and an unfolded layout without the two
+silently sharing one. Cross-orientation seeding is still deferred; see
+[LANDSCAPE_PLAN.md](LANDSCAPE_PLAN.md) → L2.
 
 **Home surface — two *pairings*, chosen in one place.** `HomeScreen` is a `when` over `HomeLayout` above shared
 wiring (the ViewModel, the device report, the state), which is deliberately `AppsScreen`'s shape and the same
@@ -240,12 +242,15 @@ the launcher's home surface.
   `4 × 1`. `GridArea.splitForDock` is the one expression that divides the window, returning **both** halves together
   (like `DerivedCell`) because three callers depend on them agreeing and cannot check each other: the surface draws
   them, and both settings sections bound their grids against them.
-  - **Rotation must not re-fit what it is not drawing.** Placements are keyed by `Orientation` and home reads
-    `PORTRAIT` only (home orientation is unbuilt), so `fitMainTo`/`fitDockTo` are gated on
-    `HomeViewModel.drawsStoredPlacements`. Without it, rotating a phone would settle a portrait arrangement against a
-    landscape grid — and against the **rail**, which is the transpose, so nearly every dock item would be evicted to
-    home and would not come back. A grid drawn out of bounds for as long as a rotation lasts is cosmetic and reverses
-    itself; the write does not. The guard becomes vacuous the day placements are stored per posture.
+  - **Rotation must not re-fit what it is not drawing** — and the answer is no longer a guard. Home once read
+    `Orientation.PORTRAIT` only, so `fitMainTo`/`fitDockTo` were gated on `HomeViewModel.drawsStoredPlacements`:
+    without it, rotating a phone settled a portrait arrangement against a landscape grid — and against the **rail**,
+    which is the transpose, so nearly every dock item was evicted to home and did not come back. Placements are now
+    keyed per posture (`ArrangementKey`), which retires the gate but not the hazard: the optimistic `placements` map
+    still belongs to one key, so a rotation that left the previous posture's items in it would have the settles
+    reflow *those* and write the result under the *new* key. The store collector therefore **clears the map where it
+    switches arrangements**, and a reflow of nothing reports no change and writes nothing. The fix is at the source
+    rather than at the two call sites, which is why neither settle carries a condition any more.
 - **`cellMultiplier` is a *placement* subdivision, and the snap has to honor it or it buys nothing.** HOME's three
   free-placement grids (pager, dock, widget area) declare `cellMultiplier = 2`: a 4×5 grid of visible cells really is
   8×10 logical ones, and an app is a 2×2 logical footprint. The user is never shown that — they see 4×5 cells with

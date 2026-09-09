@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
  * The third layout repository, beside [LayoutRepository] (HOME's coordinate placements) and [AppsOrderRepository]
  * (the APPS surface's order stores), and it is here rather than folded into either for the reason those two are
  * separate from each other: the *shape* differs. A coordinate store answers "which cell, in which zone, at which
- * orientation"; this one answers "which position in one list", with no orientation and no zone at all. Two of the
+ * arrangement"; this one answers "which position in one list", with no key and no zone at all. Two of the
  * three questions have no answer here, and a repository that had to accept them would be asking every caller to
  * supply a value it then ignores.
  *
@@ -22,8 +22,8 @@ import kotlinx.coroutines.flow.Flow
  * The good half of that idea survives as [seedIfEmpty]: the *first* time the list is shown it is filled from the
  * grid in reading order, so choosing this layout hands the user their apps rather than a blank screen.
  *
- * **Apps only, and one list across orientations.** No folders, a one-lane list having no merge ring to make one
- * with — and no per-orientation copy, because rotating a list changes how many rows are on
+ * **Apps only, and one list for every arrangement.** No folders, a one-lane list having no merge ring to make one
+ * with — and no per-arrangement copy, because rotating a list changes how many rows are on
  * screen and nothing about their order (the persistence table in `CLAUDE.md` states both).
  */
 interface HomeListRepository {

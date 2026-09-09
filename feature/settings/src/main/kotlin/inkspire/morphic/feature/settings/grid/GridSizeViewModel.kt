@@ -2,6 +2,7 @@ package inkspire.morphic.feature.settings.grid
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import inkspire.morphic.core.model.ArrangementKey
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridEditorEdge
@@ -10,7 +11,7 @@ import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.IconSizing
-import inkspire.morphic.core.model.Orientation
+import inkspire.morphic.core.model.authoredArrangement
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.mainSlot
 import inkspire.morphic.core.model.pagerSlot
@@ -266,12 +267,13 @@ class GridSizeViewModel(
         )
 
         viewModelScope.launch {
-            val moves = placementMoves(edge, add, nextConfig)
+            val key = configuration.authoredArrangement
+            val moves = placementMoves(key, edge, add, nextConfig)
             if (add) {
                 writeSize(configuration, nextCols, nextRows)
-                if (moves.isNotEmpty()) layoutRepository.apply(ORIENTATION, moves)
+                if (moves.isNotEmpty()) layoutRepository.apply(key, moves)
             } else {
-                if (moves.isNotEmpty()) layoutRepository.apply(ORIENTATION, moves)
+                if (moves.isNotEmpty()) layoutRepository.apply(key, moves)
                 writeSize(configuration, nextCols, nextRows)
             }
         }
@@ -296,13 +298,17 @@ class GridSizeViewModel(
      *
      * Scoped to [HomeZone.MAIN]: the dock is its own coordinate space on the same rows, so including it would reflow
      * dock items against home's grid and re-stamp them into it.
+     *
+     * Scoped to [arrangement] for the matching reason one level up: this section edits the grid of the configuration
+     * it is *showing*, so the placements it displaces are that configuration's and no other's.
      */
     private suspend fun placementMoves(
+        arrangement: ArrangementKey,
         edge: GridEditorEdge,
         add: Boolean,
         nextConfig: GridConfig,
     ): List<LayoutChange> {
-        val placed = layoutRepository.placements(ORIENTATION).first()
+        val placed = layoutRepository.placements(arrangement).first()
         val onMain = placed.filterValues { it.zone == HomeZone.MAIN }.mapValues { it.value.placement }
         val edited = GridReflow.edit(onMain, edge, add, nextConfig)
         if (!edited.changed) return emptyList()
@@ -319,8 +325,6 @@ class GridSizeViewModel(
     private val slot: GridSlot get() = layout.value.mainSlot
 
     private companion object {
-        /** Portrait only, matching the home surface itself until it gains orientation support. */
-        val ORIENTATION = Orientation.PORTRAIT
         const val STOP_TIMEOUT_MS = 5_000L
     }
 }

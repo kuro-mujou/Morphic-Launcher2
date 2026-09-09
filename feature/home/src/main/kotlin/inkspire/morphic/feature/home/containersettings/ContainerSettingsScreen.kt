@@ -61,6 +61,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.backdrop.PunchThroughLayer
 import inkspire.morphic.core.designsystem.backdrop.punchThroughHole
 import inkspire.morphic.core.designsystem.cell.AppIcon
@@ -147,8 +148,13 @@ fun ContainerSettingsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val viewModel: ContainerSettingsViewModel = koinViewModel { parametersOf(route) }
+    // Reported for a *read* rather than bookkeeping: the preview shows where the container sits, and that is a
+    // different placement per posture. Acquiring the holder here too keeps the content function about drawing.
+    val device = currentDeviceConfiguration()
+    LaunchedEffect(device) { viewModel.setDevice(device) }
     LauncherTheme(darkTheme = isSystemInDarkTheme()) {
-        ContainerSettingsContent(route = route, onBack = onBack, modifier = modifier)
+        ContainerSettingsContent(viewModel = viewModel, route = route, onBack = onBack, modifier = modifier)
     }
 }
 
@@ -158,15 +164,19 @@ fun ContainerSettingsScreen(
  * Split from [ContainerSettingsScreen] so the theme wraps everything that reads a color — `LocalMorphicColors` is
  * read on the very first line, and a `LauncherTheme` opened after that would not reach it. `SettingsScreen` is
  * shaped the same way, wrapping its two panes rather than sitting inside one.
+ *
+ * The holder is acquired by the caller and passed in, rather than resolved here, so that everything this function
+ * does is drawing — the wiring a holder needs (its parameters, the device report it reads placements by) has no
+ * more to do with the content than the theme does.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ContainerSettingsContent(
+    viewModel: ContainerSettingsViewModel,
     route: ContainerSettingsRoute,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val viewModel: ContainerSettingsViewModel = koinViewModel { parametersOf(route) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val colors = LocalMorphicColors.current
 

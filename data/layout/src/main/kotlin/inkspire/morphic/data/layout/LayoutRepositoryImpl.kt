@@ -7,12 +7,12 @@ import inkspire.morphic.core.database.entity.FolderItemEntity
 import inkspire.morphic.core.database.entity.IconContainerEntity
 import inkspire.morphic.core.database.entity.WidgetContainerEntity
 import inkspire.morphic.core.database.entity.WidgetContainerItemEntity
+import inkspire.morphic.core.model.ArrangementKey
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.Folder
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.IconContainer
 import inkspire.morphic.core.model.IconItem
-import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.WidgetContainer
 import inkspire.morphic.core.model.WidgetInfo
 import inkspire.morphic.data.layout.mapper.foldersOf
@@ -41,13 +41,13 @@ internal class LayoutRepositoryImpl(
 ) : LayoutRepository {
 
     /** One map from the five per-type placement tables: each observed list maps to entries, concatenated. */
-    override fun placements(orientation: Orientation): Flow<Map<GridItem, PlacedItem>> =
+    override fun placements(arrangement: ArrangementKey): Flow<Map<GridItem, PlacedItem>> =
         combine(
-            daos.appPlacement.observe(orientation),
-            daos.folderPlacement.observe(orientation),
-            daos.widgetPlacement.observe(orientation),
-            daos.iconContainerPlacement.observe(orientation),
-            daos.widgetContainerPlacement.observe(orientation),
+            daos.appPlacement.observe(arrangement),
+            daos.folderPlacement.observe(arrangement),
+            daos.widgetPlacement.observe(arrangement),
+            daos.iconContainerPlacement.observe(arrangement),
+            daos.widgetContainerPlacement.observe(arrangement),
         ) { apps, folders, widgets, iconContainers, widgetContainers ->
             (apps.map { it.toEntry() } +
                 folders.map { it.toEntry() } +
@@ -72,33 +72,33 @@ internal class LayoutRepositoryImpl(
     override fun widgets(): Flow<List<WidgetInfo>> =
         daos.widget.observeAll().map { widgets -> widgets.map { it.toWidgetInfo() } }
 
-    override suspend fun apply(orientation: Orientation, changes: List<LayoutChange>) {
+    override suspend fun apply(arrangement: ArrangementKey, changes: List<LayoutChange>) {
         withContext(dispatchers.io) {
-            changes.forEach { applyChange(orientation, it) }
+            changes.forEach { applyChange(arrangement, it) }
         }
     }
 
-    private suspend fun applyChange(orientation: Orientation, change: LayoutChange) {
+    private suspend fun applyChange(arrangement: ArrangementKey, change: LayoutChange) {
         when (change) {
-            // ── Placement: upsert into the matching per-type table for this orientation ──
+            // ── Placement: upsert into the matching per-type table for this arrangement ──
             is LayoutChange.Move -> when (val item = change.item) {
                 is GridItem.App ->
-                    daos.appPlacement.upsert(listOf(item.toEntity(orientation, change.zone, change.to)))
+                    daos.appPlacement.upsert(listOf(item.toEntity(arrangement, change.zone, change.to)))
 
                 is GridItem.Folder ->
-                    daos.folderPlacement.upsert(listOf(item.toEntity(orientation, change.zone, change.to)))
+                    daos.folderPlacement.upsert(listOf(item.toEntity(arrangement, change.zone, change.to)))
 
                 is GridItem.Widget ->
-                    daos.widgetPlacement.upsert(listOf(item.toEntity(orientation, change.zone, change.to)))
+                    daos.widgetPlacement.upsert(listOf(item.toEntity(arrangement, change.zone, change.to)))
 
                 is GridItem.IconContainer ->
-                    daos.iconContainerPlacement.upsert(listOf(item.toEntity(orientation, change.zone, change.to)))
+                    daos.iconContainerPlacement.upsert(listOf(item.toEntity(arrangement, change.zone, change.to)))
 
                 is GridItem.WidgetContainer ->
-                    daos.widgetContainerPlacement.upsert(listOf(item.toEntity(orientation, change.zone, change.to)))
+                    daos.widgetContainerPlacement.upsert(listOf(item.toEntity(arrangement, change.zone, change.to)))
             }
 
-            // ── Remove from home = drop membership across all orientations ──
+            // ── Remove from home = drop membership across all arrangements ──
             // An app detaches (stays installed); a folder/container/widget is destroyed — deleting the parent
             // row FK-cascades its items and placement. (The AppWidgetHost *unbind* of a destroyed widget is a
             // data:widgets system action; this only drops our records.)
@@ -123,7 +123,7 @@ internal class LayoutRepositoryImpl(
                 daos.widgetPlacement.upsert(
                     listOf(
                         GridItem.Widget(change.widget.appWidgetId)
-                            .toEntity(orientation, change.zone, change.at),
+                            .toEntity(arrangement, change.zone, change.at),
                     ),
                 )
             }
@@ -136,7 +136,7 @@ internal class LayoutRepositoryImpl(
                 // The folded apps now live inside the folder, so they leave the grid (an app is in one place).
                 change.apps.forEach { daos.appPlacement.deleteByComponent(it) }
                 daos.folderPlacement.upsert(
-                    listOf(GridItem.Folder(folderId).toEntity(orientation, change.zone, change.at)),
+                    listOf(GridItem.Folder(folderId).toEntity(arrangement, change.zone, change.at)),
                 )
             }
 
@@ -161,7 +161,7 @@ internal class LayoutRepositoryImpl(
                 val id = daos.iconContainer.insert(IconContainerEntity(arrangementSpec = change.arrangement))
                 setIconContainerItems(id, change.items)
                 daos.iconContainerPlacement.upsert(
-                    listOf(GridItem.IconContainer(id).toEntity(orientation, change.zone, change.at)),
+                    listOf(GridItem.IconContainer(id).toEntity(arrangement, change.zone, change.at)),
                 )
             }
 
@@ -188,7 +188,7 @@ internal class LayoutRepositoryImpl(
                     change.widgetIds.mapIndexed { i, w -> WidgetContainerItemEntity(id, w, i) },
                 )
                 daos.widgetContainerPlacement.upsert(
-                    listOf(GridItem.WidgetContainer(id).toEntity(orientation, change.zone, change.at)),
+                    listOf(GridItem.WidgetContainer(id).toEntity(arrangement, change.zone, change.at)),
                 )
             }
 

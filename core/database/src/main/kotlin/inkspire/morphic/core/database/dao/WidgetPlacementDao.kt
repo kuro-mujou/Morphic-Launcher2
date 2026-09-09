@@ -4,16 +4,16 @@ import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Upsert
 import inkspire.morphic.core.database.entity.WidgetPlacementEntity
+import inkspire.morphic.core.model.ArrangementKey
 import inkspire.morphic.core.model.HomeZone
-import inkspire.morphic.core.model.Orientation
 import kotlinx.coroutines.flow.Flow
 
-/** Reads and writes widget placements ([WidgetPlacementEntity]) on the home surface, per orientation. */
+/** Reads and writes widget placements ([WidgetPlacementEntity]) on the home surface, per arrangement. */
 @Dao
 interface WidgetPlacementDao {
 
-    @Query("SELECT * FROM widget_placement WHERE orientation = :orientation")
-    fun observe(orientation: Orientation): Flow<List<WidgetPlacementEntity>>
+    @Query("SELECT * FROM widget_placement WHERE arrangement = :arrangement")
+    fun observe(arrangement: ArrangementKey): Flow<List<WidgetPlacementEntity>>
 
     @Upsert
     suspend fun upsert(entities: List<WidgetPlacementEntity>)
@@ -21,9 +21,9 @@ interface WidgetPlacementDao {
     @Query("DELETE FROM widget_placement WHERE appWidgetId = :appWidgetId")
     suspend fun deleteByWidgetId(appWidgetId: Int)
 
-    @Query("DELETE FROM widget_placement WHERE appWidgetId = :appWidgetId AND orientation = :orientation AND zone = :zone")
-    suspend fun deleteZone(appWidgetId: Int, orientation: Orientation, zone: HomeZone)
+    @Query("DELETE FROM widget_placement WHERE appWidgetId = :appWidgetId AND arrangement = :arrangement AND zone = :zone")
+    suspend fun deleteZone(appWidgetId: Int, arrangement: ArrangementKey, zone: HomeZone)
 
-    @Query("DELETE FROM widget_placement WHERE orientation = :orientation")
-    suspend fun clearOrientation(orientation: Orientation)
+    @Query("DELETE FROM widget_placement WHERE arrangement = :arrangement")
+    suspend fun clearArrangement(arrangement: ArrangementKey)
 }

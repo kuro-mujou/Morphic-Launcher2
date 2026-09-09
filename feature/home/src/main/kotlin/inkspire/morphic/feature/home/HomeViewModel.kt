@@ -2,6 +2,7 @@ package inkspire.morphic.feature.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import inkspire.morphic.core.model.ArrangementKey
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.DropIntent
@@ -18,14 +19,13 @@ import inkspire.morphic.core.model.IconContainer
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.ItemGesture
-import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.core.model.WidgetContainer
 import inkspire.morphic.core.model.WidgetContainerAxis
 import inkspire.morphic.core.model.WidgetInfo
+import inkspire.morphic.core.model.authoredArrangement
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.mainSlot
-import inkspire.morphic.core.model.orientation
 import inkspire.morphic.core.model.pagerSlot
 import inkspire.morphic.core.model.sideSlot
 import inkspire.morphic.data.apps.AppLauncher
@@ -51,6 +51,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
@@ -80,8 +81,8 @@ import kotlinx.coroutines.launch
  *
  * **The device comes from the UI.** `currentDeviceConfiguration()` is a `@Composable` read of the window, so the
  * surface reports it via [setDevice] and everything device-dependent is derived here: **both** grids and both zones'
- * icon sizing, each resolved by `data:settings` from its blueprint plus whatever the user changed. Orientation is
- * fixed to [Orientation.PORTRAIT] for now.
+ * icon sizing, each resolved by `data:settings` from its blueprint plus whatever the user changed — and, since the
+ * device also names the [ArrangementKey], *which* stored arrangement is read and written at all.
  *
  * **Every configured number arrives as a flow, including the main grid — which is what makes the settings screen
  * reach this surface at all.** An earlier cut resolved `HomePagerGrid.toGridConfig(device)` here and again in
@@ -118,6 +119,16 @@ class HomeViewModel(
 
     /** The device the surface reports, or null until it does. Null keeps [iconSizings] empty rather than guessing. */
     private val device = MutableStateFlow<DeviceConfiguration?>(null)
+
+    /**
+     * The arrangement rows this surface reads and writes — the reported device's own, so a rotation moves the whole
+     * surface onto the other posture's placements rather than re-fitting one posture's arrangement to a screen it is
+     * never drawn on.
+     *
+     * Null until the surface reports, and every write path returns on null rather than guessing a key: a placement
+     * written under the wrong one is not a misdraw that rotating back undoes, it is a row in the wrong table.
+     */
+    private val arrangement: ArrangementKey? get() = device.value?.authoredArrangement
 
     /**
      * Which pairing HOME is drawing, from the surface register.
@@ -429,10 +440,22 @@ class HomeViewModel(
         // Emissions are ignored while one of our own writes is in flight, which is what preserves the optimism: a drop
         // updates the map immediately, and the echo of an *earlier* write must not roll it back for a frame. Anything
         // skipped is either what is already shown or is superseded by the emission after the last write lands.
+        //
+        // **Re-subscribed per arrangement, and cleared at the switch.** The map belongs to one posture's rows, so a
+        // rotation must not leave the previous one's items in it: they would be drawn against the new lattice for a
+        // frame, which is cosmetic — but `fitMainTo`/`fitDockTo` would also reflow them and *write the result under
+        // the new key*, which is not. Clearing is what makes those settles safe without a gate of their own, since a
+        // reflow of nothing reports no change and writes nothing.
         viewModelScope.launch {
-            layoutRepository.placements(ORIENTATION).collect { stored ->
-                if (writesInFlight == 0) placements.value = stored
-            }
+            device.filterNotNull()
+                .map { it.authoredArrangement }
+                .distinctUntilChanged()
+                .collectLatest { key ->
+                    placements.value = emptyMap()
+                    layoutRepository.placements(key).collect { stored ->
+                        if (writesInFlight == 0) placements.value = stored
+                    }
+                }
         }
         // The list's store, followed on the same terms — see [listOrder].
         viewModelScope.launch {
@@ -769,6 +792,34 @@ class HomeViewModel(
     }
 
     /**
+     * Re-homes anything the **main area** can no longer hold, now that its grid is [config] — the pager's half of the
+     * rule [fitDockTo] states for the dock.
+     *
+     * The trigger is usually the dock: its height is the setting, the pager takes what is left, and past a point what
+     * is left carries fewer rows than the user's count. It is also reached by an icon-size change, which raises the
+     * smallest usable cell and so lowers how many fit — the same clamp from the other side.
+     *
+     * **Where the strays go is the one difference from the dock, and it follows from the surface rather than being a
+     * choice.** Home is paged and can always append one, so `GridReflow`'s default overflow carries them forward;
+     * the dock is a single strip with no next page, which is why it evicts to home instead. Nothing is deleted on
+     * either path.
+     *
+     * The row *count* is not written down here. It is clamped where it is read (`CellFit.fitGridConfig` in the
+     * surface), so shortening the dock again gives the rows straight back — where writing the reduction would make a
+     * temporary shortage permanent. Only the placements move, and only when the reflow reports it needed to.
+     */
+    fun fitMainTo(config: GridConfig) {
+        val main = placements.value.filterValues { it.zone == HomeZone.MAIN }.mapValues { it.value.placement }
+        val settled = GridReflow.reflow(main, config)
+        if (!settled.changed) return
+        applyChanges(
+            settled.placements
+                .filterNot { (item, at) -> main[item] == at }
+                .map { (item, at) -> LayoutChange.Move(item, at, HomeZone.MAIN) },
+        )
+    }
+
+    /**
      * Re-homes anything the dock can no longer hold, now that its grid is [dockConfig] — **the settings write and
      * the placement store meeting**.
      *
@@ -789,53 +840,7 @@ class HomeViewModel(
      * happens to find a stray, and racing itself. Here the trigger is the config changing, and the
      * write is an ordinary [applyChanges] like any other.
      */
-    /**
-     * **Is the posture on screen the one whose arrangement this surface reads?**
-     *
-     * The gate on both settles, and it exists because they *write*. Placements are keyed by [Orientation] and this
-     * surface reads [ORIENTATION] only — home orientation is unbuilt — so re-fitting while the device is the other way
-     * up would rewrite a portrait arrangement to fit a screen it is never drawn on, and nothing would undo that on
-     * rotating back. It matters most for the dock, which is a **rail** in phone landscape: the transpose of the strip,
-     * so almost every item in it would be evicted to home permanently.
-     *
-     * A grid drawn out of its bounds for as long as a rotation lasts is cosmetic and reverses itself. The write does
-     * not, which is why this guards the writes rather than the drawing. It stops being a no-op the day placements are
-     * stored per posture, at which point [ORIENTATION] follows the device and this is simply always true.
-     */
-    private val drawsStoredPlacements: Boolean
-        get() = device.value?.orientation == ORIENTATION
-
-    /**
-     * Re-homes anything the **main area** can no longer hold, now that its grid is [config] — the pager's half of the
-     * rule [fitDockTo] states for the dock.
-     *
-     * The trigger is usually the dock: its height is the setting, the pager takes what is left, and past a point what
-     * is left carries fewer rows than the user's count. It is also reached by an icon-size change, which raises the
-     * smallest usable cell and so lowers how many fit — the same clamp from the other side.
-     *
-     * **Where the strays go is the one difference from the dock, and it follows from the surface rather than being a
-     * choice.** Home is paged and can always append one, so `GridReflow`'s default overflow carries them forward;
-     * the dock is a single strip with no next page, which is why it evicts to home instead. Nothing is deleted on
-     * either path.
-     *
-     * The row *count* is not written down here. It is clamped where it is read (`CellFit.fitGridConfig` in the
-     * surface), so shortening the dock again gives the rows straight back — where writing the reduction would make a
-     * temporary shortage permanent. Only the placements move, and only when the reflow reports it needed to.
-     */
-    fun fitMainTo(config: GridConfig) {
-        if (!drawsStoredPlacements) return
-        val main = placements.value.filterValues { it.zone == HomeZone.MAIN }.mapValues { it.value.placement }
-        val settled = GridReflow.reflow(main, config)
-        if (!settled.changed) return
-        applyChanges(
-            settled.placements
-                .filterNot { (item, at) -> main[item] == at }
-                .map { (item, at) -> LayoutChange.Move(item, at, HomeZone.MAIN) },
-        )
-    }
-
     fun fitDockTo(dockConfig: GridConfig) {
-        if (!drawsStoredPlacements) return
         viewModelScope.launch {
             // Nothing is written until the main grid is known — an eviction with nowhere to go would take an item off
             // the dock and leave it placed nowhere. **Awaited rather than skipped**: the two configs resolve from the
@@ -864,16 +869,20 @@ class HomeViewModel(
      * [writesInFlight] brackets the write so the store collector holds off until it lands: between the optimistic
      * update and the database catching up, the truth is here rather than there. Decremented in a `finally`, so a
      * failed write cannot leave the surface permanently deaf to the store.
+     *
+     * **The key is read once, before the optimistic update**, so a rotation landing mid-write cannot persist the
+     * batch under a different arrangement from the one it was planned against.
      */
     fun applyChanges(changes: List<LayoutChange>) {
         if (changes.isEmpty()) return
+        val key = arrangement ?: return
         placements.value = placements.value.withApplied(changes)
         writesInFlight++
         viewModelScope.launch {
             try {
-                layoutRepository.apply(ORIENTATION, changes)
+                layoutRepository.apply(key, changes)
                 if (changes.any { it !is LayoutChange.Move && it !is LayoutChange.RemoveFromGrid }) {
-                    placements.value = layoutRepository.placements(ORIENTATION).first()
+                    placements.value = layoutRepository.placements(key).first()
                 }
             } finally {
                 writesInFlight--
@@ -1135,7 +1144,8 @@ class HomeViewModel(
      * dock is filled by dragging an app into it, which is the flow that needs proving first.
      */
     private suspend fun seedIfEmpty(config: GridConfig) {
-        if (layoutRepository.placements(ORIENTATION).first().isNotEmpty()) return
+        val key = arrangement ?: return
+        if (layoutRepository.placements(key).first().isNotEmpty()) return
         val mult = config.cellMultiplier
         val seedRows = (config.visualRows - 1).coerceAtLeast(1)
         val apps = appRepository.observeApps().first().take(seedRows * config.visualCols)
@@ -1152,11 +1162,10 @@ class HomeViewModel(
                 zone = HomeZone.MAIN,
             )
         }
-        layoutRepository.apply(ORIENTATION, moves)
+        layoutRepository.apply(key, moves)
     }
 
     companion object {
-        val ORIENTATION = Orientation.PORTRAIT
         private const val STOP_TIMEOUT_MS = 5_000L
         private const val DEFAULT_FOLDER_LABEL = "Folder"
 

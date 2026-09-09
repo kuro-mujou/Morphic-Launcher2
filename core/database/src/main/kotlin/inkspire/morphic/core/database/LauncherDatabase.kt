@@ -3,10 +3,10 @@ package inkspire.morphic.core.database
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import inkspire.morphic.core.database.converter.ArrangementKeyConverter
 import inkspire.morphic.core.database.converter.ComponentKeyConverter
 import inkspire.morphic.core.database.converter.HomeZoneConverter
 import inkspire.morphic.core.database.converter.IconArrangementConverter
-import inkspire.morphic.core.database.converter.OrientationConverter
 import inkspire.morphic.core.database.converter.WidgetContainerAxisConverter
 import inkspire.morphic.core.database.dao.AppInfoDao
 import inkspire.morphic.core.database.dao.AppPlacementDao
@@ -46,9 +46,13 @@ import inkspire.morphic.core.database.entity.WidgetEntity
 import inkspire.morphic.core.database.entity.WidgetPlacementEntity
 
 /**
- * The launcher's Room database: cached app metadata, home placements (per orientation), folders, widgets,
- * containers, per-app icon overrides, and the "order" arrangements (APPS pager, categories, home list).
+ * The launcher's Room database: cached app metadata, home placements (per `ArrangementKey`), folders, widgets,
+ * containers, per-app icon overrides, and the ordered stores (APPS pager, categories, home list).
  * Layout/grid/icon *config* for a surface lives in `data:settings`, not here.
+ *
+ * **No migrations are written.** `DatabaseModule` builds this with `fallbackToDestructiveMigration(dropAllTables
+ * = true)`, so a version bump wipes and rebuilds rather than migrating. That is a decision with an expiry date: it
+ * holds only while the launcher has no users with a home screen to lose.
  */
 @Database(
     entities = [
@@ -71,12 +75,12 @@ import inkspire.morphic.core.database.entity.WidgetPlacementEntity
         CategoryItemEntity::class,
         HomeListItemEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @TypeConverters(
     ComponentKeyConverter::class,
-    OrientationConverter::class,
+    ArrangementKeyConverter::class,
     HomeZoneConverter::class,
     IconArrangementConverter::class,
     WidgetContainerAxisConverter::class
