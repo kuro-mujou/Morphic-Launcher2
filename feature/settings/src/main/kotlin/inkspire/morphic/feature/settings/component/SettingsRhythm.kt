@@ -30,8 +30,8 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 /**
  * A group heading inside a settings screen, or above a run of rows in the section list.
  *
- * @param spaceAbove false where nothing is above it to be separated from, which is the **first** heading in a list.
- *   [HeaderGapTop] is a break between two groups; paid at the top of a pane it is just the app bar pushed away.
+ * @param spaceAbove false where nothing is above it to be separated from — the first heading in a pane, and every
+ *   heading in `SettingsList`, which pays the break on the group instead so that an *unheaded* group gets one too.
  */
 @Composable
 internal fun SettingsSectionHeader(title: String, modifier: Modifier = Modifier, spaceAbove: Boolean = true) {

@@ -64,10 +64,18 @@ internal fun SettingsList(
     LazyColumn(modifier = modifier, contentPadding = contentPadding) {
         settingsGroups.forEachIndexed { index, group ->
             item(key = "group-${group.header ?: index}") {
-                Column(Modifier.padding(horizontal = 16.dp)) {
+                // **The break between two groups is paid here, not by the heading.** A heading that pays its own
+                // separates nothing when a group has none: `Extras` is one unheaded row, and it sat welded to the
+                // bottom of the Layout panel — a sixth Layout row wearing a different corner radius. What the eye is
+                // reading is the gap between two *panels*, which is this list's to give whether or not a word sits in
+                // it. The first group takes none: it is already under the app bar.
+                Column(
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .padding(top = if (index > 0) 16.dp else 0.dp),
+                ) {
                     if (group.header != null) {
-                        // The first heading sits directly under the app bar, so it takes no break above it.
-                        SettingsSectionHeader(group.header, spaceAbove = index > 0)
+                        SettingsSectionHeader(group.header, spaceAbove = false)
                     }
                     MorphicGroupPanel {
                         group.sections.forEach { section ->
