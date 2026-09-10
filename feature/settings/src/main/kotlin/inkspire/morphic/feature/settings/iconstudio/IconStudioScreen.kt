@@ -214,7 +214,21 @@ fun IconStudioScreen(
         { pack, name -> state.packImages[LayerSource.IconPack(pack, name).key]?.toDrawable(resources) }
     }
 
+    // **Which panel is showing, if any** — declared up here because two things read it: the slot that draws it, and
+    // the back handler below that closes it. Stated once, so a panel cannot be drawn that back does not know about.
+    val openTool = tool?.takeIf { state.subject !is StudioSubject.Unchosen }
+
+    // **Back closes what is open before it leaves, innermost first**, and composition order is what ranks them: the
+    // last handler composed is the first one offered the press. So this is the floor — leaving the studio — and every
+    // handler declared after it takes precedence, in the order they are drawn over each other: the panel, then the
+    // color picker that opens over a panel, then the rail's menu, then the pack browser.
+    //
+    // **The panel had no handler at all and the picker's was lost** when the two arrangements were split apart, so a
+    // press with either of them open discarded the whole session instead of the thing that was open. That is an
+    // expensive way to be wrong on a screen whose entire purpose is unsaved work.
     BackHandler(onBack = onBack)
+    if (openTool != null) BackHandler { tool = null }
+    if (colorPicker.request != null) BackHandler { colorPicker.close() }
 
     // **The bars' icons follow the canvas, because the canvas is what is behind them.** The studio's own chrome is
     // fixed dark glass with white content (see `studioSurface`), and it can be, because it paints its own wash to
@@ -536,7 +550,7 @@ fun IconStudioScreen(
                 // transition starts and the container simply follows the height the panel is animating; and a panel
                 // arriving is freshly composed, so it has no previous height of its own to animate from.
                 val picking = colorPicker.request
-                val open = tool?.takeIf { state.subject !is StudioSubject.Unchosen }
+                val open = openTool
                 // Read out here because `transitionSpec` is not a composable lambda — the motion scheme is, so it
                 // cannot be reached from inside it.
                 val slide = MaterialTheme.motionScheme.defaultSpatialSpec<IntOffset>()
@@ -741,47 +755,47 @@ fun IconStudioScreen(
                     }
                 }
             } else {
-            // The bottom of the workspace: the tool bar, with anything floating above it in the same stack. One
-            // `uiInsetsPadding` for the pair, so the gap between them is not inset twice.
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    // The bottom chrome is the only thing on this screen a keyboard can cover, and the color picker's
-                    // hex field is the only thing that raises one — so the whole stack rides above it rather than the
-                    // panel alone, which would have left the rail underneath the keys. Zero when no keyboard is up, so
-                    // it costs the other panels nothing.
-                    .imePadding()
-                    .uiInsetsPadding()
-                    .padding(12.dp)
-                    .fillMaxWidth(),
-                // **Start, not end, and the layer rail is why.** The trailing end is the obvious place, and
-                // was out of the way of everything that existed at the time. The rail now runs down that edge, and
-                // the panel is what brings them together: opening one pushes this row up into the rail's vertical
-                // span, so a trailing row would meet the tiles rather than clear them. The leading end is the only
-                // side with nothing else on it — the icon bound has already shifted the other way for the same
-                // reason (`IconBoundShift`).
-                //
-                // Only this row moves. Everything else in this column fills the width, so the alignment does not
-                // reach the panel or the bar.
-                horizontalAlignment = Alignment.Start,
-            ) {
-                sessionPills()
-                panelSlot(
-                    // **Bounded and centred, because a panel is a column of labelled rows and not a sheet.** Filling
-                    // the width put a rotation slider on a 1100dp throw across a tablet in landscape, with its label
-                    // at one edge of the screen and its value at the other — the pair the row exists to associate.
-                    Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .widthIn(max = 480.dp),
-                )
-                toolRail(
-                    // Centred explicitly, because the bar wraps its contents and this column aligns to the start for
-                    // the row of session buttons above. `ColumnScope.align` is the per-child override, so the two say
-                    // what they mean rather than one settling for the other's answer.
-                    Modifier
-                        .padding(top = 6.dp)
-                        .align(Alignment.CenterHorizontally),
-                )
+                // The bottom of the workspace: the tool bar, with anything floating above it in the same stack. One
+                // `uiInsetsPadding` for the pair, so the gap between them is not inset twice.
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        // The bottom chrome is the only thing on this screen a keyboard can cover, and the color picker's
+                        // hex field is the only thing that raises one — so the whole stack rides above it rather than the
+                        // panel alone, which would have left the rail underneath the keys. Zero when no keyboard is up, so
+                        // it costs the other panels nothing.
+                        .imePadding()
+                        .uiInsetsPadding()
+                        .padding(12.dp)
+                        .fillMaxWidth(),
+                    // **Start, not end, and the layer rail is why.** The trailing end is the obvious place, and
+                    // was out of the way of everything that existed at the time. The rail now runs down that edge, and
+                    // the panel is what brings them together: opening one pushes this row up into the rail's vertical
+                    // span, so a trailing row would meet the tiles rather than clear them. The leading end is the only
+                    // side with nothing else on it — the icon bound has already shifted the other way for the same
+                    // reason (`IconBoundShift`).
+                    //
+                    // Only this row moves. Everything else in this column fills the width, so the alignment does not
+                    // reach the panel or the bar.
+                    horizontalAlignment = Alignment.Start,
+                ) {
+                    sessionPills()
+                    panelSlot(
+                        // **Bounded and centred, because a panel is a column of labelled rows and not a sheet.** Filling
+                        // the width put a rotation slider on a 1100dp throw across a tablet in landscape, with its label
+                        // at one edge of the screen and its value at the other — the pair the row exists to associate.
+                        Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .widthIn(max = 480.dp),
+                    )
+                    toolRail(
+                        // Centred explicitly, because the bar wraps its contents and this column aligns to the start for
+                        // the row of session buttons above. `ColumnScope.align` is the per-child override, so the two say
+                        // what they mean rather than one settling for the other's answer.
+                        Modifier
+                            .padding(top = 6.dp)
+                            .align(Alignment.CenterHorizontally),
+                    )
                 }
             }
 
