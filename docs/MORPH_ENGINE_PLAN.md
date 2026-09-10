@@ -1,6 +1,6 @@
 # Morph Engine
 
-**Status:** design, **nothing built** (2026-09-10). Drawn from three screen captures of Smart Launcher's wallpaper
+**Status:** M1–M3 built (2026-09-10); M4 next. Drawn from three screen captures of Smart Launcher's wallpaper
 studio taken by the author, each of which overturned a conclusion drawn from the one before.
 
 **Covers:** the render seam both studios draw through — why `Generator.render() → Bitmap` is the wrong shape for a live
@@ -88,7 +88,7 @@ palette *morphing* during a scrub is then lerping two palettes at draw time, whi
 including the ground going black → cream. Baking colors into the plan would instead mean lerping per-primitive RGB
 between matched pairs, with the ground needing a special case of its own.
 
-## The matching rule
+## The matching rule — and the class of design it does not cover
 
 PowerPoint's semantics, which is what the frames show:
 
@@ -100,6 +100,19 @@ PowerPoint's semantics, which is what the frames show:
 
 **A triangle and a heptagon must be resampled to a common vertex count** around the perimeter before any lerp. Skipped,
 this fails silently — the lerp still runs and still draws, it just draws garbage.
+
+**All of which is right for a scatter and wrong for a subdivision, and M3 found out which by rendering it.** The rule
+above assumes the primitives are *independent* — true of Confetti, Spray, Dot Grid, Halftone, and of anything strewn
+across a frame. It is false wherever the primitives **partition** the frame, because then two of them share an edge
+that one cut made, and pairing them separately tears it. That is a **third bucket**, not a hard case of the first:
+
+> **Subdivision designs — the cells are one structure, so the *cuts* interpolate and the cells are re-derived.**
+> Vitrall, Mondrian, Modern Mosaic, Bauhaus, Triangular Facets, Rounded Tiles — every design whose panes tile what
+> they are cut from. `GlassTree` is the worked example; the recipe is to keep the construction's own recursion
+> instead of discarding it, merge two of them, and clip per frame.
+
+The test for which bucket a design is in is one question: **could two of its primitives be moved independently and
+still leave a legal picture?** A scattered dot, yes. A pane, no.
 
 ## Which generators can follow — all of them
 
@@ -229,9 +242,48 @@ claim to apply.
   - The GPU is reached through `RenderNode` + `HardwareRenderer`, which is what Compose uses underneath — it keeps
     Compose's test infrastructure out of a module that has no Compose in it. **API 29+**, so the test skips below
     that and the scrub will need the software path there; the launcher's floor is 26.
-- **M3 — the matcher.** Nearest-centroid pairing, vertex resampling, `lerp(planA, planB, t)`, unmatched scale-and-fade.
-  JVM-testable in full, which is the point of `Plan` being data. Only the primitive bucket needs any of this — a field
-  plan is a struct, and lerping one is field-by-field with nothing to pair.
+- **M3 — the matcher. ✅ (2026-09-10), and it is not a matcher.** Built first as one — nearest-centroid pairing,
+  arc-length resampling, rotational alignment, unmatched scale-and-fade, thirteen passing unit tests — and the render
+  harness refuted the whole approach on its first run. **A subdivision's cells are not independent objects**, so
+  pairing them off and interpolating each against its partner cannot hold the partition: two panes are neighbours
+  *because one cut made both*, and partners chosen pane by pane pull a shared edge in two directions. Measured on the
+  device: the lead went from 18% of the frame at `t = 0` to **40% at `t = 0.5`**, panes detached from their own
+  boundaries, and the bones — meaningful only *as* boundaries — came loose and swept over open ground as free strokes.
+  Neither bound helped, and that is the tell: tightening the travel and area limits refuses more pairs and collapses
+  *more*, loosening them buys the self-intersection scribble the limits exist to prevent.
+  - **What replaced it is `GlassTree`: the *cuts* interpolate, and the cells are re-derived per frame.** `panes()` now
+    records each cut as a recipe over any region rather than throwing it away once the polygons fall out, `plan()`
+    derives the window from that tree, and a morph merges two trees into one shared structure. The partition stops
+    being something to preserve and becomes an *invariant*: whatever the cuts are at a moment, applying them in order
+    divides the frame, because that is what cutting is. `the frame stays whole at every moment of a scrub` asserts it
+    at twenty-one values of `t`, which is the test the old mechanism could not have passed at one.
+  - **Three things the shape of the problem forced.** A cut is carried as **curvature**, not radius, because
+    flattening a bow means its radius running to infinity and lerping a radius toward zero *tightens* the arc instead
+    — the window curling up rather than going straight. A cut's two sides are named by its own normal rather than by
+    the order the geometry produced them, or a bow flattening through zero silently swaps two subtrees. And where one
+    tree cuts and the other does not, the missing cut is supplied **flattened out past the frame's edge**, so a pane
+    with no counterpart grows out of an edge or shrinks back into one, and the recursion into the vanishing side
+    needs no special case.
+  - **The bake survives, to 21 pixels of 2,592,000 at one 8-bit level.** `t = 1` is byte-identical to the
+    pre-rework render and `t = 0` differs in a single 15×17 box at a junction of three leads — the same *set* of
+    strokes drawn in the tree's order rather than the subdivision's pop order, which rounds differently where two
+    antialiased strokes of one color overlap. Restoring the old order would mean collecting bones a second way,
+    which is the second source of truth this rework exists to remove. The glazing-stream fingerprint is unchanged,
+    so the random draws and the pane order are exactly as they were.
+  - **`PolygonMorph` is deleted, with its tests.** Pairing, resampling and rotational alignment have no consumer once
+    the cuts interpolate, and a scatter design that might want them later is not a consumer today. What survived is
+    two lines of arithmetic, now in `GlassTree`.
+  - **A coarse middle, and the fix was one distance.** The first build ran ground share 18% → **7%** → 16%: where
+    the trees diverge high up, many cuts flattened at once and panes merged, so the scrub passed through a state
+    reading as the same design at a *lower density*. The cause was that a flattened cut was pushed by **the frame's
+    diagonal** — the obvious way to guarantee one side is empty — which takes it out of the pane it divides about a
+    fifth of the way through the gesture, after which that whole subtree contributes nothing. Pushed instead just
+    clear of **the region it actually divides**, the same cut spends the entire scrub crossing it, so what is leaving
+    shrinks smoothly and the density holds: **18% → 13.3% → 16.3%**, against ends of 18% and 16%. It cost `merge` the
+    regions, so both trees are now re-cut as the merge descends — one frame's worth of clipping, once per gesture —
+    and the side that leaves is chosen by **area** rather than by leaf count, a large pane shrinking away being the
+    thing that gets noticed. The lesson generalizes past this design: **a vanishing element should spend the whole
+    gesture vanishing**, and a bound picked to be safely large is how it ends up spending a fifth.
 - **M4 — the gesture.** `t` bound to the finger, commit on release, and speculative pre-planning of the next seed while
   idle so the plan is in hand before touch-down.
 - **M5 — the field bucket, on one generator.** Mesh Gradient, since it is the design the third capture proves and the

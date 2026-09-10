@@ -2,6 +2,7 @@ package inkspire.morphic.core.graphics.wallpaper
 
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -153,6 +154,111 @@ class VitrallGeneratorTest {
         }
         assertEquals(GlazingFingerprint, fingerprint)
     }
+
+    /**
+     * **Both ends of a scrub are the real plans, not re-cuts of them.** Re-cutting reproduces them, but the plans are
+     * already in hand, and taking them removes any question of whether a scrub lands on the window a bake would draw.
+     */
+    @Test
+    fun `a morph begins and ends on the plans themselves`() {
+        val from = VitrallGenerator.plan(1080, 2400, params, seed = 1L)
+        val to = VitrallGenerator.plan(1080, 2400, params, seed = 2L)
+        val morph = VitrallGenerator.morph(from, to)
+
+        assertSame(from, morph.at(0f))
+        assertSame(to, morph.at(1f))
+        assertSame(from, morph.at(-0.5f))
+        assertSame(to, morph.at(2f))
+    }
+
+    /**
+     * **The frame is still exactly divided at every moment of a scrub, and this is the assertion the whole design
+     * exists to make true.**
+     *
+     * It is what the morph this replaced could not do. Pairing panes off and interpolating each against its partner
+     * is reasonable until you notice that two panes are neighbours *because one cut made both*: partners chosen pane
+     * by pane pull a shared edge in two directions, so the panes part company and the lead opens between them.
+     * Driven on the device it went from 18% of the frame to 40% at the middle of a scrub, and the bones — meaningful
+     * only as pane boundaries — came off the panes and swept over open ground.
+     *
+     * Interpolating the *cuts* makes this an invariant rather than a hope: whatever the cuts are at a moment,
+     * applying them in order divides the frame, because that is what cutting is. So the check is the plainest one
+     * there is, and it holds at every `t` rather than at the two ends where the old one was looked at.
+     */
+    @Test
+    fun `the frame stays whole at every moment of a scrub`() {
+        val from = VitrallGenerator.plan(1080, 2400, params, seed = 1L)
+        val to = VitrallGenerator.plan(1080, 2400, params.copy(density = 0.9f, irregularity = 0.8f), seed = 2L)
+        val morph = VitrallGenerator.morph(from, to)
+
+        for (step in 0..20) {
+            val t = step / 20f
+            val covered = morph.at(t).panes.sumOf { GlassCut.area(it.outline).toDouble() }
+            assertEquals("the window has come apart at t=$t", from.aspect.toDouble(), covered, 1e-3)
+        }
+    }
+
+    /** A moment of a scrub still has to be a window somebody can draw, not merely one that adds up. */
+    @Test
+    fun `every moment is drawable`() {
+        val from = VitrallGenerator.plan(1080, 2400, params, seed = 3L)
+        val to = VitrallGenerator.plan(1080, 2400, params, seed = 4L)
+        val middle = VitrallGenerator.morph(from, to).at(0.5f)
+
+        assertTrue("a pane needs three corners", middle.panes.all { it.outline.size >= 6 })
+        assertTrue(
+            "an interpolated coordinate must be finite",
+            middle.panes.all { pane -> pane.outline.all { it.isFinite() } },
+        )
+        assertTrue("a bone is a polyline", middle.bones.all { it.size >= 4 && it.size % 2 == 0 })
+    }
+
+    /**
+     * A hair into the scrub the window is still the one it started from, and a hair before the end it is already the
+     * one it is going to.
+     *
+     * **Counted in panes that are actually there**, which is the point: a window whose counterpart cuts where it does
+     * not gains those cuts flattened out past the frame's edge, so at its own end they carve off nothing and the
+     * panes they would make have no area yet. Cutting at `0.001` rather than at `0` is what makes this a statement
+     * about the re-cut window rather than about the plan handed back unchanged.
+     */
+    @Test
+    fun `each end of a scrub re-cuts the window it belongs to`() {
+        val from = VitrallGenerator.plan(1080, 2400, params, seed = 5L)
+        val to = VitrallGenerator.plan(1080, 2400, params.copy(density = 0.8f), seed = 6L)
+        val morph = VitrallGenerator.morph(from, to)
+        val sliver = from.aspect * 1e-5f
+
+        val opening = morph.at(0.001f).panes.count { GlassCut.area(it.outline) > sliver }
+        val closing = morph.at(0.999f).panes.count { GlassCut.area(it.outline) > sliver }
+        assertEquals(from.panes.size, opening)
+        assertEquals(to.panes.size, closing)
+    }
+
+    /** A scrub asks for the same `t` again whenever a finger holds still, and two answers would read as a flicker. */
+    @Test
+    fun `one moment of a morph is always the same moment`() {
+        val from = VitrallGenerator.plan(1080, 2400, params, seed = 6L)
+        val to = VitrallGenerator.plan(1080, 2400, params, seed = 7L)
+        val morph = VitrallGenerator.morph(from, to)
+
+        val once = morph.at(0.37f)
+        val again = morph.at(0.37f)
+        assertEquals(once.panes.size, again.panes.size)
+        assertTrue(once.panes.indices.all { once.panes[it].outline.contentEquals(again.panes[it].outline) })
+    }
+
+    /** The knobs interpolate too, so a morph carries the glass and the leading across rather than snapping them. */
+    @Test
+    fun `the knobs cross with the geometry`() {
+        val from = VitrallGenerator.plan(1080, 2400, params.copy(depth = 0f, scale = 0f), seed = 8L)
+        val to = VitrallGenerator.plan(1080, 2400, params.copy(depth = 1f, scale = 1f), seed = 9L)
+        val middle = VitrallGenerator.morph(from, to).at(0.5f)
+
+        assertEquals(0.5f, middle.glass, 1e-5f)
+        assertEquals(0.5f, middle.leading, 1e-5f)
+    }
+
 
     private val params = DesignParams()
 

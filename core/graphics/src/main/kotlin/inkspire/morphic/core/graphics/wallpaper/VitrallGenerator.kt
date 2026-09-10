@@ -72,6 +72,10 @@ import kotlin.random.Random
  * [panes] is pure and tested, as is the [GlassCut] toolkit under it — a cut that drops a crossing leaves a hairline
  * of ground between two panes, and that reads as a rendering artifact rather than as a bug.
  */
+// The count is the design's own vocabulary — cutting, glazing, toning, planning, drawing and now morphing — and each
+// step is a named thing rather than a fragment of a longer one. Splitting the object to score better would put a
+// window's construction in two files.
+@Suppress("TooManyFunctions")
 object VitrallGenerator : Generator {
 
     /**
@@ -112,8 +116,16 @@ object VitrallGenerator : Generator {
      * @property bones the first few cuts, as full chords across whatever they cut — drawn in heavier lead. Two points
      *   for a straight cut, the sampled arc chain for a bowed one.
      * @property aspect how wide the cut frame was, in units of its own height. Everything above is in that frame.
+     * @property tree the cuts themselves, kept rather than discarded once the panes fall out of them. **[panes] is
+     *   derived from this and not built beside it** — one window, cut once — which is what lets a scrub re-cut the
+     *   frame at a moment between two windows and get a partition rather than a pile of polygons.
      */
-    internal class Window(val panes: List<FloatArray>, val bones: List<FloatArray>, val aspect: Float)
+    internal class Window(
+        val panes: List<FloatArray>,
+        val bones: List<FloatArray>,
+        val aspect: Float,
+        val tree: GlassTree.Branch,
+    )
 
     /**
      * A pane and the glass cut for it — the unit a window is planned in, and the unit two windows would be paired by.
@@ -152,6 +164,9 @@ object VitrallGenerator : Generator {
      *   spends it on the rim; [plan] has already spent it on each pane's [Pane.lift].
      * @property leading how heavy the came is — [DesignParams.scale], likewise unresolved: it becomes a stroke width
      *   only against a frame size.
+     * @property tree the cuts [panes] were derived from, for [morph] to interpolate. **Null on a plan that is itself
+     *   a moment of a morph** — that window was never cut from a recipe of its own, and nothing scrubs from a
+     *   moment.
      */
     internal class Plan(
         val panes: List<Pane>,
@@ -159,7 +174,89 @@ object VitrallGenerator : Generator {
         val aspect: Float,
         val glass: Float,
         val leading: Float,
+        val tree: GlassTree.Branch? = null,
     )
+
+    /**
+     * Two windows prepared to interpolate — built once when a scrub begins, asked for a moment on each of its frames.
+     *
+     * **The split between this and [morph] is the performance of the whole feature.** Merging two trees walks both of
+     * them and counts subtrees as it goes; asking for a moment re-cuts the frame, which is one clip per cut. Merging
+     * per frame would put the structure back into the inner loop for an answer that cannot change while a finger is
+     * down.
+     */
+    internal class Morph(private val from: Plan, private val to: Plan, private val blend: GlassTree.Blend) {
+
+        /**
+         * The window [t] of the way across, `0` being [from] and `1` being [to].
+         *
+         * **Both ends hand back the original plan rather than a re-cut of it.** Re-cutting reproduces them — that is
+         * asserted rather than assumed — but the plan is already in hand, so taking it costs nothing and leaves no
+         * question about whether the ends of a scrub are the windows it was between.
+         */
+        fun at(t: Float): Plan = when {
+            t <= 0f -> from
+            t >= 1f -> to
+            else -> cut(t)
+        }
+
+        private fun cut(t: Float): Plan {
+            val aspect = GlassTree.lerp(from.aspect, to.aspect, t)
+            val panes = ArrayList<Pane>(maxOf(from.panes.size, to.panes.size))
+            val bones = ArrayList<FloatArray>()
+            GlassTree.cells(blend, t, frameRect(aspect), bones) { a, b, outline ->
+                panes.add(glazed(from.panes.getOrNull(a), to.panes.getOrNull(b), outline, t))
+            }
+            return Plan(
+                panes = panes,
+                bones = bones,
+                aspect = aspect,
+                glass = GlassTree.lerp(from.glass, to.glass, t),
+                leading = GlassTree.lerp(from.leading, to.leading, t),
+            )
+        }
+
+        /**
+         * The glass filling one pane at [t] — between [a]'s and [b]'s, or one of them alone where that pane is only
+         * arriving or only leaving.
+         */
+        private fun glazed(a: Pane?, b: Pane?, outline: FloatArray, t: Float): Pane = when {
+            a == null -> Pane(outline, b!!.tone, b.flashed, b.angle, b.lift)
+            b == null -> Pane(outline, a.tone, a.flashed, a.angle, a.lift)
+            else -> Pane(
+                outline = outline,
+                tone = GlassTree.lerp(a.tone, b.tone, t),
+                // A flash is a decision, not a quantity — there is no half-flashed pane to draw, so it switches at the
+                // midpoint. It lands on about one pane in fifty and moves that pane's color by a fifth, which is a
+                // step small enough and rare enough to cost less than fading two fills over each other.
+                flashed = if (t < 0.5f) a.flashed else b.flashed,
+                angle = GlassTree.lerpAngle(a.angle, b.angle, t),
+                lift = GlassTree.lerp(a.lift, b.lift, t),
+            )
+        }
+    }
+
+    /**
+     * [from] and [to] merged into one set of cuts, ready to divide the frame at any moment between them.
+     *
+     * **What interpolates is the cutting, not the panes** — which is this design and the second answer the question
+     * has had. Pairing panes off and interpolating each one against its partner looks reasonable and cannot work:
+     * two panes are neighbours *because one cut made both*, so partners chosen pane by pane pull a shared edge in
+     * two directions, and a window that is a partition at both ends of a scrub is a pile of shards over open lead in
+     * the middle of it. Cuts have no such coupling to break. [GlassTree] carries the measurement that settled it.
+     */
+    internal fun morph(from: Plan, to: Plan): Morph = Morph(
+        from, to,
+        GlassTree.merge(
+            requireNotNull(from.tree) { "a scrub starts on a window that was cut, not on a moment of one" },
+            requireNotNull(to.tree) { "a scrub ends on a window that was cut, not on a moment of one" },
+            frameRect(from.aspect),
+        ),
+    )
+
+    /** The cut frame: [aspect] wide and one tall, which every cut is applied to in turn. */
+    private fun frameRect(aspect: Float): FloatArray = floatArrayOf(0f, 0f, aspect, 0f, aspect, 1f, 0f, 1f)
+
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val bitmap = createBitmap(width, height)
@@ -195,7 +292,7 @@ object VitrallGenerator : Generator {
             val lift = lift(glass, random)
             Pane(outline, tone, flashed, angle, lift)
         }
-        return Plan(glazed, window.bones, window.aspect, glass, params.scale.coerceIn(0f, 1f))
+        return Plan(glazed, window.bones, window.aspect, glass, params.scale.coerceIn(0f, 1f), window.tree)
     }
 
     /**
@@ -261,6 +358,10 @@ object VitrallGenerator : Generator {
      *
      * The recursion is depth-first over a stack rather than by call, so a fine window cannot run the frame out of
      * stack; [MaxTries] attempts per region and a hard cap on the pane count keep a pathological seed bounded.
+     *
+     * **The cuts are recorded as they are made and the panes derived from them at the end, rather than kept as they
+     * fall out.** Two ways of saying what one window is would be two things to hold in agreement, and the one a scrub
+     * reads is the one no bake would ever exercise — so there is one, and the bake is what proves it.
      */
     internal fun panes(count: Int, curves: Float, seed: Long, aspect: Float = 1f): Window {
         val random = Random(seed)
@@ -272,36 +373,83 @@ object VitrallGenerator : Generator {
         val diagonal = if (random.nextBoolean()) tilt else -tilt
         val grain = floatArrayOf(diagonal, diagonal + GlassCut.Quarter, GlassCut.Quarter, 0f)
 
-        val settled = ArrayList<FloatArray>()
-        val bones = ArrayList<FloatArray>()
-        val pending = ArrayDeque<Triple<FloatArray, Float, Int>>()
-        pending.addLast(Triple(floatArrayOf(0f, 0f, frame, 0f, frame, 1f, 0f, 1f), 1f, 0))
+        val root = GlassTree.Branch()
+        val settled = ArrayList<Region>()
+        val pending = ArrayDeque<Region>()
+        pending.addLast(Region(frameRect(frame), root, 1f, 0))
         while (pending.isNotEmpty() && settled.size < count * PaneCap) {
-            val (region, spread, depth) = pending.removeLast()
+            val here = pending.removeLast()
             // Small enough for this branch's own stopping area, or too awkward a shape to cut — either way, it stays.
-            val cut = if (GlassCut.area(region) < target * spread) {
+            val made = if (GlassCut.area(here.outline) < target * here.spread) {
                 null
             } else {
-                cut(region, grain, bowing, target, depth, random)
+                cut(here.outline, grain, bowing, target, here.depth, random)
             }
-            if (cut == null) {
-                settled.add(region)
-            } else {
-                if (depth <= BoneDepth) cut.arc?.let(bones::add)
-                cut.panes.forEach { pending.addLast(Triple(it, nextSpread(random), depth + 1)) }
-            }
+            if (made == null) settled.add(here) else divide(here, made, pending, random)
         }
-        settled.addAll(pending.map { it.first })
-        return Window(settled.flatMap { glaze(it, target, bowing, random) }, bones, frame)
+        settled.addAll(pending)
+
+        var next = 0
+        for (pane in settled) next = glaze(pane.outline, pane.branch, next, target, bowing, random)
+        val outlines = arrayOfNulls<FloatArray>(next)
+        val bones = ArrayList<FloatArray>()
+        GlassTree.cells(root, frameRect(frame), outlines, bones)
+        return Window(outlines.filterNotNull(), bones, frame, root)
+    }
+
+    /**
+     * A region of the frame on its way to being a pane: its outline, the node standing for it, the stopping area its
+     * own branch drew, and how deep it sits.
+     */
+    private class Region(
+        val outline: FloatArray,
+        val branch: GlassTree.Branch,
+        val spread: Float,
+        val depth: Int,
+    )
+
+    /** A cut that landed: the two sides it left, and the recipe that would make it again over any region. */
+    private class Made(val sides: GlassTree.Sides, val recipe: GlassTree.Cutting)
+
+    /**
+     * [here] recorded as cut by [made], and its two pieces queued to be cut in their turn.
+     *
+     * **The pieces are queued in the order the geometry produced them and hung on the tree by the cut's own sides,
+     * and those two orders differ whenever a cut bows the far way.** The queue order is what the random stream is
+     * spent against, so changing it re-glazes every pane after this one; the tree's order is what makes a bow and a
+     * straight cut name their sides alike, without which a scrub swaps two subtrees the instant a bow flattens
+     * through zero. Conflating them is silent either way round.
+     */
+    private fun divide(here: Region, made: Made, pending: ArrayDeque<Region>, random: Random) {
+        val plus = GlassTree.Branch()
+        val minus = GlassTree.Branch()
+        here.branch.cut = made.recipe
+        here.branch.bone = here.depth <= BoneDepth
+        here.branch.plus = plus
+        here.branch.minus = minus
+        val plusOutline = made.sides.plus!!
+        val minusOutline = made.sides.minus!!
+        val depth = here.depth + 1
+        if (made.recipe.curve >= 0f) {
+            pending.addLast(Region(plusOutline, plus, nextSpread(random), depth))
+            pending.addLast(Region(minusOutline, minus, nextSpread(random), depth))
+        } else {
+            pending.addLast(Region(minusOutline, minus, nextSpread(random), depth))
+            pending.addLast(Region(plusOutline, plus, nextSpread(random), depth))
+        }
     }
 
     /**
      * One cut of [region] — straight or bowed — or null after [MaxTries] tries, which the caller reads as "leave
      * this pane whole".
      *
-     * Retrying is the whole reason this can fail: [GlassCut.split] and [GlassCut.bow] both refuse a cut that would
-     * not leave exactly two pieces, and both halves have to be worth keeping ([MinHalf] of the target area), so a
-     * pane that has been bitten into an awkward shape needs several angles offered before one lands.
+     * Retrying is the whole reason this can fail: a cut that would not leave exactly two pieces is refused, and both
+     * halves have to be worth keeping ([MinHalf] of the target area), so a pane that has been bitten into an awkward
+     * shape needs several angles offered before one lands.
+     *
+     * **The recipe is struck first and the pieces come from applying it**, rather than the two being made side by
+     * side. That is what makes the window a bake reproduces and the window a scrub re-cuts the same window by
+     * construction instead of by inspection.
      */
     @Suppress("LongParameterList") // The window's settings plus the region; every one is read on the first line.
     private fun cut(
@@ -311,7 +459,7 @@ object VitrallGenerator : Generator {
         target: Float,
         depth: Int,
         random: Random,
-    ): GlassCut.Cut? {
+    ): Made? {
         repeat(MaxTries) {
             val angle = cutAngle(grain, random)
             val box = GlassCut.bounds(region)
@@ -319,16 +467,17 @@ object VitrallGenerator : Generator {
             val py = GlassCut.centroidY(region) + (random.nextFloat() * 2f - 1f) * PointDrift * (box[3] - box[1])
             // A bow is likelier on the first cuts, where it becomes the window's tracery rather than a wobble.
             val bows = random.nextFloat() < min(1f, bowing * (if (depth <= EarlyDepth) EarlyBowGain else 1f))
-            val made = if (bows) {
-                GlassCut.bow(region, angle, px, py, bowReach(box, depth, random))
+            val recipe = if (bows) {
+                GlassTree.bowed(angle, px, py, bowReach(box, depth, random))
             } else {
-                GlassCut.Cut(
-                    GlassCut.split(region, px, py, cos(angle), sin(angle)),
-                    GlassCut.chord(region, px, py, cos(angle), sin(angle)),
-                )
+                GlassTree.straight(angle, px, py)
             }
-            val clean = made.panes.size == 2 && made.panes.all { GlassCut.area(it) > target * MinHalf }
-            if (clean) return made
+            val sides = recipe.cut(region)
+            val plus = sides.plus
+            val minus = sides.minus
+            val clean = plus != null && minus != null &&
+                GlassCut.area(plus) > target * MinHalf && GlassCut.area(minus) > target * MinHalf
+            if (clean) return Made(sides, recipe)
         }
         return null
     }
@@ -373,7 +522,7 @@ object VitrallGenerator : Generator {
         exp(ln(MinSpread) + random.nextFloat() * (ln(MaxSpread) - ln(MinSpread)))
 
     /**
-     * [region] as itself, or glazed into a run of two to four parallel courses.
+     * [region] left as one pane, or glazed into a run of two to four parallel courses, recorded onto [branch].
      *
      * Straight courses run near-vertical or near-horizontal, or — once in [LongEdgeChance] — along the pane's own
      * longest diagonal, which is where the reference's runs of parallel strips come from; the rest are concentric
@@ -382,20 +531,59 @@ object VitrallGenerator : Generator {
      * **The arc courses are gated on [bowing], where the reference model's are unconditional.** That is a departure
      * and it is the knob's fault, not the model's: *Curves* at `0` has to leave every cut straight, and a glazing
      * pass that keeps striking arcs there makes the rigid end of the knob a lie about a fifth of the window.
+     *
+     * @return the next unused pane index, this pane's courses having taken the ones from [first] up.
      */
-    private fun glaze(region: FloatArray, target: Float, bowing: Float, random: Random): List<FloatArray> {
-        if (random.nextFloat() >= GlazeChance || GlassCut.area(region) <= target * GlazeFloor) return listOf(region)
+    @Suppress("LongParameterList") // A pane, where it hangs, what it is numbered from, and the window's settings.
+    private fun glaze(
+        region: FloatArray,
+        branch: GlassTree.Branch,
+        first: Int,
+        target: Float,
+        bowing: Float,
+        random: Random,
+    ): Int {
+        if (random.nextFloat() >= GlazeChance || GlassCut.area(region) <= target * GlazeFloor) return whole(branch, first)
         val courses = min(MinStrips + random.nextInt(StripSpread), (GlassCut.area(region) / (target * StripFloor)).toInt())
-        if (courses < MinStrips) return listOf(region)
+        if (courses < MinStrips) return whole(branch, first)
         return if (random.nextFloat() < ArcCourseChance * bowing) {
-            arcCourses(region, courses, random)
+            arcCourses(region, branch, first, courses, random)
         } else {
-            straightCourses(region, courses, random)
+            straightCourses(region, branch, first, courses, random)
         }
     }
 
+    /** [branch] left as the single pane it already is, numbered [index]. */
+    private fun whole(branch: GlassTree.Branch, index: Int): Int {
+        branch.index = index
+        return index + 1
+    }
+
+    /**
+     * [node] cut into the course it keeps and the remainder that carries on, the remainder being handed back.
+     *
+     * A run of courses is a chain rather than a fan: each cut takes one strip off what is left, so the tree under a
+     * glazed pane leans all the way to one side. That costs nothing — it is four deep at most — and it is what makes
+     * a course an ordinary cut, interpolable like every other.
+     */
+    private fun course(node: GlassTree.Branch, cut: GlassTree.Cutting, index: Int): GlassTree.Branch {
+        val kept = GlassTree.Branch()
+        val rest = GlassTree.Branch()
+        node.cut = cut
+        node.plus = kept
+        node.minus = rest
+        kept.index = index
+        return rest
+    }
+
     /** [count] courses cut off [region] by parallel lines — the plain leaded band. */
-    private fun straightCourses(region: FloatArray, count: Int, random: Random): List<FloatArray> {
+    private fun straightCourses(
+        region: FloatArray,
+        branch: GlassTree.Branch,
+        first: Int,
+        count: Int,
+        random: Random,
+    ): Int {
         val angle = if (random.nextFloat() < LongEdgeChance) {
             GlassCut.longestDiagonal(region) + (random.nextFloat() * 2f - 1f) * LongEdgeJitter
         } else {
@@ -409,25 +597,31 @@ object VitrallGenerator : Generator {
             val t = region[i] * nx + region[i + 1] * ny
             lo = min(lo, t); hi = max(hi, t)
         }
-        val out = ArrayList<FloatArray>(count)
         var rest = region
+        var node = branch
+        var index = first
         for (s in 1 until count) {
             val at = lo + (hi - lo) * (s.toFloat() / count + (random.nextFloat() * 2f - 1f) * StripJitter)
             // (nx·at, ny·at) projects to `at` on the normal, so it sits on the cut line.
             val halves = GlassCut.split(rest, nx * at, ny * at, cos(angle), sin(angle))
             if (halves.size != 2) continue
-            out.add(halves[0])
+            node = course(node, GlassTree.straight(angle, nx * at, ny * at), index++)
             rest = halves[1]
         }
-        out.add(rest)
-        return out
+        return whole(node, index)
     }
 
     /**
      * [count] courses cut off [region] by concentric circles struck from a center outside it — the curved glazing a
      * rose window is leaded in.
      */
-    private fun arcCourses(region: FloatArray, count: Int, random: Random): List<FloatArray> {
+    private fun arcCourses(
+        region: FloatArray,
+        branch: GlassTree.Branch,
+        first: Int,
+        count: Int,
+        random: Random,
+    ): Int {
         val box = GlassCut.bounds(region)
         val reach = hypot(box[2] - box[0], box[3] - box[1])
         val away = random.nextFloat() * GlassCut.Turn
@@ -440,17 +634,17 @@ object VitrallGenerator : Generator {
             val d = hypot(region[i] - cx, region[i + 1] - cy)
             near = min(near, d); far = max(far, d)
         }
-        val courses = ArrayList<FloatArray>(count)
         var rest = region
+        var node = branch
+        var index = first
         for (s in 1 until count) {
             val at = near + (far - near) * (s.toFloat() / count + (random.nextFloat() * 2f - 1f) * CourseJitter)
             val bowed = GlassCut.bowAbout(rest, cx, cy, at)
             if (bowed.panes.size != 2) continue
-            courses.add(bowed.panes[0])
+            node = course(node, GlassTree.about(cx, cy, at, rest), index++)
             rest = bowed.panes[1]
         }
-        courses.add(rest)
-        return courses
+        return whole(node, index)
     }
 
     /**
