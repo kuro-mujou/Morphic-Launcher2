@@ -5,11 +5,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -213,6 +216,8 @@ fun StudioHistoryButtons(
  * @param canResetView whether the preview has been panned or zoomed at all. Dimmed rather than absent, per this file's
  *   rule: its availability changes as the canvas is dragged, and a control that came and went under the finger using
  *   it would be worse than a gray one — and gray still says the view *can* be put back.
+ * @param vertical stacks the pair instead of setting them side by side, for the side arrangement — where this sits in
+ *   a column of chrome down the leading edge and a horizontal pill would be the one thing across it.
  */
 @Composable
 fun StudioViewButtons(
@@ -222,11 +227,11 @@ fun StudioViewButtons(
     onCycleBackground: () -> Unit,
     onResetView: () -> Unit,
     modifier: Modifier = Modifier,
+    vertical: Boolean = false,
 ) {
-    Row(
-        modifier = modifier.studioSurface(hazeState, shape = CircleShape),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    // **The pill is the same object on either axis** — one surface, one blur, the same two children in the same
+    // order. Only the direction it runs in changes, so the pair cannot come to look like two different controls.
+    val pair: @Composable () -> Unit = {
         // The swatch is smaller than a glyph slot and stays so — it is a *picture* of a backdrop, and at 40dp it would
         // read as a tile rather than as a button's contents. Centered in a full-size cell instead, so the pair lines
         // up and both halves have the same press target.
@@ -246,6 +251,13 @@ fun StudioViewButtons(
             enabled = canResetView,
             onClick = onResetView,
         )
+    }
+
+    val surface = modifier.studioSurface(hazeState, shape = CircleShape)
+    if (vertical) {
+        Column(modifier = surface, horizontalAlignment = Alignment.CenterHorizontally) { pair() }
+    } else {
+        Row(modifier = surface, verticalAlignment = Alignment.CenterVertically) { pair() }
     }
 }
 
@@ -270,8 +282,11 @@ fun StudioToolBar(
     selected: StudioTool?,
     onSelect: (StudioTool?) -> Unit,
     modifier: Modifier = Modifier,
+    vertical: Boolean = false,
 ) {
-    StudioBottomBar(hazeState = hazeState, modifier = modifier) {
+    // **The entries are the same object either way**, which is the point of taking an axis rather than growing a
+    // second bar: a tool that appeared on one and not the other would be a tool the user cannot reach in one posture.
+    val entries: @Composable () -> Unit = {
         tools.forEach { tool ->
             StudioIconButton(
                 icon = tool.icon,
@@ -280,6 +295,11 @@ fun StudioToolBar(
                 onClick = { onSelect(tool.takeIf { it != selected }) },
             )
         }
+    }
+    if (vertical) {
+        StudioSideBar(hazeState = hazeState, modifier = modifier) { entries() }
+    } else {
+        StudioBottomBar(hazeState = hazeState, modifier = modifier) { entries() }
     }
 }
 
@@ -301,6 +321,35 @@ fun StudioToolBar(
  *
  * @param content laid out in a row; a rail of [StudioIconButton]s is what this is shaped for.
  */
+/**
+ * [StudioBottomBar] stood on its end: the tools down the leading edge, for a window too short to spend a band of its
+ * height on them.
+ *
+ * The pair is what the bottom bar's own KDoc anticipated — "the piece a future landscape arrangement re-points at a
+ * side rail". Same glass, same shape, same 56dp across; only the axis differs, so the two cannot drift into looking
+ * like different surfaces.
+ *
+ * @param content laid out in a column; a rail of [StudioIconButton]s is what this is shaped for.
+ */
+@Composable
+fun StudioSideBar(
+    hazeState: HazeState,
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(24.dp),
+    width: Dp = 56.dp,
+    content: @Composable ColumnScope.() -> Unit = {},
+) {
+    Column(
+        modifier = modifier
+            .width(width)
+            .studioSurface(hazeState, shape = shape)
+            .padding(vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        content = content,
+    )
+}
+
 @Composable
 fun StudioBottomBar(
     hazeState: HazeState,

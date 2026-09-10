@@ -10,10 +10,13 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -47,6 +50,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
@@ -56,6 +60,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.picker.AppPicker
@@ -304,7 +309,24 @@ fun IconStudioScreen(
             // — with a height it actually wants, and capping it at the *list's* number cut the hue strip off on a
             // tablet, where there was room for all of it. `heightIn` only bounds, so on a tall window the picker
             // still measures to its own size; the bound is there for the one window that cannot hold it.
-            val toolPanelMaxHeight = minOf(panelSpace, 320.dp)
+
+
+            // **Which arrangement the controls take, and it is the window's height that decides.** Only a phone on
+            // its side lacks the height for a bottom stack; every other posture has it and keeps the arrangement the
+            // studio was designed in. Not `isLandscape`: a tablet on its side is tall, and moving its controls to the
+            // edge would spend the width it has on a problem it does not.
+            val sideLayout = currentDeviceConfiguration().isShortWindow
+            val canvasChrome = StudioCanvasChrome(
+                topInset = with(density) { topChrome.toPx() },
+                panelEdge = if (sideLayout) StudioPanelEdge.START else StudioPanelEdge.BOTTOM,
+            )
+
+            // **Side-on, the panel is bounded by the column it sits in rather than by a number here.** That stack is
+            // already inside a box inset below the chrome, so the constraint reaching the panel *is* the height it may
+            // have; a cap on top of it could only make the panel shorter than the room it has, which on the one
+            // posture short of room is the wrong direction. Standing up, the caps above apply as they did.
+            val toolPanelMaxHeight = if (sideLayout) Dp.Infinity else minOf(panelSpace, 320.dp)
+            val pickerMaxHeight = if (sideLayout) Dp.Infinity else panelSpace
 
             // The area a floating panel may occupy: the canvas less `uiInsets`. Whole pixels, since that is what the
             // placement arithmetic works in.
@@ -331,7 +353,7 @@ fun IconStudioScreen(
             StudioCanvas(
                 background = state.background,
                 workspace = state.workspace,
-                topInset = topChrome,
+                chrome = canvasChrome,
                 onWorkspaceChange = viewModel::setWorkspace,
                 onWorkspaceCommit = viewModel::commitWorkspace,
                 onTap = dismissChrome,
@@ -475,69 +497,10 @@ fun IconStudioScreen(
                 )
             }
 
-            // The bottom of the workspace: the tool bar, with anything floating above it in the same stack. One
-            // `uiInsetsPadding` for the pair, so the gap between them is not inset twice.
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    // The bottom chrome is the only thing on this screen a keyboard can cover, and the color picker's
-                    // hex field is the only thing that raises one — so the whole stack rides above it rather than the
-                    // panel alone, which would have left the rail underneath the keys. Zero when no keyboard is up, so
-                    // it costs the other panels nothing.
-                    .imePadding()
-                    .uiInsetsPadding()
-                    .padding(12.dp)
-                    .fillMaxWidth(),
-                // **Start, not end, and the layer rail is why.** The trailing end is the obvious place, and
-                // was out of the way of everything that existed at the time. The rail now runs down that edge, and
-                // the panel is what brings them together: opening one pushes this row up into the rail's vertical
-                // span, so a trailing row would meet the tiles rather than clear them. The leading end is the only
-                // side with nothing else on it — the icon bound has already shifted the other way for the same
-                // reason (`IconBoundShift`).
-                //
-                // Only this row moves. Everything else in this column fills the width, so the alignment does not
-                // reach the panel or the bar.
-                horizontalAlignment = Alignment.Start,
-            ) {
-                Row(
-                    modifier = Modifier.padding(bottom = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    // **The view's two controls on one pill, the subject's on another** — see [StudioViewButtons].
-                    // The grouping is the whole of what says these are different questions: the first pill is *how
-                    // the work is shown*, the second is *which app it is shown on*.
-                    StudioViewButtons(
-                        background = state.background,
-                        canResetView = !state.workspace.previewAtRest,
-                        hazeState = screenHaze,
-                        onCycleBackground = viewModel::cycleBackground,
-                        onResetView = viewModel::resetPreviewView,
-                    )
-                    // **One slot, and the subject decides what is in it** — which is the sum type earning its keep
-                    // rather than two buttons each checking whether they apply. Both answer the same question, "which
-                    // app am I looking at?", and they differ because the answer means different things: a global
-                    // recipe is *previewed* on an app, so any app will do and a shuffle is the fastest way through
-                    // several; an individual recipe *belongs* to one, so it is chosen.
-                    when (state.subject) {
-                        is StudioSubject.Global -> StudioPillButton(
-                            icon = Icons.Default.Casino,
-                            contentDescription = "Preview on another app",
-                            hazeState = screenHaze,
-                            onClick = viewModel::shuffleSample,
-                        )
-
-                        is StudioSubject.App -> StudioPillButton(
-                            icon = Icons.Default.Apps,
-                            contentDescription = "Edit another app",
-                            hazeState = screenHaze,
-                            onClick = viewModel::chooseAnotherApp,
-                        )
-
-                        // The picker is already up, so there is nothing to change to.
-                        StudioSubject.Unchosen -> Unit
-                    }
-                }
+            // **The controls, in one of two arrangements.** They are the same three things either way — the session
+            // pills, the panel slot and the tool rail — so they are built once here and merely *placed* twice. A
+            // second copy of any of them would be a control that exists in one posture and not the other, which is
+            // the failure this shape makes impossible.
 
                 // Above the bar it belongs to, and below the cycle button, which belongs to neither. Absent rather
                 // than empty when nothing is chosen: the picker covers the screen then, and a panel editing a recipe
@@ -579,6 +542,65 @@ fun IconStudioScreen(
                 val slide = MaterialTheme.motionScheme.defaultSpatialSpec<IntOffset>()
                 val fade = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
                 val resize = MaterialTheme.motionScheme.defaultSpatialSpec<IntSize>()
+
+            // The small buttons that ride with the panel: how the work is shown, and which app it is shown on.
+            val sessionPills: @Composable () -> Unit = {
+                // **They run along the same axis as everything else in the stack.** Standing up that is a row above
+                // the panel; side-on it is a column beside it, because a horizontal cluster in a column of vertical
+                // chrome is the one thing lying across the grain — and on the posture with width to spare it is width
+                // that a row spends.
+                val cluster: @Composable () -> Unit = {
+                    // **The view's two controls on one pill, the subject's on another** — see [StudioViewButtons].
+                    // The grouping is the whole of what says these are different questions: the first pill is *how
+                    // the work is shown*, the second is *which app it is shown on*.
+                    StudioViewButtons(
+                        background = state.background,
+                        canResetView = !state.workspace.previewAtRest,
+                        hazeState = screenHaze,
+                        onCycleBackground = viewModel::cycleBackground,
+                        onResetView = viewModel::resetPreviewView,
+                        vertical = sideLayout,
+                    )
+                    // **One slot, and the subject decides what is in it** — which is the sum type earning its keep
+                    // rather than two buttons each checking whether they apply. Both answer the same question, "which
+                    // app am I looking at?", and they differ because the answer means different things: a global
+                    // recipe is *previewed* on an app, so any app will do and a shuffle is the fastest way through
+                    // several; an individual recipe *belongs* to one, so it is chosen.
+                    when (state.subject) {
+                        is StudioSubject.Global -> StudioPillButton(
+                            icon = Icons.Default.Casino,
+                            contentDescription = "Preview on another app",
+                            hazeState = screenHaze,
+                            onClick = viewModel::shuffleSample,
+                        )
+
+                        is StudioSubject.App -> StudioPillButton(
+                            icon = Icons.Default.Apps,
+                            contentDescription = "Edit another app",
+                            hazeState = screenHaze,
+                            onClick = viewModel::chooseAnotherApp,
+                        )
+
+                        // The picker is already up, so there is nothing to change to.
+                        StudioSubject.Unchosen -> Unit
+                    }
+                }
+                if (sideLayout) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) { cluster() }
+                } else {
+                    Row(
+                        modifier = Modifier.padding(bottom = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) { cluster() }
+                }
+            }
+
+            // The panel, given where to sit by whichever arrangement places it.
+            val panelSlot: @Composable (Modifier) -> Unit = { slotModifier ->
                 AnimatedContent(
                     targetState = picking to open,
                     contentKey = { (request, panel) ->
@@ -588,23 +610,28 @@ fun IconStudioScreen(
                             else -> PanelSlot.NONE
                         }
                     },
+                    // **The slide runs along the axis the rail is on**, since the whole of what it says is "this
+                    // came out from behind that button". Sliding a side panel upward would point at the bottom of the
+                    // screen, where nothing opened it.
                     transitionSpec = {
-                        val enter = fadeIn(fade) + slideInVertically(slide) { it / 6 }
-                        val exit = fadeOut(fade) + slideOutVertically(slide) { it / 6 }
+                        val enter = fadeIn(fade) + if (sideLayout) {
+                            slideInHorizontally(slide) { -it / 6 }
+                        } else {
+                            slideInVertically(slide) { it / 6 }
+                        }
+                        val exit = fadeOut(fade) + if (sideLayout) {
+                            slideOutHorizontally(slide) { -it / 6 }
+                        } else {
+                            slideOutVertically(slide) { it / 6 }
+                        }
                         enter togetherWith exit using SizeTransform { _, _ -> resize }
                     },
-                    // Bottom-anchored, so a slot that is not yet its full height keeps its lower edge against the rail
-                    // and opens *upward*. Top-aligned — the default — would pin the panel's head where it will end up
-                    // and grow it downward over the rail, which is the opposite of coming out from behind it.
-                    contentAlignment = Alignment.BottomCenter,
+                    // Anchored to the corner the rail is on, so a slot short of its full size keeps that edge against
+                    // the rail and opens away from it. The default would pin the panel's head where it will end up and
+                    // grow it over the rail, which is the opposite of coming out from behind it.
+                    contentAlignment = if (sideLayout) Alignment.BottomStart else Alignment.BottomCenter,
                     label = "studio panel",
-                    // **Bounded and centered, because a panel is a column of labeled rows and not a sheet.** Filling
-                    // the width put a rotation slider on a 1100dp throw across a tablet in landscape, with its label
-                    // at one edge of the screen and its value at the other — the pair the row exists to associate.
-                    // The bar and the buttons below fill as before; only the panel is held to a readable column.
-                    modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .widthIn(max = 480.dp),
+                    modifier = slotModifier,
                     // The outgoing panel is composed with the state it was opened on, which is what lets a closing
                     // picker keep drawing its request after `colorPicker.request` is already null.
                 ) { (request, panel) ->
@@ -627,7 +654,7 @@ fun IconStudioScreen(
                     ) {
                         when {
                             request != null -> StudioColorPickerPanel(
-                                maxHeight = panelSpace,
+                                maxHeight = pickerMaxHeight,
                                 modifier = Modifier.padding(vertical = 6.dp),
                                 request = request,
                                 hazeState = screenHaze,
@@ -654,23 +681,16 @@ fun IconStudioScreen(
                         }
                     }
                 }
-                // Outside the transition, so it is bound to the picker being *open* rather than to whichever panel is
-                // still on screen — a handler inside would linger for the length of the exit. Declared after the
-                // screen's own handler, so back closes the picker before it leaves the studio, which is the same
-                // layering the pack browser below relies on.
-                if (picking != null) BackHandler { colorPicker.close() }
+            }
 
+            val toolRail: @Composable (Modifier) -> Unit = { barModifier ->
                 StudioToolBar(
                     hazeState = screenHaze,
                     // Derived from the selection, so the composite offers only what applies to it — see
                     // [StudioTool.appliesTo].
                     tools = StudioTool.entries.filter { it.appliesTo(state.target) },
-                    // Centered explicitly, because the bar wraps its contents now and this column aligns to the
-                    // start for the row of session buttons above. `ColumnScope.align` is the per-child override,
-                    // so the two say what they mean rather than one of them settling for the other's answer.
-                    modifier = Modifier
-                        .padding(top = 6.dp)
-                        .align(Alignment.CenterHorizontally),
+                    modifier = barModifier,
+                    vertical = sideLayout,
                     selected = tool,
                     // Choosing a tool closes the picker **and the rail's menu**, so the bar always opens what it says
                     // it opens. Without the first a press would swap the bar's highlight and leave the color panel
@@ -683,6 +703,86 @@ fun IconStudioScreen(
                         tool = it
                     },
                 )
+            }
+
+            if (sideLayout) {
+                // **Rail, panel and pills down the leading edge; the icon away to the end.** A phone on its side has
+                // width to spare and no height at all, so a sheet growing from the bottom is the one thing this window
+                // cannot afford — it buried the icon and pushed the rail off the screen entirely. Turned ninety
+                // degrees the same three pieces spend width instead, which is the axis there is some of, and the icon
+                // rests clear of them (`StudioPanelEdge.START`).
+                //
+                // Seated below the top chrome rather than over it, so the panel's head cannot reach the back button.
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = topChrome)
+                        .imePadding()
+                        .uiInsetsPadding()
+                        .padding(12.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.align(Alignment.CenterStart),
+                        // Bottom, because that is the edge the pills sit on. The rail overrides it for itself.
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        // Centred against the panel rather than against the screen: the rail opens the thing beside
+                        // it, so the two read as one control and its surface.
+                        toolRail(Modifier.align(Alignment.CenterVertically))
+                        panelSlot(
+                            Modifier
+                                .padding(start = 6.dp)
+                                .widthIn(max = 320.dp),
+                        )
+                        // **The pills stand at the panel's foot, on its outer side, and travel with it** — the
+                        // portrait relationship turned with everything else: there they ride directly above the
+                        // panel, here directly beside it.
+                        Box(Modifier.padding(start = 8.dp)) { sessionPills() }
+                    }
+                }
+            } else {
+            // The bottom of the workspace: the tool bar, with anything floating above it in the same stack. One
+            // `uiInsetsPadding` for the pair, so the gap between them is not inset twice.
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    // The bottom chrome is the only thing on this screen a keyboard can cover, and the color picker's
+                    // hex field is the only thing that raises one — so the whole stack rides above it rather than the
+                    // panel alone, which would have left the rail underneath the keys. Zero when no keyboard is up, so
+                    // it costs the other panels nothing.
+                    .imePadding()
+                    .uiInsetsPadding()
+                    .padding(12.dp)
+                    .fillMaxWidth(),
+                // **Start, not end, and the layer rail is why.** The trailing end is the obvious place, and
+                // was out of the way of everything that existed at the time. The rail now runs down that edge, and
+                // the panel is what brings them together: opening one pushes this row up into the rail's vertical
+                // span, so a trailing row would meet the tiles rather than clear them. The leading end is the only
+                // side with nothing else on it — the icon bound has already shifted the other way for the same
+                // reason (`IconBoundShift`).
+                //
+                // Only this row moves. Everything else in this column fills the width, so the alignment does not
+                // reach the panel or the bar.
+                horizontalAlignment = Alignment.Start,
+            ) {
+                sessionPills()
+                panelSlot(
+                    // **Bounded and centred, because a panel is a column of labelled rows and not a sheet.** Filling
+                    // the width put a rotation slider on a 1100dp throw across a tablet in landscape, with its label
+                    // at one edge of the screen and its value at the other — the pair the row exists to associate.
+                    Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .widthIn(max = 480.dp),
+                )
+                toolRail(
+                    // Centred explicitly, because the bar wraps its contents and this column aligns to the start for
+                    // the row of session buttons above. `ColumnScope.align` is the per-child override, so the two say
+                    // what they mean rather than one settling for the other's answer.
+                    Modifier
+                        .padding(top = 6.dp)
+                        .align(Alignment.CenterHorizontally),
+                )
+                }
             }
 
             // Reachable again now that the Source section is back. Full-screen over everything, including the bar:

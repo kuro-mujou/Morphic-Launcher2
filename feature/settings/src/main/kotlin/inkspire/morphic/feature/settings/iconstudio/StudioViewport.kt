@@ -1,5 +1,6 @@
 package inkspire.morphic.feature.settings.iconstudio
 
+import androidx.compose.ui.geometry.Offset
 import inkspire.morphic.data.settings.IconStudioWorkspace
 import kotlin.math.min
 
@@ -18,6 +19,29 @@ internal data class StudioIconBound(val left: Float, val top: Float, val side: F
  * How much of the canvas's shorter side the icon's bound takes at rest. Large enough to work in, short of edge to edge.
  */
 private const val IconBoundFraction = 0.62f
+
+/**
+ * Which edge of the canvas the control panel occupies — **the edge the icon rests away from**.
+ *
+ * The studio's resting arrangement has one rule: put the work as far from the controls as the canvas allows, clear of
+ * the chrome. [BOTTOM] is the panel as a sheet along the bottom, so the icon anchors to the top; [START] is the panel
+ * as a column down the leading edge, so it anchors to the end. Naming the *panel's* edge rather than the icon's is
+ * what keeps the two from being set independently — an icon anchored to the same side as its panel is a preview you
+ * cannot see while editing it, and nothing else in the layout would object.
+ */
+enum class StudioPanelEdge { BOTTOM, START }
+
+/**
+ * The chrome the icon's resting place is resolved against: how much of the canvas's top the pill row takes, and which
+ * edge the control panel occupies.
+ *
+ * **One parameter because they are one fact.** Passed separately, a caller could hand the viewport a top inset from
+ * the arrangement it is in and an edge from the one it is not — and the failure is silent: the icon simply rests
+ * somewhere no control is, or behind one. They are set together at the single place that knows the arrangement.
+ *
+ * In canvas pixels, matching everything else the viewport works in.
+ */
+data class StudioCanvasChrome(val topInset: Float, val panelEdge: StudioPanelEdge)
 
 /**
  * How far toward the start the resting bound sits, as a fraction of the canvas's width.
@@ -83,11 +107,11 @@ internal val StudioZoomRange = 0.5f..3f
 internal fun studioIconBound(
     canvasWidth: Float,
     canvasHeight: Float,
-    topInset: Float,
     workspace: IconStudioWorkspace,
+    chrome: StudioCanvasChrome,
 ): StudioIconBound {
     val side = restingSide(canvasWidth, canvasHeight) * workspace.zoom
-    val center = restingCenter(canvasWidth, canvasHeight, topInset)
+    val center = restingCenter(canvasWidth, canvasHeight, chrome)
     // **Clamped through the same [panBound] the gesture writes through**, rather than through a second expression
     // saying the same thing. They were two, agreeing because both said "keep the center on the canvas"; the moment
     // that rule gained a second regime, two copies of it would have been two chances to disagree about where a
@@ -122,18 +146,17 @@ internal fun studioIconBound(
  * entry; turning the viewport would mean the preview no longer showed the icon as the launcher draws it, which is the
  * one thing this canvas must always do.
  *
- * @param centroidX the point between the fingers, in canvas pixels. For a one-finger drag this is the finger, and the
- *   zoom ratio is 1, so it has no effect.
+ * @param centroid the point between the fingers, in canvas pixels. For a one-finger drag this is the finger, and the
+ *   zoom ratio is 1, so it has no effect. Taken as an [Offset] rather than unpacked, which is the shape
+ *   `detectTransformGestures` already reports and so is one fewer place for an x to be paired with the wrong y.
  * @param zoomBy the ratio this frame multiplies the zoom by — `1f` for a pure drag.
  */
 internal fun IconStudioWorkspace.pinched(
     canvasWidth: Float,
     canvasHeight: Float,
-    topInset: Float,
-    centroidX: Float,
-    centroidY: Float,
-    dragX: Float,
-    dragY: Float,
+    chrome: StudioCanvasChrome,
+    centroid: Offset,
+    drag: Offset,
     zoomBy: Float,
 ): IconStudioWorkspace {
     if (canvasWidth <= 0f || canvasHeight <= 0f) return this
@@ -144,12 +167,12 @@ internal fun IconStudioWorkspace.pinched(
     // held still — a pinch that pans, which reads as the canvas slipping.
     val ratio = if (zoom == 0f) 1f else newZoom / zoom
 
-    val resting = restingCenter(canvasWidth, canvasHeight, topInset)
+    val resting = restingCenter(canvasWidth, canvasHeight, chrome)
     val centerX = resting.first + panX * canvasWidth
     val centerY = resting.second + panY * canvasHeight
 
-    val zoomedX = centroidX + (centerX - centroidX) * ratio + dragX
-    val zoomedY = centroidY + (centerY - centroidY) * ratio + dragY
+    val zoomedX = centroid.x + (centerX - centroid.x) * ratio + drag.x
+    val zoomedY = centroid.y + (centerY - centroid.y) * ratio + drag.y
 
     // **The bound at the zoom this frame lands on, not the one it started at** — the clamp's regime depends on
     // whether the icon covers the canvas, so a pinch that grows past it has to be bounded by what it grew into.
@@ -297,13 +320,25 @@ private fun restingSide(canvasWidth: Float, canvasHeight: Float): Float =
     min(canvasWidth, canvasHeight) * IconBoundFraction
 
 /**
- * Where the bound's center sits with nothing panned: hard against the chrome at the top, and shifted off the rail's
- * edge horizontally.
+ * Where the bound's center sits with nothing panned — away from the panel, clear of the chrome, off the rail.
  *
  * Derived from the **resting** side rather than the zoomed one, which is what keeps the anchor still as the zoom
  * changes — a center that moved with the size would make [pinched]'s algebra chase itself.
+ *
+ * [StudioPanelEdge.BOTTOM] anchors the icon hard against the chrome at the top and shifts it off the rail's edge
+ * horizontally. [StudioPanelEdge.START] is the same rule turned ninety degrees: the panel is a column down the
+ * leading edge, so the icon anchors against the **end** — with [IconBoundShift] now measuring the gap it keeps from
+ * the rail rather than a nudge away from a centered position — and takes the middle of what is left below the chrome
+ * vertically, there being no second control on that axis to lean away from.
  */
-private fun restingCenter(canvasWidth: Float, canvasHeight: Float, topInset: Float): Pair<Float, Float> {
+private fun restingCenter(canvasWidth: Float, canvasHeight: Float, chrome: StudioCanvasChrome): Pair<Float, Float> {
     val side = restingSide(canvasWidth, canvasHeight)
-    return (canvasWidth / 2f - canvasWidth * IconBoundShift) to (topInset + side / 2f)
+    val top = chrome.topInset
+    return when (chrome.panelEdge) {
+        StudioPanelEdge.BOTTOM ->
+            (canvasWidth / 2f - canvasWidth * IconBoundShift) to (top + side / 2f)
+
+        StudioPanelEdge.START ->
+            (canvasWidth * (1f - IconBoundShift) - side / 2f) to (top + (canvasHeight - top) / 2f)
+    }
 }

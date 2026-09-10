@@ -20,7 +20,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.model.icon.PreviewBackground
 import inkspire.morphic.data.settings.IconStudioWorkspace
@@ -60,7 +59,7 @@ internal val CheckerDark = Color(0xFF8A8A8A)
  * rail's quick menu, and the color picker. A tap is unambiguous against the pan gesture because a pan has to cross
  * touch slop before it claims anything.
  *
- * @param topInset how much of the canvas's top edge the chrome above occupies. The resting bound begins immediately
+ * @param chrome the pill row's extent and the edge the control panel takes. The resting bound begins immediately
  *   below it; the canvas itself still paints edge to edge, because the backdrop is the *window's* and the insets here
  *   are content padding, as everywhere else in this launcher.
  * @param onWorkspaceChange the arrangement as it is being dragged — live, uncommitted, every frame.
@@ -71,7 +70,7 @@ internal val CheckerDark = Color(0xFF8A8A8A)
 fun StudioCanvas(
     background: PreviewBackground,
     workspace: IconStudioWorkspace,
-    topInset: Dp,
+    chrome: StudioCanvasChrome,
     onWorkspaceChange: (IconStudioWorkspace) -> Unit,
     onWorkspaceCommit: () -> Unit,
     onTap: () -> Unit,
@@ -80,7 +79,6 @@ fun StudioCanvas(
 ) {
     val density = LocalDensity.current
     val checkerPx = with(density) { 12.dp.toPx() }
-    val topInsetPx = with(density) { topInset.toPx() }
 
     // **Read from inside the gesture rather than keyed on**, which is the same trap `StudioStepperButton` documents:
     // keying `pointerInput` on the workspace would restart the gesture on its own first frame, so a pinch would be
@@ -106,7 +104,7 @@ fun StudioCanvas(
         // share again.
         val canvasWidth = with(density) { maxWidth.toPx() }
         val canvasHeight = with(density) { maxHeight.toPx() }
-        val bound = studioIconBound(canvasWidth, canvasHeight, topInsetPx, workspace)
+        val bound = studioIconBound(canvasWidth, canvasHeight, workspace, chrome)
 
         // **Snapped to whole pixels once, and both readers take these three numbers.** The bound is the icon's
         // square: the checkerboard is painted into it and the icon is laid out in it, and those were two derivations
@@ -136,11 +134,9 @@ fun StudioCanvas(
                             currentWorkspace.pinched(
                                 canvasWidth = size.width.toFloat(),
                                 canvasHeight = size.height.toFloat(),
-                                topInset = topInsetPx,
-                                centroidX = centroid.x,
-                                centroidY = centroid.y,
-                                dragX = drag.x,
-                                dragY = drag.y,
+                                chrome = chrome,
+                                centroid = centroid,
+                                drag = drag,
                                 zoomBy = zoomBy,
                             ),
                         )
