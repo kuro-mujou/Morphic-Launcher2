@@ -735,23 +735,31 @@ fun IconStudioScreen(
                         .uiInsetsPadding()
                         .padding(12.dp),
                 ) {
+                    // **Two rows, because two different things are being lined up.** The rail is centred on the
+                    // panel; the pills sit on its foot. As three siblings of one row those two rules collided — a
+                    // row is as tall as its tallest child, so a *short* panel (More is one control) made the rail
+                    // the tallest, and the panel and pills dropped to the rail's foot with the rail standing over
+                    // them. The pairing that shares a baseline is nested, and the outer row then has one job.
                     Row(
                         modifier = Modifier.align(Alignment.CenterStart),
-                        // Bottom, because that is the edge the pills sit on. The rail overrides it for itself.
-                        verticalAlignment = Alignment.Bottom,
-                    ) {
                         // Centred against the panel rather than against the screen: the rail opens the thing beside
-                        // it, so the two read as one control and its surface.
-                        toolRail(Modifier.align(Alignment.CenterVertically))
-                        panelSlot(
-                            Modifier
-                                .padding(start = 6.dp)
-                                .widthIn(max = 320.dp),
-                        )
-                        // **The pills stand at the panel's foot, on its outer side, and travel with it** — the
-                        // portrait relationship turned with everything else: there they ride directly above the
-                        // panel, here directly beside it.
-                        Box(Modifier.padding(start = 8.dp)) { sessionPills() }
+                        // it, so the two read as one control and its surface. Centring is symmetric, so this is the
+                        // same arrangement whichever of the two is the taller — which is what makes it hold for a
+                        // panel of any length rather than only for the long ones.
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        toolRail(Modifier)
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            panelSlot(
+                                Modifier
+                                    .padding(start = 6.dp)
+                                    .widthIn(max = 320.dp),
+                            )
+                            // **The pills stand at the panel's foot, on its outer side, and travel with it** — the
+                            // portrait relationship turned with everything else: there they ride directly above the
+                            // panel, here directly beside it.
+                            Box(Modifier.padding(start = 8.dp)) { sessionPills() }
+                        }
                     }
                 }
             } else {
