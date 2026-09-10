@@ -60,6 +60,20 @@ data class StudioCanvasChrome(val topInset: Float, val panelEdge: StudioPanelEdg
 private const val IconBoundShift = 0.08f
 
 /**
+ * How far in from the **end** the resting bound sits in the side arrangement, as a fraction of the canvas's width.
+ *
+ * Its own number rather than [IconBoundShift] reused, because the two are doing different amounts of work. That one
+ * nudges a *centred* bound off the rail and has half a canvas of slack behind it; this one anchors the bound hard
+ * *against* the end, so what it leaves is the only thing between the icon and the rail. Sharing the 8% left five dp
+ * of it on a phone in landscape — the icon and the rail read as touching, which is the very thing both constants
+ * exist to prevent.
+ *
+ * A fraction rather than the rail's width in dp, on [IconBoundShift]'s own argument, and it is the safer choice here
+ * for a second reason: this arrangement runs on one posture, so it sees one range of canvas widths.
+ */
+private const val SideIconEndShift = 0.11f
+
+/**
  * How far the bound's center may be pushed, as a fraction of the canvas past its edges.
  *
  * Zero, which is to say the **center stays on the canvas** — so at the very worst a quarter of the icon is visible in
@@ -327,8 +341,8 @@ private fun restingSide(canvasWidth: Float, canvasHeight: Float): Float =
  *
  * [StudioPanelEdge.BOTTOM] anchors the icon hard against the chrome at the top and shifts it off the rail's edge
  * horizontally. [StudioPanelEdge.START] is the same rule turned ninety degrees: the panel is a column down the
- * leading edge, so the icon anchors against the **end** — with [IconBoundShift] now measuring the gap it keeps from
- * the rail rather than a nudge away from a centered position — and takes the middle of what is left below the chrome
+ * leading edge, so the icon anchors against the **end** — by [SideIconEndShift], which is the gap it keeps from the
+ * rail rather than a nudge away from a centered position — and takes the middle of what is left below the chrome
  * vertically, there being no second control on that axis to lean away from.
  */
 private fun restingCenter(canvasWidth: Float, canvasHeight: Float, chrome: StudioCanvasChrome): Pair<Float, Float> {
@@ -339,6 +353,6 @@ private fun restingCenter(canvasWidth: Float, canvasHeight: Float, chrome: Studi
             (canvasWidth / 2f - canvasWidth * IconBoundShift) to (top + side / 2f)
 
         StudioPanelEdge.START ->
-            (canvasWidth * (1f - IconBoundShift) - side / 2f) to (top + (canvasHeight - top) / 2f)
+            (canvasWidth * (1f - SideIconEndShift) - side / 2f) to (top + (canvasHeight - top) / 2f)
     }
 }
