@@ -116,38 +116,30 @@ WallpaperRecipe ─┐
 | The editor screen (preview + Designs/Color/Style/Filters panels) | **`feature:wallpaperstudio`** (new) | MVVM per screen, mirrors `feature:settings/iconstudio` |
 | Community feed + sharing | deferred | its own feature + backend, out of this plan |
 
-### Motion: the swipe is a discrete re-seed with an animated transition — not a continuous phase
+### Motion: the swipe scrubs a geometric morph — moved to its own plan
 
-The studio's premium feel is a **motion layer** the first walkthrough missed: swiping mutates the current design in
-place. A video analysis (Gemini, 2026-08-30) read this as a *continuous `phase` parameter* bound to the swipe delta
-(a Z-axis in the noise). **Probing it on the emulator contradicts that** and matters for the architecture:
+**Answered, and this section's original answer was wrong (2026-09-10).** It read the swipe as a *discrete re-seed with
+an animated crossfade*, on the strength of emulator probing that found a sub-threshold drag doing nothing and a shuffle
+changing the palette. Both observations were real; the conclusion drawn from them was not. What that probing had found
+was the threshold below which a scrub does not start, not the absence of a scrub.
 
-- Swiping past a threshold on *Confetti Dots* re-rolled the dot arrangement **and the palette** together, as one
-  undoable step. A pure geometric phase would never touch the palette.
-- A small, slow sub-threshold drag did **nothing**. A continuous phase would give a small visible morph for a small
-  input.
+A capture of one slow swipe shows the reference **plans two designs and interpolates between them**, with shape
+identity preserved, ground and palette lerping alongside the geometry, and progress **bound to the finger** — pausing
+the swipe pauses the transition mid-way. It is PowerPoint's morph, scrubbed.
 
-So the mechanism is a **discrete re-seed on a threshold/fling, with a smooth transition animation between the two
-states** — not a continuous function of the finger. (The video *does* show real motion; that is the transition, which
-a post-release screenshot cannot capture. Both readings see motion; they disagree on whether it is a parameter or a
-transition.)
+A second capture, on **Mesh Gradient**, then showed the same thing on a design with no drawn shapes at all — its
+control points interpolate, so a smooth field morphs as readily as a tessellation. **Every design in the catalog can
+follow**; what differs is the cost, and the two costs are complementary rather than ranked.
 
-**This is the better model for us, not just the truer one.** A continuous phase forces every generator to be
-continuous in its input — easy for 3D-noise designs (flow, metaballs, contours), but **impossible to do without pops
-for a tessellation**, whose *topology* changes discretely. The transition model keeps generators as plain static
-`render(seed) → bitmap` functions and puts the motion in a layer above them:
+That changes the engine seam rather than the studio's build order, so it has its own plan:
+**[MORPH_ENGINE_PLAN.md](MORPH_ENGINE_PLAN.md)** — the `plan`/`draw` split that replaces `Generator.render() → Bitmap`
+on the live path, what following it costs each design, the GPU and NDK verdicts, the filter risk it carries, and slices
+M1–M6. **Read it before touching `Generator` or the studio's transition.**
 
-- **`Generator.render(size, palette, params, seed): Bitmap`** stays **static and deterministic** — no `phase`. This is
-  also what keeps a **recipe = seed** (a saved wallpaper is a seed + palette + filters, nothing to animate).
-- A **`TransitionController`** animates between the outgoing bitmap and a freshly re-seeded one. The **universal**
-  transition is a **crossfade** (works for all 22 designs for free); a **per-generator interpolated morph** (points
-  drifting, discs gliding) is an *optional* enhancement layered on the designs where it is cheap — the noise-based
-  ones — and never required.
-- A **swipe** re-rolls the seed (and the palette, unless **locked**); **switching design** from the grid crossfades
-  old→new. Both are the same transition machinery.
-
-Whether the noise-based designs *also* carry an in-drag continuous morph (which the video may show and a screenshot
-cannot) is left open below — but it is an enhancement on those specific generators, not the base mechanism.
+Two claims from the original section that do still hold: a **continuous `phase` threaded through every generator** is
+the wrong model (a tessellation's topology changes discretely and cannot be phased without pops), and `render()` must
+stay **static and deterministic** so a recipe remains a seed. The morph gets its continuity from interpolating two
+*plans*, not from making one generator continuous — which is why both survive.
 
 ### The one refactor worth doing: a shared bitmap-filter runner
 
@@ -448,10 +440,11 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
    throttle is refusing to cancel the cheap pass. No AGSL and no GPU path: at a ninth of the pixels the CPU stack
    keeps up. What remains open is the *generators' own* cancellation — a superseded full-size pass is abandoned in
    intent only, since none of them checks.
-2. **Is there an in-drag continuous morph on the noise-based designs?** The evidence says the base mechanism is a
-   discrete re-seed + crossfade, but a video may show the flow/contour/metaball designs *also* morphing continuously
-   during the drag. If wanted, that is a per-generator enhancement (3D-noise `z = swipe`), not the base model — decide
-   whether it is in v1 or a later pass.
+2. **Is there an in-drag continuous morph? — Answered *yes* (2026-09-10), and it is the base mechanism rather than an
+   enhancement.** A capture of one slow swipe shows a scrubbable geometric morph between two planned designs, which is
+   the opposite of what this question assumed and of what the Motion section above originally concluded. It is not a
+   3D-noise `z`, and it is not confined to the noise-based designs — if anything those are the ones that *cannot* do
+   it. The whole answer, and what it costs, is [MORPH_ENGINE_PLAN.md](MORPH_ENGINE_PLAN.md).
 3. **Generator subset for v1.** All 22, or a strong ~8–10 across the groups? (Recommend the latter — lead with flow,
    tessellation, field, gradient.)
 2. **`core:graphics` vs a new `core:art` module** for the engine. `core:graphics` is the honest home (it is already

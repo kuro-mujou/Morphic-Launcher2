@@ -14,10 +14,12 @@ import inkspire.morphic.core.model.wallpaper.WallpaperDesign
  * that reached for an unseeded `Random`, the clock, or any ambient state would break all three silently — the
  * picture would drift between a preview and the applied wallpaper, and a shared recipe would not reproduce.
  *
- * **Static, not animated — no `phase`.** The studio's swipe-to-mutate is a *discrete re-seed with an animated
- * transition* between two static renders, not a continuous parameter threaded through the generator (see the plan's
- * Motion section for the evidence). So a generator's only notion of "which variation" is [seed]; the motion lives in
- * a transition layer above this, and the generator stays a pure function of its inputs.
+ * **Static, not animated — no `phase`.** A generator's only notion of "which variation" is [seed], and the motion
+ * lives above this rather than inside it. A continuous parameter threaded through here would have to be continuous
+ * for *every* design, which a tessellation cannot be: its topology changes discretely, so it would pop. The studio's
+ * swipe is nonetheless a continuous scrub, and it gets its continuity by interpolating two designs' **geometry** —
+ * see docs/MORPH_ENGINE_PLAN.md, which splits this seam into a plan and a draw and is what to read before changing
+ * the signature below.
  *
  * **Returns its own new [Bitmap].** The caller owns and eventually recycles it; a generator must not cache or reuse
  * one across calls, since two renders at two sizes (a preview and a full bake) are routinely live at once.

@@ -72,13 +72,16 @@ import kotlin.math.abs
  * on top of it rather than beside it — the same placement decision the icon studio's color picker makes for the same
  * reason.
  *
- * **A dissolve is the transition, and only between *pictures*.** A new design or a shuffled seed fades over the last,
- * which is the whole of the studio's premium motion at this stage — the discrete re-seed with an animated fade the
- * plan settled on, not a continuous morph. A knob being dragged is a picture changing rather than a new one, so it
- * swaps; see [WallpaperPreview].
+ * **A dissolve is the transition, and only between *pictures*.** A new design or a shuffled seed fades over the last;
+ * a knob being dragged is a picture changing rather than a new one, so it swaps. See [WallpaperPreview].
  *
- * **A horizontal swipe shuffles**, the gesture the walkthrough found is the app's core toy — mapped here to the
- * discrete re-roll it actually is. Picking a design is the row; applying it as the wallpaper is the next slice.
+ * **The dissolve is a placeholder for a morph, not the intended motion** — the reference scrubs a geometric
+ * interpolation between two designs under the finger, which a fade between two finished bitmaps structurally cannot
+ * reach. What replaces this, and what has to change under it, is docs/MORPH_ENGINE_PLAN.md.
+ *
+ * **A horizontal swipe shuffles**, the gesture the walkthrough found is the app's core toy — mapped here to a
+ * discrete re-roll, which is the half of it a bitmap transition can express. Picking a design is the row; applying it
+ * as the wallpaper is the next slice.
  */
 @Composable
 fun WallpaperStudioScreen(onBack: () -> Unit) {

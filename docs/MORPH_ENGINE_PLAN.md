@@ -1,0 +1,306 @@
+# Morph Engine
+
+**Status:** design, **nothing built** (2026-09-10). Drawn from three screen captures of Smart Launcher's wallpaper
+studio taken by the author, each of which overturned a conclusion drawn from the one before.
+
+**Covers:** the render seam both studios draw through — why `Generator.render() → Bitmap` is the wrong shape for a live
+transition, what replaces it, and what following it costs each design. It is the *how the picture is made and moved*;
+[WALLPAPER_STUDIO_PLAN.md](WALLPAPER_STUDIO_PLAN.md) stays the *what to build and in what order*.
+
+**Supersedes:** that plan's "Motion: the swipe is a discrete re-seed with an animated transition — not a continuous
+phase" section, and its open question 2. Both were answered wrong. See "How this was settled" at the end — the record
+is kept because this question has now been mis-answered three times, twice from video evidence and once from grepping
+the code, and a fourth attempt should start from the disproofs rather than from either.
+
+**Companions:** [WALLPAPER_STUDIO_TEARDOWN.md](WALLPAPER_STUDIO_TEARDOWN.md) (per-design knobs and construction),
+[ICON_ARCHITECTURE.md](ICON_ARCHITECTURE.md) (the two-renderer hazard this deliberately does *not* repeat, and the
+`drawsLive` vocabulary reused below).
+
+---
+
+## What the reference actually does
+
+The second capture (30 frames sampled from a 19-second video of **one slow swipe**, on a stained-glass tessellation)
+shows a **scrubbable geometric morph**:
+
+| | frame 0 | frame 8 | frame 13 | frame 18 | frame 29 |
+|---|---|---|---|---|---|
+| Ground | black | mid gray-olive | sage-gray | pale sage | cream |
+| Palette | saturated green | green, gold entering | gold | gold | sage/teal + orange |
+| Coverage | full | ~35% | ~20% (minimum) | ~35% | full |
+| Geometry | design A | A, dispersed | A remnants + B faint | B growing | design B |
+
+JPEG sizes trace the same curve: 786K → 283K at frame 13 → 487K at frame 29.
+
+**Four properties, and each rules something out.**
+
+1. **Every intermediate frame is made of crisp, fully opaque polygons on a flat ground** — not two translucent
+   pictures. This is what disproves a crossfade.
+2. **Shape identity survives.** The dark-green blob left of center and the pale double-needle below it are
+   recognizably the same objects across frames 8 → 11 → 13 → 15 → 18, translating and resizing continuously. A
+   re-generated design at a new seed has *different* polygons; these move. **This is the load-bearing evidence** — see
+   the method note at the end for why the others are weaker than they look.
+3. **The incoming design fades in as geometry, not as a picture.** The polygon group in the right-hand third, about
+   two thirds down, appears faintly at frame 13, stronger at 18, solid at 24, and is present unchanged in frame 29 —
+   design B arriving at its final position while A disperses.
+4. **The transition is scrubbed by the finger.** Confirmed by the author: stop swiping and it holds at an unfinished
+   state. So it is not a timed animation, and it cannot be a re-generation — nineteen seconds of scrubbing against a
+   generator run per frame would be a slideshow.
+
+Together those say the reference **plans both designs once at gesture start, then only lerps and redraws.**
+
+## The seam
+
+Returning a `Bitmap` is what forces software raster and blocks all of the above. Split it:
+
+```kotlin
+/** Everything the picture is, as plain data — no Canvas, no Paint, no Bitmap. */
+fun plan(width: Int, height: Int, params: DesignParams, seed: Long): Plan
+
+/** Paint a plan. Any canvas: a software one for the bake, a hardware one for the scrub. */
+fun draw(canvas: Canvas, plan: Plan, palette: Palette)
+```
+
+- `render()` becomes `draw(Canvas(bitmap), plan(...), palette)`. The bake is unchanged, still deterministic, still the
+  truth for the applied wallpaper.
+- The morph becomes `draw(hardwareCanvas, lerp(planA, planB, t), lerp(paletteA, paletteB, t))`.
+
+**This satisfies the standing rule rather than breaking it.** Two draw paths, one shared derivation. The part that
+would be *invisibly* wrong — the geometry — is computed in exactly one place and both paths call it. That is
+`CellFit`'s lesson applied correctly, not the icon subsystem's two-renderer hazard repeated: there, the two paths
+compute the picture twice and are kept honest by intention.
+
+**A `Plan` is whatever that design's picture is a function of** — a set of paths for a primitive design, a struct of
+control points and phases for a field one. `draw` issues draw calls in the first case and runs a pixel loop in the
+second. One seam, two kinds of plan, and what separates them is a cost profile rather than a capability; see "Which
+generators can follow".
+
+**`Plan` holds plain arrays, not `android.graphics.Path`.** `core:graphics`' build file already states the module's
+reason for existing — "everything here is arithmetic over an `IntArray` … this is where it can be checked without an
+emulator" — and its JVM tests are deliberately scoped to the arithmetic a `Canvas` test cannot reach. A `Plan` of
+float arrays extends that scope enormously: a tessellation's cells, a cascade's copies, a flow field's trails all
+become assertable data instead of draw calls. A `Plan` of `Path` would throw that away for nothing, since `draw` can
+build the `Path` in one line.
+
+**`Plan` stores ramp positions (`0..1`), not resolved colors.** Two payoffs. A palette change stops being a
+re-generation and becomes a redraw of the plan already in hand — `setPalette` currently triggers a full render. And
+palette *morphing* during a scrub is then lerping two palettes at draw time, which is what the capture shows,
+including the ground going black → cream. Baking colors into the plan would instead mean lerping per-primitive RGB
+between matched pairs, with the ground needing a special case of its own.
+
+## The matching rule
+
+PowerPoint's semantics, which is what the frames show:
+
+- Pair A's primitive with B's by **nearest centroid** — greedy over a spatial grid is enough; there is no need for an
+  optimal assignment and no way to perceive one.
+- **Matched:** lerp centroid, vertices, ramp position, and the ground.
+- **Unmatched in A:** scale toward its own centroid → 0, fade.
+- **Unmatched in B:** scale 0 → 1, fade in.
+
+**A triangle and a heptagon must be resampled to a common vertex count** around the perimeter before any lerp. Skipped,
+this fails silently — the lerp still runs and still draws, it just draws garbage.
+
+## Which generators can follow — all of them
+
+**The test is not "does it draw shapes". It is: does a continuous path exist between A and B in the generator's own
+parameter space?** By that test the whole catalog qualifies, and the buckets below are about **cost**, not capability.
+
+A mesh gradient is the design that proves it, and a capture of one settles it: the pale-green crease at frame 1
+*migrates* down-left and softens across twenty frames before vanishing, and the dark band's lower boundary rotates from
+a steep diagonal to horizontal. A crossfade cannot walk a feature — it can only fade one out in place while a different
+one fades in elsewhere. So a mesh gradient's **control points** are its elements; they are simply *evaluated* rather
+than drawn, and they interpolate perfectly.
+
+The same is true wherever the picture is a pure function of a small parameter set: Metaballs' charge positions and
+radii, Plasma's harmonic phases, Marble's turbulence phase and vein position, Contour's terrain parameters (whose
+isolines slide, merge and split — the flattering case), Linear Gradient's stops and angle.
+
+**Voronoi deserves a specific correction**, because it looks like the hard one and is not. Its sites lerp, and
+nearest-site assignment is **continuous in site position**, so every boundary slides smoothly without any cell polygon
+ever being built. No Delaunay, no Fortune's sweep, no re-implementation.
+
+### The two buckets, by cost — and each is cheap where the other is not
+
+**Primitive designs — re-draw is `O(elements)`, and they need full resolution (19).** Bauhaus, Confetti, Contour, Dot
+Grid, Flow Field, Flow Lines, Halftone, Impasto, Modern Mosaic, Mondrian, Polygon Cascade, Ribbon Flow, Ribbons,
+Rounded Tiles, Soft Overlaps, Spray, Triangular Facets, Truchet, Vitrall. Cheap per frame and GPU-rasterizable, but a
+downscale would soften the edges that *are* the picture. `plan` here extracts what `render` already computes before it
+draws — no new geometry, and the byte-identical bake assertion should hold trivially.
+
+**Field designs — re-evaluation is `O(pixels)`, and they downscale for free (13).** Diagonal Bands, Gradient Columns,
+Linear Gradient, Louvers, Marble, Mesh Gradient, Metaballs, Plasma, Ribbed Glass, Voronoi, Wave Dividers, Waves,
+Planet. Expensive per full-resolution frame on the CPU, but the field is smooth by construction, so a scrub frame
+evaluated at a fraction of the pixels and bilinearly upscaled is **perceptually identical**. `plan` here is a small
+parameter struct rather than a set of paths, and `draw` runs the pixel loop — the same seam, a different kind of plan.
+
+**That is the inversion worth holding on to: each bucket is cheap in exactly the way the other is not.** The intuition
+that a "cheap draft" helps the expensive designs is right; the intuition that it helps *everything* is wrong, and it is
+the primitive designs that must stay at full size.
+
+**The free downscale is not uniform, and the exception is already recorded.** `DraftShortSidePx = 360` exists because
+`ContourGenerator` samples its terrain on a lattice 360 cells across the short side — below that its contours *move*
+rather than soften, which is a different composition rather than a softer one. So the safe scrub resolution is
+**per-design**: a mesh gradient can go far below 360, Contour cannot. One global floor is the right default and the
+wrong ceiling.
+
+**AGSL becomes an optimization, not a prerequisite.** It would speed the field bucket, and it is still API 33+ against
+a `minSdk` of 26 — but the downscale already makes that bucket affordable, so nothing is blocked on it and no second
+renderer has to exist.
+
+## Engine verdicts
+
+**GPU: yes for the primitive bucket — by drawing primitives, not by writing shaders.** Compose's `DrawScope` is
+hardware-accelerated Skia (Ganesh) at every API level from 21. Drawing an interpolated plan into it is GPU
+rasterization with no `RuntimeShader`, no AGSL, and therefore nothing gated behind API 33 against a `minSdk` of 26.
+Framing the question as "AGSL versus CPU" was the wrong axis — AGSL is the *field* bucket's optimization, and that
+bucket has a cheaper answer available first (the free downscale above), so nothing waits on it.
+
+**C++/NDK: no.** Per scrub frame the work is a few thousand float lerps plus path rasterization. The rasterizer is
+Skia — already C++, and on this path already on the GPU. There is nothing left for native code to accelerate. The cost
+would be CMake in the build, JNI marshalling, ABI splits, 32 generators as a second implementation to keep in sync, and
+the loss of the `core:graphics` JVM test suite, which the seam above exists partly to *grow*.
+
+**`draftThenSettle` does not apply to a scrub, and that is not a regression.** That loop exists because a recipe change
+forces a generator run slower than a frame. During a scrub there is no recipe change — only `t` — so there is no run and
+nothing to draft. Two loops for two different problems, and both stay:
+
+| | what changes | cost | loop |
+|---|---|---|---|
+| Knob drag | the recipe | a full generator run | `draftThenSettle` (built, correct, unchanged) |
+| Morph scrub | `t` only | a lerp and a redraw | direct draw, full quality, no draft |
+
+**The scrub is view state, not recipe state.** `WallpaperRecipe` is design + seed + palette + params + filters, and no
+seed means "62% of the way from A to B". So `t` and the two plans live in the UI layer, the ViewModel commits one end
+on release, and none of this reaches persistence.
+
+## The risk this carries: filters have no bitmap to run on
+
+`FilterPipeline` is per-pixel arithmetic over an `IntArray`. A GPU-drawn scrub frame never becomes an `IntArray`, so a
+recipe with filters on either drops them mid-scrub — a visible pop at both ends of the gesture — or cannot take this
+path at all. **This is the largest open risk in the design, and it is not solvable by making the draw faster.**
+
+The icon subsystem already owns the vocabulary for the answer: `LayerEffect.drawsLive` splits effects by whether the
+live path can reach them at all. The wallpaper filters want the same flag, and it lands in a useful place:
+
+- **Survives a scrub at every API** — the color grades (Color, Duotone, Tritone), which are a `ColorFilter`/
+  `ColorMatrix` on the hardware canvas, and Vignette, which is a drawn overlay.
+- **Survives from API 31** — blur, via `graphicsLayer { renderEffect = … }`.
+- **Does not survive** — Ripple, Pixelate, Grain, ChromaticSplit. Per-pixel, and their only live route is AGSL at
+  API 33+.
+
+So the honest behavior is that a scrub applies what the hardware canvas can reach and resolves the rest on settle, with
+the flag saying which is which. What must **not** happen is the two paths disagreeing silently about a filter both
+claim to apply.
+
+## Slices
+
+- **M1 — the seam, on one generator.** Split `VitrallGenerator` into `plan`/`draw`, reimplement `render()` on top, and
+  assert the bake is **byte-identical** to today's for a fixed seed. Vitrall because the capture is of it.
+- **M2 — the live draw path.** Draw a `Plan` into a Compose `DrawScope` and verify on device that it matches the baked
+  bitmap. This is where the two paths' agreement is proved — once, rather than argued.
+- **M3 — the matcher.** Nearest-centroid pairing, vertex resampling, `lerp(planA, planB, t)`, unmatched scale-and-fade.
+  JVM-testable in full, which is the point of `Plan` being data. Only the primitive bucket needs any of this — a field
+  plan is a struct, and lerping one is field-by-field with nothing to pair.
+- **M4 — the gesture.** `t` bound to the finger, commit on release, and speculative pre-planning of the next seed while
+  idle so the plan is in hand before touch-down.
+- **M5 — the field bucket, on one generator.** Mesh Gradient, since it is the design the third capture proves and the
+  one with the smallest parameter set. `plan` is a struct of control points and ramp positions; `draw` is the existing
+  pixel loop; the scrub evaluates at a fraction of the size and upscales. This is where the per-design safe resolution
+  gets a number rather than a guess.
+- **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Eighteen extractions left in
+  the primitive bucket and twelve parameter structs in the field one, and neither is a rewrite.
+
+**Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
+generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a
+**fixed** and a **per-megapixel** term. That is the `plan`-versus-`draw` split this plan is sized by, and it is
+obtainable *before* anything is split, since the two terms are separable from the curve alone. Three readings to take
+from it:
+
+- **`fixed` near zero with a good `r2`** confirms a design belongs in the field bucket by measurement rather than by
+  reading its source — which is the check the classification above went without, twice.
+- **`fixed` large** names the designs that will hitch at touch-down, and therefore what M4's speculative pre-planning
+  is actually for.
+- **`r2` poor** means the composition changes with the size rather than resolving finer — so the fit is a detector for
+  *the rest of Contour's problem*, and the cheapest way to find the per-design floor open question 3 asks for.
+
+Run it **on the phone and alone**: an emulator has no thermal ceiling and a different Skia build, and the PNG sweeps in
+`GeneratorRenderHarness` heat the device enough to slow everything measured after them. Its KDoc carries the command
+and the rest of the method.
+
+### First run — emulator, 2026-09-10, shape only
+
+A smoke run on an x86_64 emulator (`ranchu`, API 36). **The absolute milliseconds are not a phone's and must not be
+quoted as budgets**; what carries over is `planShareAtFull` and `r2`, which are ratios taken within one design on one
+machine. Three findings, and two of them change decisions above.
+
+**1. The bucket split is confirmed by measurement, and Voronoi with it.** Thirteen designs come back
+`planShareAtFull ≤ 0.02` with `r2 ≥ 0.998` — Linear Gradient, Mesh Gradient, Voronoi, Plasma, Ribbed Glass, Marble,
+Metaballs, Waves, Louvers, Diagonal Bands, Gradient Columns, Wave Dividers, Rounded Tiles. Pure pixel cost, zero fixed
+cost, perfectly linear. **Voronoi is `planShare = 0.000, r2 = 1.0000`**, which settles the earlier claim that it would
+need a Delaunay sweep: it plans nothing, and its downscale is exactly free.
+
+**2. Most of the primitive bucket already renders full-frame inside a frame budget — so M2 is less urgent than it
+looks.** Eleven designs land **under 10ms at full 1080×2400 on an emulator**: Mondrian 4.6, Bauhaus 5.9, Confetti 6.2,
+Dot Grid 6.6, Triangular Facets 7.1, Modern Mosaic 7.2, Polygon Cascade 7.3, Soft Overlaps 7.6, Halftone 7.6, Truchet
+8.5, Ribbon Flow 9.1. Software raster is already fast enough to scrub these at full resolution. The Compose hardware
+canvas is still the right target and still costs nothing to adopt, but it is a headroom decision rather than a
+prerequisite — which is worth knowing before M2 is sequenced ahead of M3.
+
+**3. `r2` found more than Contour, which widens open question 3.** Contour is the worst at **0.4541**, exactly as the
+`DraftShortSidePx` lattice note predicted. But **Flow Lines (0.7070)** and **Flow Field (0.8966)** are nonlinear too,
+and for a different reason: their trail walks scale their *step counts* with the frame, so the planning work itself
+changes with the size rather than the fill. That is a second class of "the downscale is not free", it was not
+predicted, and it means the per-design floor is owed to at least five designs rather than one.
+
+The plan-bound designs — the ones M4's speculative pre-planning exists for — are Flow Field (`0.850`), Spray (`0.648`),
+Flow Lines (`0.500`), Contour (`0.469`) and Impasto (`0.362`). Everything else can be planned on demand.
+
+## Open questions
+
+1. **What a release below threshold does** — snap back to A, or commit B anyway. The capture is one complete swipe and
+   does not say.
+2. **Whether the scrub also drives `DesignParams`**, or only the seed and palette. The coverage collapse is consistent
+   with either an inset knob or a scale-out of unmatched primitives.
+3. **Whether the reference's field designs morph — answered *yes* (2026-09-10), on Mesh Gradient.** What is still open
+   is the **per-design safe scrub resolution**: `DraftShortSidePx`'s 360 is set by Contour's lattice and is far more
+   than a mesh gradient needs. M5 is where that stops being a guess.
+4. **Where the ground color comes from** — the palette, or its own field on the plan. It has to lerp either way; only
+   the ownership is open.
+5. **Whether `Plan` lives in `core:graphics` or earns a module.** It is data and wants to be plain, but `core:model` is
+   plain *Kotlin* by rule and a plan is not small. `core:graphics` is the honest first home.
+
+## How this was settled, and why the record is kept
+
+The same question has now been answered wrong twice from video evidence, in opposite directions:
+
+- **2026-08-30 — a video read as a continuous `phase` parameter** bound to swipe delta. Rejected on emulator probing: a
+  sub-threshold drag did nothing, and a shuffle changed the palette, which a geometric phase would not touch. That
+  rejection was *correct about its evidence* and wrong about the mechanism — what it had found was the threshold below
+  which a scrub does not start, not the absence of a scrub.
+- **2026-09-10 — a first capture read as a crossfade.** Fifteen frames spanning several swipes, sampled far enough
+  apart that settled states and transitions interleaved. Crossing strokes at partial alpha read as bent single strokes;
+  a frame showing two orb sets read as two superimposed pictures. Wrong, but the frames genuinely do look like a
+  crossfade at that sampling rate.
+
+- **2026-09-10, later the same day — the catalog split by implementation rather than by capability.** With the
+  mechanism finally right, the *classification* went wrong: generators were sorted by whether they call `canvas.draw*`
+  or `setPixels`, and "writes pixels" was read as "has no elements to match". A capture of a **mesh gradient** morphing
+  disproved it — a mesh gradient's elements are its control points, which are evaluated rather than drawn. The error
+  cost two false claims that had been argued at length: that a third of the catalog could not morph at all, and that
+  Voronoi would need a Delaunay implementation. Both came from measuring the code instead of the design.
+
+What settled the mechanism was a capture of **one** swipe, deliberately slow, plus the author's report that pausing the
+finger pauses the transition. What settled the classification was the author simply naming a design the table had
+called impossible. Three lessons worth carrying:
+
+- **Sample rate is the whole problem.** Frames far apart cannot distinguish a transition from a settled state, and a
+  transition sampled at its midpoint looks like whatever you already believe.
+- **The strong evidence is identity, not opacity.** "The intermediates look opaque" is weak — a *slow* scrub is the
+  best case for a draft-and-settle scheme, so sharp frames prove less than they appear to. "The same polygon is present
+  in five consecutive frames at five positions" is not weak, and it is what no re-generation can produce. On a smooth
+  field, where a crossfade and a morph both look smooth, the same test still works and is the only one that does: a
+  crossfade fades a feature out *in place*, so a crease that **migrates** across twenty frames rules it out.
+- **How a generator rasterizes says nothing about whether it can morph.** That is the mistake above, and it is easy to
+  repeat because the implementation is the part that is greppable. Ask what the picture is a *function of*; if that is
+  a small parameter set, it interpolates, whatever the code does with it afterward.
