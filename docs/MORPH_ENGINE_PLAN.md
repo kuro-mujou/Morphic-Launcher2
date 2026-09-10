@@ -211,8 +211,24 @@ claim to apply.
   - **It also turned up a pre-existing bug:** `PlanetGenerator` renders non-deterministically (`gen_COLORFUL_PLANET`
     differed between two runs of *identical* code, while 95 of 96 were stable), which breaks `Generator`'s
     determinism contract and means that design cannot be verified this way at all until it is fixed.
-- **M2 — the live draw path.** Draw a `Plan` into a Compose `DrawScope` and verify on device that it matches the baked
-  bitmap. This is where the two paths' agreement is proved — once, rather than argued.
+- **M2 — the live draw path. ✅ (2026-09-10)** And the finding is that **there is no second drawing path to write**.
+  `draw` already takes an `android.graphics.Canvas`, which is exactly what a Compose `DrawScope` hands out
+  (`drawIntoCanvas { it.nativeCanvas }`) — so the scrub and the bake issue *the same draw calls from the same plan*,
+  and the only thing that differs is which rasterizer is on the other end. The agreement is now measured rather than
+  argued, by `VitrallLivePathTest`:
+  - **Software bake versus GPU: mean difference `0.18` of 255, and `4.2e-4` of pixels differing loudly.** The
+    difference map shows pane interiors at pure black with a hairline along pane boundaries — antialiasing, and
+    nothing else.
+  - **`BlurMaskFilter` survives the hardware canvas, which was the real risk.** A mask filter was for years
+    unsupported under hardware acceleration and an unsupported one does not throw — it silently draws nothing.
+    Vitrall's rim is a blurred stroke washed inward from every pane edge, so had it been dropped a large share of the
+    frame would have lit up. It did not, and `clipPath` came through with it.
+  - **The bar is a *share of area*, not a per-pixel tolerance.** An antialiased edge legitimately differs by a lot at
+    one pixel (max was `69`); a feature that silently did nothing differs a little over a great many. Only the second
+    is a failure, so only the second is asserted.
+  - The GPU is reached through `RenderNode` + `HardwareRenderer`, which is what Compose uses underneath — it keeps
+    Compose's test infrastructure out of a module that has no Compose in it. **API 29+**, so the test skips below
+    that and the scrub will need the software path there; the launcher's floor is 26.
 - **M3 — the matcher.** Nearest-centroid pairing, vertex resampling, `lerp(planA, planB, t)`, unmatched scale-and-fade.
   JVM-testable in full, which is the point of `Plan` being data. Only the primitive bucket needs any of this — a field
   plan is a struct, and lerping one is field-by-field with nothing to pair.
