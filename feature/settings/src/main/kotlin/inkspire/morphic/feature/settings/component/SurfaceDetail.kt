@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -51,9 +52,13 @@ private const val IconSectionTitle = "Icon & text"
  * cells are widgets rather than icons, so `WidgetAreaGrid.icon` is null and there is no fraction, guardrail or label to
  * set.
  *
- * - **Landscape is a different arrangement, not a narrower one.** The layout group scrolls away, the heading pins, and
- *   the icon group fills the viewport as a final full-height item: controls scrolling on the left, preview fixed on the
- *   right. A phone in landscape has room for a cell beside its sliders and no room for one above them.
+ * - **A short window is a different arrangement, not a narrower one.** The layout group scrolls away, the heading
+ *   pins, and the icon group fills the viewport as a final full-height item: controls scrolling on the left, preview
+ *   fixed on the right. A phone in landscape has room for a cell beside its sliders and no room for one above them.
+ *   **A tablet in landscape is not that case** and must not take this arrangement: its pane is ~740dp tall, so the
+ *   preview fits above the controls with room to spare, while a full-viewport item turns the icon group into a
+ *   second screenful of scroll to reach a heading already pinned at the bottom of the first. The branch keys on
+ *   `isShortWindow` for that reason — the fact it was always about — rather than on `isLandscape`.
  *
  * **The pane draws no heading of its own.** The app bar above it already carries the section's name — the same
  * `meta().title` the list row was tapped on — so a heading here is that word a second time, with a line under it
@@ -78,15 +83,15 @@ internal fun SurfaceDetail(
     icons: (@Composable ColumnScope.() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    if (currentDeviceConfiguration().isLandscape) {
-        LandscapeDetail(onReroll, layout, preview, icons, modifier)
+    if (currentDeviceConfiguration().isShortWindow) {
+        ShortWindowDetail(onReroll, layout, preview, icons, modifier)
     } else {
-        PortraitDetail(onReroll, layout, preview, icons, modifier)
+        TallWindowDetail(onReroll, layout, preview, icons, modifier)
     }
 }
 
 @Composable
-private fun PortraitDetail(
+private fun TallWindowDetail(
     onReroll: () -> Unit,
     layout: @Composable ColumnScope.() -> Unit,
     preview: (@Composable (Modifier) -> Unit)?,
@@ -112,9 +117,16 @@ private fun PortraitDetail(
                 .fillMaxWidth()
                 .background(colors.background)) {
                 IconSectionHeader(onReroll, Modifier.padding(horizontal = 20.dp))
-                preview(Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp))
+                // **Bounded, because what it previews is one cell.** The band is wallpaper with a cell centered in
+                // it, so given a tablet's pane it becomes a 900dp slab around a 158dp cell — the same stretch
+                // `EffectsDetail` caps its panel preview against. The bound is the widest a phone pane gets, which
+                // is the width the preview was judged at.
+                preview(
+                    Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .widthIn(max = 440.dp)
+                        .padding(horizontal = 20.dp),
+                )
             }
         }
         item(key = "icon-controls") {
@@ -131,7 +143,7 @@ private fun PortraitDetail(
 }
 
 @Composable
-private fun LandscapeDetail(
+private fun ShortWindowDetail(
     onReroll: () -> Unit,
     layout: @Composable ColumnScope.() -> Unit,
     preview: (@Composable (Modifier) -> Unit)?,

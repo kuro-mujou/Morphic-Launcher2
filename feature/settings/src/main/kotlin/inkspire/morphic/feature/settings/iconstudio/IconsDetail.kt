@@ -57,9 +57,13 @@ import org.koin.androidx.compose.koinViewModel
  * moved to a full-screen destination — which is right for a second reason here, that a settings pane shares the
  * screen with the section list on a tablet, and a creative workspace cannot have half a screen.
  *
- * **Adaptive**: in portrait the two actions sit side by side above the presets; in landscape
- * they stack in a narrow column on the left with the presets filling the rest, so the short height is not spent on
- * two cards' worth of empty space.
+ * **Adaptive on height, not on orientation**: where the window is tall the two actions sit side by side above the
+ * presets; on a **short** one they stack in a narrow column on the left with the presets filling the rest, so the
+ * height that is scarce is not spent on two cards' worth of empty space.
+ *
+ * A tablet in landscape is tall, and taking the short arrangement there produced exactly the emptiness it exists to
+ * avoid: two `weight(1f)` cards ~480dp high, each holding an icon and two lines. That is why the test is
+ * `isShortWindow` rather than `isLandscape`.
  */
 @Composable
 internal fun IconsDetail(modifier: Modifier = Modifier) {
@@ -70,7 +74,7 @@ internal fun IconsDetail(modifier: Modifier = Modifier) {
     val editAll = { navigator.goTo(IconStudioRoute.Global()) }
     val editOne = { navigator.goTo(IconStudioRoute.App()) }
 
-    if (currentDeviceConfiguration().isLandscape) {
+    if (currentDeviceConfiguration().isShortWindow) {
         Row(
             modifier
                 .fillMaxSize()
