@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -63,10 +62,12 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
@@ -83,6 +84,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 import java.text.Collator
+import kotlin.math.roundToInt
 
 /**
  * **Wallpaper**: the image the launcher owns, and where to put it.
@@ -496,11 +498,34 @@ private fun RotateSlot(
  * Sizes a tile to [ratio] inside a bounded box, filling whichever axis leaves it fitting.
  *
  * `aspectRatio` alone derives one dimension from the other and will happily overflow the box it is in — a 2.2∶1
- * landscape tile told to fill a 200dp height asks for 444dp of width. Choosing the axis by which side of square the
- * ratio falls on is the whole fix, and it is why the portrait and landscape slots can share one composable.
+ * landscape tile told to fill a 200dp height asks for 444dp of width. Which axis to fill is therefore the whole
+ * question, and it is settled by **measuring the box**, which is why this is a `layout` rather than a pair of
+ * modifiers chosen ahead of time.
+ *
+ * **The box's shape decides, not the tile's.** This used to fill the width whenever [ratio] was landscape, reasoning
+ * about a box taller than it is wide — and the band it actually sits in is `fillMaxWidth().height(…)`, which is the
+ * opposite shape. So the branch was wrong in every case it fired: on a tablet in landscape a 1.6∶1 tile filled 888dp
+ * of width and asked for 555dp of height inside 200dp, drew over the buttons below it and clipped the page. The
+ * rotating pane's landscape slot passes `maxOf(ratio, 1/ratio)`, so it took that branch on every device.
+ *
+ * Failing silently is the reason this is worth the machinery: an overflowing child is *drawn*, not clipped, so the
+ * symptom is a picture that looks deliberate sitting on top of controls that no longer respond where they appear.
  */
-private fun Modifier.fitAspect(ratio: Float): Modifier =
-    if (ratio > 1f) fillMaxWidth().aspectRatio(ratio) else fillMaxHeight().aspectRatio(ratio)
+private fun Modifier.fitAspect(ratio: Float): Modifier = layout { measurable, constraints ->
+    val boxWidth = constraints.maxWidth
+    val boxHeight = constraints.maxHeight
+    // An unbounded axis cannot bind, so the other one is the fit. Neither box here is unbounded today; the guard is
+    // what keeps a caller that puts this in a scroller from asking for a tile of `Int.MAX_VALUE`.
+    val fillWidth = when {
+        !constraints.hasBoundedHeight -> true
+        !constraints.hasBoundedWidth -> false
+        else -> boxWidth <= boxHeight * ratio
+    }
+    val width = if (fillWidth) boxWidth else (boxHeight * ratio).roundToInt().coerceAtMost(boxWidth)
+    val height = if (fillWidth) (boxWidth / ratio).roundToInt().coerceAtMost(boxHeight) else boxHeight
+    val placeable = measurable.measure(Constraints.fixed(width, height))
+    layout(width, height) { placeable.place(0, 0) }
+}
 
 /** A page's action: an icon and a label, at the tonal emphasis that puts it below the page's apply control. */
 @Composable
