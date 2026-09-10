@@ -776,34 +776,26 @@ fun IconStudioScreen(
                         .uiInsetsPadding()
                         .padding(12.dp)
                         .fillMaxWidth(),
-                    // **Start, not end, and the layer rail is why.** The trailing end is the obvious place, and
-                    // was out of the way of everything that existed at the time. The rail now runs down that edge, and
-                    // the panel is what brings them together: opening one pushes this row up into the rail's vertical
-                    // span, so a trailing row would meet the tiles rather than clear them. The leading end is the only
-                    // side with nothing else on it — the icon bound has already shifted the other way for the same
-                    // reason (`IconBoundShift`).
+                    // **The stack is centred, all three of it.** This used to align to the start, and the reason was
+                    // sound while it held: the pills were the only child that did not fill the width, the trailing
+                    // edge belongs to the layer rail, and the leading one was the side with nothing on it.
                     //
-                    // Only this row moves. Everything else in this column fills the width, so the alignment does not
-                    // reach the panel or the bar.
-                    horizontalAlignment = Alignment.Start,
+                    // Bounding the panel to a readable column is what ended that. With the panel no longer filling
+                    // the width, the bar already centred and the panel centred beside it, the pills were the one
+                    // piece left out at an edge — furthest from the panel they belong to, and on a tablet that is
+                    // most of a screen away from it. Centred, they clear the rail on any width this runs at, so
+                    // nothing the old alignment was avoiding is given up.
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     sessionPills()
                     panelSlot(
-                        // **Bounded and centred, because a panel is a column of labelled rows and not a sheet.** Filling
-                        // the width put a rotation slider on a 1100dp throw across a tablet in landscape, with its label
-                        // at one edge of the screen and its value at the other — the pair the row exists to associate.
-                        Modifier
-                            .align(Alignment.CenterHorizontally)
-                            .widthIn(max = 480.dp),
+                        // **Bounded, because a panel is a column of labelled rows and not a sheet.** Filling the width
+                        // put a rotation slider on a 1100dp throw across a tablet in landscape, with its label at one
+                        // edge of the screen and its value at the other — the pair the row exists to associate. The
+                        // centring is the column's now, so it is not said again here.
+                        Modifier.widthIn(max = 480.dp),
                     )
-                    toolRail(
-                        // Centred explicitly, because the bar wraps its contents and this column aligns to the start for
-                        // the row of session buttons above. `ColumnScope.align` is the per-child override, so the two say
-                        // what they mean rather than one settling for the other's answer.
-                        Modifier
-                            .padding(top = 6.dp)
-                            .align(Alignment.CenterHorizontally),
-                    )
+                    toolRail(Modifier.padding(top = 6.dp))
                 }
             }
 
