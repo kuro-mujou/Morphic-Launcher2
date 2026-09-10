@@ -3,6 +3,7 @@ package inkspire.morphic.core.graphics.wallpaper
 import android.content.ContentResolver
 import android.content.ContentValues
 import android.graphics.Bitmap
+import android.os.Build
 import android.provider.MediaStore
 
 /**
@@ -30,17 +31,30 @@ import android.provider.MediaStore
  * path and the `rm` silently clears nothing — which lands you back on the stale files above by a second route.
  *
  * A plain insert, with no attempt to overwrite: an in-app delete would only be a no-op dressed up as a safeguard.
+ *
+ * **The write is marked pending until it is finished, and without that a random frame of a run comes out
+ * truncated.** MediaStore publishes a row the moment it is inserted, so a reader — `adb pull` goes through the same
+ * provider — can be handed a file that is still being compressed, and what lands on the host is a PNG cut off
+ * partway. It hit a different frame on each of two runs and left the rest of the sweep perfect, which is what makes
+ * it worth a comment: an eleven-frame sweep with one short file reads as "that frame rendered wrong", and the frame
+ * rendered fine.
  */
 internal fun saveHarnessPng(resolver: ContentResolver, name: String, bitmap: Bitmap) {
+    val pending = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
     val uri = resolver.insert(
         MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
         ContentValues().apply {
             put(MediaStore.Images.Media.DISPLAY_NAME, name)
             put(MediaStore.Images.Media.MIME_TYPE, "image/png")
             put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/genharness")
+            if (pending) put(MediaStore.Images.Media.IS_PENDING, 1)
         },
     )!!
     resolver.openOutputStream(uri)!!.use { out ->
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+        out.flush()
+    }
+    if (pending) {
+        resolver.update(uri, ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
     }
 }
