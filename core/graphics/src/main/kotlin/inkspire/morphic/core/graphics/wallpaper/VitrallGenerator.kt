@@ -105,7 +105,7 @@ object VitrallGenerator : Generator {
     }
 
     /**
-     * A finished window.
+     * The cut, before anything is glazed into it — what [panes] hands back, and the pure-geometry half of a [Plan].
      *
      * @property panes each pane's outline, interleaved `x, y` in a frame [aspect] wide and one tall. A bowed cut
      *   leaves the arc sampled into short segments, so a pane is a plain polygon however curved it looks.
@@ -115,22 +115,101 @@ object VitrallGenerator : Generator {
      */
     internal class Window(val panes: List<FloatArray>, val bones: List<FloatArray>, val aspect: Float)
 
+    /**
+     * A pane and the glass cut for it — the unit a window is planned in, and the unit two windows would be paired by.
+     *
+     * @property outline the pane's corners, interleaved `x, y`, in the cut frame (see [Plan.aspect]).
+     * @property tone where on the palette's ramp this pane's glass is cut from, `0..1`. **A position, not a color** —
+     *   the palette is [draw]'s input, so one plan can be recolored without being re-cut, and two windows' tones can
+     *   be interpolated without their palettes having to agree.
+     * @property flashed whether this is one of the rare much paler pieces. A decision rather than a tone, because the
+     *   lift it earns is applied to the resolved color and is deliberately independent of the ramp.
+     * @property angle which way this pane's own gradient runs, in radians.
+     * @property lift how far that gradient's bright end is lifted; the dark end drops [DropBias] of it.
+     */
+    internal class Pane(
+        val outline: FloatArray,
+        val tone: Float,
+        val flashed: Boolean,
+        val angle: Float,
+        val lift: Float,
+    )
+
+    /**
+     * A window cut and glazed but not yet painted — everything [draw] needs, at no particular size and in no
+     * particular palette.
+     *
+     * **Resolution-independent, which is the property that earns the split.** Nothing here is measured in pixels:
+     * every coordinate is in the cut frame ([aspect] wide, one tall) and [glass] and [leading] are the `0..1` their
+     * knobs give. So one plan serves a draft, a full-size bake and a scrub frame at whatever size it can afford,
+     * and none of them can disagree about the geometry because none of them re-derives it.
+     *
+     * **[Window] is the cut; this is the cut plus what was glazed into it.** They are separate because the cut is
+     * pure geometry and is tested as such, where the glazing spends a random stream that only a whole window can
+     * account for.
+     *
+     * @property glass how thick the glass reads — [DesignParams.depth], kept unresolved so it interpolates. [draw]
+     *   spends it on the rim; [plan] has already spent it on each pane's [Pane.lift].
+     * @property leading how heavy the came is — [DesignParams.scale], likewise unresolved: it becomes a stroke width
+     *   only against a frame size.
+     */
+    internal class Plan(
+        val panes: List<Pane>,
+        val bones: List<FloatArray>,
+        val aspect: Float,
+        val glass: Float,
+        val leading: Float,
+    )
+
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
+        val bitmap = createBitmap(width, height)
+        draw(Canvas(bitmap), plan(width, height, params, seed), palette, width, height)
+        return bitmap
+    }
+
+    /**
+     * The window [params] and [seed] describe, in a frame shaped like `[width]` × `[height]`.
+     *
+     * **The size is read for its aspect and nothing else**, so a plan made against one frame size is valid at every
+     * frame size of that shape — which is what lets a scrub redraw at whatever resolution it can afford without
+     * re-cutting the window.
+     */
+    internal fun plan(width: Int, height: Int, params: DesignParams, seed: Long): Plan {
         // Cut in a frame that is `aspect` wide and 1 tall, not in the unit square: in the unit square a 45° cut on
         // a 1080×2400 frame draws as a near-vertical one, so the grain collapses toward the long axis and the window
-        // fills with needles. Aspect-true, one unit is one unit, and `height` is the scale for both axes.
+        // fills with needles. Aspect-true, one unit is one unit, and the height is the scale for both axes.
         val window = panes(Amount.at(params.density), params.irregularity, seed, width.toFloat() / height)
         val glass = params.depth.coerceIn(0f, 1f)
         val tint = Tint.entries[params.variant.coerceIn(0, Tint.entries.lastIndex)]
-        val lead = params.scale.coerceIn(0f, 1f) * MaxLeading * min(width, height)
-        val came = palette.colorAt(palette.size - 1) // darkest stop by convention — the lead between panes
-
-        val bitmap = createBitmap(width, height)
-        val canvas = Canvas(bitmap)
-        canvas.drawColor(came)
 
         val random = Random(seed xor ToneSalt)
         val noise = PerlinNoise2d(seed xor FieldSalt)
+        // One stream for the whole window, drawn in a fixed order per pane — tone, flash, angle, lift. **That order
+        // is the picture**: re-ordering these four, or hoisting one out of the loop, re-glazes every pane after it
+        // and the window silently becomes a different one at the same seed. They are locals rather than constructor
+        // arguments so the order is stated rather than inherited from the argument list.
+        val glazed = window.panes.map { outline ->
+            val tone = tone(outline, tint, noise, random, window.aspect)
+            val flashed = random.nextFloat() < FlashChance
+            val angle = random.nextFloat() * GlassCut.Turn
+            val lift = lift(glass, random)
+            Pane(outline, tone, flashed, angle, lift)
+        }
+        return Plan(glazed, window.bones, window.aspect, glass, params.scale.coerceIn(0f, 1f))
+    }
+
+    /**
+     * Paints [plan] into [canvas] at `[width]` × `[height]`, in [palette].
+     *
+     * **It is handed a canvas rather than making one, and that is the half of the split that matters**: the same plan
+     * paints into a software bitmap for the bake and into a hardware canvas for a scrub, so the two cannot drift.
+     */
+    internal fun draw(canvas: Canvas, plan: Plan, palette: Palette, width: Int, height: Int) {
+        val glass = plan.glass
+        val lead = plan.leading * MaxLeading * min(width, height)
+        val came = palette.colorAt(palette.size - 1) // darkest stop by convention — the lead between panes
+        canvas.drawColor(came)
+
         val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
         // Black rather than the came, and translucent: the rim is the glass *thickening* toward the lead, so it has
         // to darken whatever tone it lands on. A wash of the palette's darkest stop would lighten a bright pane.
@@ -142,15 +221,14 @@ object VitrallGenerator : Generator {
         }
 
         val scale = height.toFloat()
-        val paths = window.panes.map { path(it, scale) }
+        val paths = plan.panes.map { path(it.outline, scale) }
         paths.forEachIndexed { i, path ->
-            val pane = window.panes[i]
-            val at = tone(pane, tint, noise, random, window.aspect)
-            var base = LinearGradientGenerator.colorAt(at, palette)
+            val pane = plan.panes[i]
+            var base = LinearGradientGenerator.colorAt(pane.tone, palette)
             // The odd flashed pane, a stop-independent lift — a real window carries a few pieces of much paler glass,
             // and they are what the eye reads as light coming through rather than as color laid on.
-            if (random.nextFloat() < FlashChance) base = TriangularFacetsGenerator.shade(base, FlashLift)
-            fill.shader = glassShader(pane, base, glass, random, scale)
+            if (pane.flashed) base = TriangularFacetsGenerator.shade(base, FlashLift)
+            fill.shader = glassShader(pane, base, scale)
             canvas.drawPath(path, fill)
             if (glass > 0f) {
                 // The rim is a blurred stroke clipped to the pane, so the glass darkens inward only.
@@ -170,12 +248,11 @@ object VitrallGenerator : Generator {
             }
             paths.forEach { canvas.drawPath(it, came1) }
             val heavy = Paint(came1).apply { strokeWidth = lead * BoneWidth }
-            window.bones.forEach { canvas.drawPath(path(it, scale, close = false), heavy) }
+            plan.bones.forEach { canvas.drawPath(path(it, scale, close = false), heavy) }
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), Paint(came1).apply {
                 strokeWidth = lead * FrameWidth
             })
         }
-        return bitmap
     }
 
     /**
@@ -435,33 +512,39 @@ object VitrallGenerator : Generator {
     }
 
     /**
-     * The shader a pane is filled with: [base] lifted at one end of the pane and dropped at the other, along an angle
-     * of the pane's own, by [glass].
+     * The shader a pane is filled with: [base] lifted at one end of the pane and dropped at the other, along the
+     * pane's own [Pane.angle] and by its own [Pane.lift].
      *
-     * The angle *and the strength* are per pane rather than shared, which is the difference between a window of
-     * hand-cut glass and a sheet with a gradient over it: a real window's pieces each catch the light their own way.
      * The sweep spans the pane's own extent along that angle, so a small pane gets the whole of it too, and the drop
      * is [DropBias] of the lift — glass reads as tinted rather than lit when its dark end goes further than its
      * bright one.
      */
-    private fun glassShader(pane: FloatArray, base: Int, glass: Float, random: Random, scale: Float): Shader {
-        val angle = random.nextFloat() * GlassCut.Turn
-        val lx = cos(angle)
-        val ly = sin(angle)
+    private fun glassShader(pane: Pane, base: Int, scale: Float): Shader {
+        val lx = cos(pane.angle)
+        val ly = sin(pane.angle)
         var lo = Float.MAX_VALUE
         var hi = -Float.MAX_VALUE
-        for (i in pane.indices step 2) {
-            val t = (pane[i] * lx + pane[i + 1] * ly) * scale
+        for (i in pane.outline.indices step 2) {
+            val t = (pane.outline[i] * lx + pane.outline[i + 1] * ly) * scale
             lo = min(lo, t); hi = max(hi, t)
         }
-        val reach = MinLift + glass * (MaxLift - MinLift)
-        val lift = reach * (LiftFloor + random.nextFloat() * (1f - LiftFloor))
         return LinearGradient(
             hi * lx, hi * ly, lo * lx, lo * ly,
-            TriangularFacetsGenerator.shade(base, 1f + lift),
-            TriangularFacetsGenerator.shade(base, 1f - lift * DropBias),
+            TriangularFacetsGenerator.shade(base, 1f + pane.lift),
+            TriangularFacetsGenerator.shade(base, 1f - pane.lift * DropBias),
             Shader.TileMode.CLAMP,
         )
+    }
+
+    /**
+     * How far one pane's gradient lifts — a share, never less than [LiftFloor] of it, of what [glass] allows.
+     *
+     * Drawn per pane rather than shared, which is the difference between a window of hand-cut glass and a sheet with
+     * a gradient over it: a real window's pieces each catch the light their own way.
+     */
+    private fun lift(glass: Float, random: Random): Float {
+        val reach = MinLift + glass * (MaxLift - MinLift)
+        return reach * (LiftFloor + random.nextFloat() * (1f - LiftFloor))
     }
 
     /** Divides the asked-for count down, so the subdivision plus the glazing pass land near it rather than above it. */

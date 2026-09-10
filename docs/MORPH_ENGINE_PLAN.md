@@ -195,8 +195,22 @@ claim to apply.
 
 ## Slices
 
-- **M1 — the seam, on one generator.** Split `VitrallGenerator` into `plan`/`draw`, reimplement `render()` on top, and
-  assert the bake is **byte-identical** to today's for a fixed seed. Vitrall because the capture is of it.
+- **M1 — the seam, on one generator. ✅ (2026-09-10)** `VitrallGenerator` splits into `plan` (a `Plan` of `Pane`s —
+  outline, ramp position, flash, gradient angle and lift, plus the two unresolved knobs) and `draw(canvas, …)`, with
+  `render()` reimplemented as `draw(Canvas(bitmap), plan(…))`. All three Vitrall renders came back **byte-identical**
+  to the pre-split baseline, as did the other 94 (see the note on Planet below). Three things it settled:
+  - **`Plan` is resolution-independent, and that is now a test rather than an intention** — `plan(1080, 2400)` and
+    `plan(135, 300)` produce the same window, so a scrub can redraw at any size without re-cutting. It is the property
+    the whole split exists for and the only one nothing else would have caught.
+  - **The per-pane random draws are a fixed sequence — tone, flash, angle, lift — and re-ordering them is silent.**
+    The geometry, the pane count and the tone range all survive it; the window merely becomes a different one at the
+    same seed. `VitrallGeneratorTest` pins a fingerprint of the whole glazing stream for that reason, and the four
+    values are locals rather than constructor arguments so the order is stated rather than inherited.
+  - **The seam is not on the `Generator` interface yet.** One generator is one consumer; it lifts when M6 brings the
+    second, per "extract on the second consumer".
+  - **It also turned up a pre-existing bug:** `PlanetGenerator` renders non-deterministically (`gen_COLORFUL_PLANET`
+    differed between two runs of *identical* code, while 95 of 96 were stable), which breaks `Generator`'s
+    determinism contract and means that design cannot be verified this way at all until it is fixed.
 - **M2 — the live draw path.** Draw a `Plan` into a Compose `DrawScope` and verify on device that it matches the baked
   bitmap. This is where the two paths' agreement is proved — once, rather than argued.
 - **M3 — the matcher.** Nearest-centroid pairing, vertex resampling, `lerp(planA, planB, t)`, unmatched scale-and-fade.
