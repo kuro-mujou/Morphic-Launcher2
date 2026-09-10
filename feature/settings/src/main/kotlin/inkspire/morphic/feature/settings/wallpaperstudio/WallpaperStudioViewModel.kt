@@ -8,6 +8,7 @@ import inkspire.morphic.core.designsystem.component.color.ColorPalettes
 import inkspire.morphic.core.graphics.wallpaper.FilterPipeline
 import inkspire.morphic.core.graphics.wallpaper.Generators
 import inkspire.morphic.core.graphics.wallpaper.PaletteColorMode
+import inkspire.morphic.core.graphics.wallpaper.WallpaperMorphs
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import inkspire.morphic.core.model.wallpaper.WallpaperDesign
@@ -101,6 +102,11 @@ class WallpaperStudioViewModel(
                 },
                 settled = { request ->
                     show(paint(request, 1f), draft = false, dissolve = request.dissolve && !drafted)
+                    // The picture is now a bitmap of this recipe, so a scrub still being held over it can go. Only a
+                    // *settled* pass releases it: a draft is a fraction of the resolution the gesture just drew at,
+                    // and handing over to one would read as the window going soft the moment the finger lifted.
+                    mutableState.update { it.copy(landing = false) }
+                    prepareScrub(request)
                 },
             )
         }
@@ -121,10 +127,53 @@ class WallpaperStudioViewModel(
         rerender(dissolve = true)
     }
 
-    /** A new variation of the current design — a fresh seed, which is all a shuffle is. */
+    /**
+     * A new variation of the current design — a fresh seed, which is all a shuffle is.
+     *
+     * **The discrete form, for the designs a scrub cannot reach and for the shuffle button.** Where a scrub *is*
+     * available the swipe commits [commitScrub] instead, which lands on the seed the finger was already dragging
+     * toward rather than drawing a second one.
+     */
     fun shuffle() {
         mutableState.update { it.copy(recipe = it.recipe.copy(seed = Random.nextLong())) }
         rerender(dissolve = true)
+    }
+
+    /**
+     * Adopt the prepared scrub's recipe — what a swipe that went the distance commits to.
+     *
+     * **It does not dissolve, and that is the whole handoff.** The last frame of the gesture is the finishing window
+     * already painted, by the same draw calls from the same plan as the bitmap that replaces it; fading between two
+     * pictures that are the same picture would only show as a dip. The screen holds the scrub on screen until that
+     * settled bitmap lands, so what the user sees across the swap is one continuous window.
+     */
+    fun commitScrub() {
+        val scrub = mutableState.value.scrub ?: return
+        mutableState.update { it.copy(recipe = scrub.to) }
+        rerender(dissolve = false)
+        mutableState.update { it.copy(landing = true) }
+    }
+
+    /**
+     * Works out the next shuffle in advance, so a swipe has something to drag the moment it starts.
+     *
+     * **Speculative, and cheap to be wrong about**: if the user edits anything instead of swiping, [rerender] throws
+     * this away and the settle after that edit prepares another. What it buys is that the front cost of a
+     * scrub — planning two windows and merging their cuts — is never paid in the frame a gesture begins on.
+     *
+     * **Prepared against the request that was just drawn rather than the current recipe**, since a later edit may
+     * already have moved it; a scrub built from one window and started from another would jump on touch-down.
+     */
+    private suspend fun prepareScrub(request: RenderRequest) {
+        val to = request.recipe.copy(seed = Random.nextLong())
+        val morph = withContext(Dispatchers.Default) {
+            WallpaperMorphs.between(request.recipe, to, request.width, request.height)
+        } ?: return
+        mutableState.update {
+            // The recipe can have moved while this was being built, and a scrub that does not start from the picture
+            // on screen is worse than none.
+            if (it.recipe == request.recipe) it.copy(scrub = WallpaperScrub(morph, to)) else it
+        }
     }
 
     /** Recolor the current design with [colors] — a chosen palette, keeping the design and seed. */
@@ -191,8 +240,17 @@ class WallpaperStudioViewModel(
         }
     }
 
-    /** Feeds the current recipe to the render loop at the current viewport. Nothing renders until a size is known. */
+    /**
+     * Feeds the current recipe to the render loop at the current viewport. Nothing renders until a size is known.
+     *
+     * **Every edit drops the prepared scrub**, because a scrub is an interpolation *from* a particular window: kept
+     * across a palette change or a knob it would start by snapping the picture back to the one it was built from.
+     * The settle at the end of the render this asks for prepares a fresh one. It drops the hold on a landing scrub
+     * for the same reason — an edit arriving mid-landing has its own picture to show, and holding a finished morph
+     * over it would show the wrong window until the edit settled.
+     */
     private fun rerender(dissolve: Boolean) {
+        mutableState.update { it.copy(scrub = null, landing = false) }
         if (viewportWidth == 0 || viewportHeight == 0) return
         requests.value = RenderRequest(
             recipe = mutableState.value.recipe,

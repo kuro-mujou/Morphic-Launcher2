@@ -7,11 +7,11 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,23 +46,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.component.color.ColorPalettes
 import inkspire.morphic.core.designsystem.component.color.PalettePresetBrowser
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
+import inkspire.morphic.core.graphics.wallpaper.WallpaperMorph
 import inkspire.morphic.core.model.wallpaper.WallpaperColorMode
 import inkspire.morphic.core.model.wallpaper.WallpaperDesign
 import inkspire.morphic.core.model.wallpaper.WallpaperFilter
 import inkspire.morphic.core.model.wallpaper.WallpaperRecipe
 import inkspire.morphic.feature.settings.iconstudio.StudioIconButton
 import org.koin.androidx.compose.koinViewModel
-import kotlin.math.abs
 
 /**
  * The wallpaper studio's editor: a full-bleed live preview with the designs to pick from and a shuffle.
@@ -75,19 +75,19 @@ import kotlin.math.abs
  * **A dissolve is the transition, and only between *pictures*.** A new design or a shuffled seed fades over the last;
  * a knob being dragged is a picture changing rather than a new one, so it swaps. See [WallpaperPreview].
  *
- * **The dissolve is a placeholder for a morph, not the intended motion** — the reference scrubs a geometric
- * interpolation between two designs under the finger, which a fade between two finished bitmaps structurally cannot
- * reach. What replaces this, and what has to change under it, is docs/MORPH_ENGINE_PLAN.md.
+ * **A horizontal swipe shuffles**, the gesture the walkthrough found is the app's core toy — and on a design the
+ * morph engine has reached it is a *scrub*: the next window is worked out in advance and the finger drags the picture
+ * into it, geometry and all, with letting go early putting it back. [ShuffleSwipe] is the gesture and
+ * docs/MORPH_ENGINE_PLAN.md is why it is built the way it is.
  *
- * **A horizontal swipe shuffles**, the gesture the walkthrough found is the app's core toy — mapped here to a
- * discrete re-roll, which is the half of it a bitmap transition can express. Picking a design is the row; applying it
- * as the wallpaper is the next slice.
+ * **The dissolve is what a design without that seam still does**, and it is a fade between two finished bitmaps —
+ * which is why it was only ever a placeholder: no amount of cross-fading reaches a shape that *moves*. Vitrall is the
+ * one design past it so far; M6 of the morph plan is the rest of the catalog.
  */
 @Composable
 fun WallpaperStudioScreen(onBack: () -> Unit) {
     val viewModel: WallpaperStudioViewModel = koinViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val density = LocalDensity.current
 
     // Which chooser the bottom bar is showing — the designs, the palettes, the filters, or the Style panel. UI
     // position, not recipe, so it is remembered across rotation but never stored. The Style tab likewise.
@@ -97,6 +97,12 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
     // second view of the palettes the bar is already showing, and leaving the ribbon under it is what lets a pick made
     // in the list be nudged along by the ribbon without a trip back through the toggles.
     var browsingPresets by rememberSaveable { mutableStateOf(false) }
+
+    val swipe = rememberShuffleSwipe(
+        state = state,
+        onCommit = viewModel::commitScrub,
+        onShuffle = viewModel::shuffle,
+    )
 
     BackHandler(onBack = onBack)
 
@@ -110,16 +116,14 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
-                .pointerInput(Unit) {
-                    var travelled = 0f
-                    val threshold = with(density) { 110.dp.toPx() }
-                    detectHorizontalDragGestures(
-                        onDragStart = { travelled = 0f },
-                        onDragEnd = { if (abs(travelled) > threshold) viewModel.shuffle() },
-                    ) { _, amount -> travelled += amount }
-                },
+                .shuffleSwipe(swipe),
         ) {
-            WallpaperPreview(shot = state.shot, onViewport = viewModel::setViewport)
+            WallpaperPreview(
+                shot = state.shot,
+                morph = swipe.live,
+                progress = { swipe.progress.value },
+                onViewport = viewModel::setViewport,
+            )
 
             StudioIconButton(
                 icon = Icons.AutoMirrored.Filled.ArrowBack,
@@ -204,6 +208,8 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
         }
     }
 }
+
+
 
 /**
  * Which of the four choosers the bottom bar is showing. [DESIGNS] is home — the three toggles flip to and from it.
@@ -347,9 +353,22 @@ private fun Chooser(
  *
  * **It measures itself and reports its pixel size**, so the generator paints exactly the resolution being shown rather
  * than a fixed guess scaled to fit. `onGloballyPositioned` would do, but the size is all that is wanted.
+ *
+ * **A live [morph] is painted over the bitmap rather than instead of it**, which is what makes the two handoffs
+ * invisible. Going in, the scrub's first frame is the window already on screen; coming out, its last frame is the
+ * window the bitmap underneath is about to become — the same draw calls from the same plan, differing only by which
+ * rasterizer ran them. So both swaps are between two copies of one picture, and neither needs a transition to hide it.
+ *
+ * **[progress] is a lambda, not a value.** Read inside the draw scope it is a deferred read: the finger moves and the
+ * frame is redrawn, with no recomposition of this or anything around it.
  */
 @Composable
-private fun WallpaperPreview(shot: WallpaperShot?, onViewport: (Int, Int) -> Unit) {
+private fun WallpaperPreview(
+    shot: WallpaperShot?,
+    morph: WallpaperMorph?,
+    progress: () -> Float,
+    onViewport: (Int, Int) -> Unit,
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -373,6 +392,14 @@ private fun WallpaperPreview(shot: WallpaperShot?, onViewport: (Int, Int) -> Uni
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
+            }
+        }
+
+        if (morph != null) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                drawIntoCanvas {
+                    morph.draw(it.nativeCanvas, progress(), size.width.toInt(), size.height.toInt())
+                }
             }
         }
     }

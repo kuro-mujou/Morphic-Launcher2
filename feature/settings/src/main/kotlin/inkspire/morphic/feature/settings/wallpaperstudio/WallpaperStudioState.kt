@@ -1,6 +1,7 @@
 package inkspire.morphic.feature.settings.wallpaperstudio
 
 import android.graphics.Bitmap
+import inkspire.morphic.core.graphics.wallpaper.WallpaperMorph
 import inkspire.morphic.core.model.wallpaper.WallpaperRecipe
 
 /**
@@ -16,11 +17,39 @@ import inkspire.morphic.core.model.wallpaper.WallpaperRecipe
  * @property shot the recipe rendered at the preview's size, or null before the first render lands.
  * @property applying whether a set-as-wallpaper write is in flight — the apply button reads it to disable itself so a
  *   second tap cannot start a second write over the first.
+ * @property scrub the next shuffle, prepared in advance and ready to be dragged through — null while it is still
+ *   being built, and null for good on a recipe that cannot be scrubbed, which is the screen's cue to fall back to a
+ *   discrete shuffle.
+ * @property landing whether a committed scrub is still the thing on screen, waiting for the render of the window it
+ *   landed on. **The screen must keep drawing the scrub until this clears**, because the recipe changed the instant
+ *   the gesture committed and the bitmap under it is still the window the swipe started from — dropping the scrub any
+ *   earlier plays the whole morph backwards in one frame.
  */
 data class WallpaperStudioState(
     val recipe: WallpaperRecipe,
     val shot: WallpaperShot? = null,
     val applying: Boolean = false,
+    val scrub: WallpaperScrub? = null,
+    val landing: Boolean = false,
+)
+
+/**
+ * A shuffle that has already been worked out, waiting for a finger.
+ *
+ * **Prepared while nothing is happening, because the cost is all at the front.** Building the morph plans both
+ * windows and merges their cuts; drawing a moment of it is a clip pass. Left until touch-down, that front cost lands
+ * in the frame the gesture starts on, which is the one frame a gesture cannot afford to drop.
+ *
+ * **The seed is decided here rather than at the release**, which is what makes the scrub honest: the picture under
+ * the finger at `t = 1` is the picture the recipe will describe, not a second random draw that happens to arrive
+ * afterwards.
+ *
+ * @property morph the prepared interpolation, asked for a moment on each frame of the drag.
+ * @property to the recipe the drag lands on, adopted whole when the gesture commits.
+ */
+data class WallpaperScrub(
+    val morph: WallpaperMorph,
+    val to: WallpaperRecipe,
 )
 
 /**

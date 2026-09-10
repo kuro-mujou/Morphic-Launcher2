@@ -1,6 +1,6 @@
 # Morph Engine
 
-**Status:** M1–M3 built (2026-09-10); M4 next. Drawn from three screen captures of Smart Launcher's wallpaper
+**Status:** M1–M4 built (2026-09-10); M5 next. Drawn from three screen captures of Smart Launcher's wallpaper
 studio taken by the author, each of which overturned a conclusion drawn from the one before.
 
 **Covers:** the render seam both studios draw through — why `Generator.render() → Bitmap` is the wrong shape for a live
@@ -284,8 +284,28 @@ claim to apply.
     and the side that leaves is chosen by **area** rather than by leaf count, a large pane shrinking away being the
     thing that gets noticed. The lesson generalizes past this design: **a vanishing element should spend the whole
     gesture vanishing**, and a bound picked to be safely large is how it ends up spending a fifth.
-- **M4 — the gesture.** `t` bound to the finger, commit on release, and speculative pre-planning of the next seed while
-  idle so the plan is in hand before touch-down.
+- **M4 — the gesture. ✅ (2026-09-10)** The studio's swipe scrubs. `WallpaperMorph` + `WallpaperMorphs.between` is the
+  public seam onto all of this — deliberately narrower than the engine, since what a screen needs is "can these two be
+  scrubbed between, and if so paint me `t`", and widening it further would put a `Plan` in a composable.
+  `ShuffleSwipe` is the gesture; the ViewModel prepares the next shuffle at the end of every settled render, so the
+  front cost — planning two windows and merging their cuts — is never paid in the frame a gesture starts on.
+  - **`between` returns null rather than a degraded scrub**, and the studio falls back to the dissolve it had. Four
+    refusals: a design with no plan seam (Vitrall is still the only one), two *different* designs, two different
+    palettes, and any filter on either side. Each is a way of putting a different picture on screen than the one that
+    would be applied, so each is a refusal instead of an approximation.
+  - **The scrub's `t` is the screen's state, not the ViewModel's**, which is the split MVVM actually wants here: the
+    recipe has no field meaning "62% of the way to the next window", and pushing `t` through the state flow would
+    recompose the studio sixty times a second to move one float that only the draw pass reads. What the ViewModel
+    keeps is what a scrub *is* and what committing one does.
+  - **The handoff is what M2 was measured for.** The last frame of the gesture is the finishing window drawn on the
+    hardware canvas; the bitmap that replaces it is the same plan drawn by the software path. So the commit does not
+    dissolve, and the screen holds the scrub until the *settled* pass lands — a draft would read as the window going
+    soft the instant the finger lifted. `WallpaperStudioState.landing` is that hold.
+  - **Verified on emulator-5554**, three paths: a committing drag re-cuts continuously at full density; a
+    sub-threshold release returns the screen **pixel-identical** to before the touch (0.00% of pixels differing, against
+    61% mid-drag); and a design with no seam shows **nothing** mid-drag and re-rolls on release, as it always did. Across
+    a ten-frame burst after a committing release the picture moved 69% (the spring), then 0.30%, then exactly zero
+    seven times over — no jump where the canvas hands over to the bitmap.
 - **M5 — the field bucket, on one generator.** Mesh Gradient, since it is the design the third capture proves and the
   one with the smallest parameter set. `plan` is a struct of control points and ramp positions; `draw` is the existing
   pixel loop; the scrub evaluates at a fraction of the size and upscales. This is where the per-design safe resolution
@@ -340,8 +360,11 @@ Flow Lines (`0.500`), Contour (`0.469`) and Impasto (`0.362`). Everything else c
 
 ## Open questions
 
-1. **What a release below threshold does** — snap back to A, or commit B anyway. The capture is one complete swipe and
-   does not say.
+1. ~~**What a release below threshold does**~~ — **answered: it snaps back (2026-09-10)**, and the evidence was
+   already in this document. The 2026-08-30 probing recorded that a sub-threshold drag on the reference left the design
+   as it was; that was filed at the time as evidence *against* there being a scrub at all, which was the wrong
+   conclusion from the right observation — what it had found was this threshold. A drag with no way to change your
+   mind would also be the odd one out among every other gesture on the device. `ShuffleSwipe.CommitAt` is `0.4`.
 2. **Whether the scrub also drives `DesignParams`**, or only the seed and palette. The coverage collapse is consistent
    with either an inset knob or a scale-out of unmatched primitives.
 3. **Whether the reference's field designs morph — answered *yes* (2026-09-10), on Mesh Gradient.** What is still open
