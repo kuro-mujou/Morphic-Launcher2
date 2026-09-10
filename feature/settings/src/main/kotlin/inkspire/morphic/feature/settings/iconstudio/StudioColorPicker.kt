@@ -7,14 +7,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -30,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 import inkspire.morphic.core.designsystem.component.color.MorphicColorPicker
@@ -108,6 +112,7 @@ fun StudioColorPickerPanel(
     request: ColorPickRequest,
     hazeState: HazeState,
     onDone: () -> Unit,
+    maxHeight: Dp,
     modifier: Modifier = Modifier,
 ) {
     // Seeded from the request and owned from then on, so the readout and the swatch track the drag. Keyed on the
@@ -164,9 +169,18 @@ fun StudioColorPickerPanel(
         modifier = modifier
             .fillMaxWidth()
             .studioSurface(hazeState, shape = RoundedCornerShape(24.dp))
+            // **Capped by the caller, and the two bands below are why it has to be.** This panel's natural height is
+            // the wheel plus its row — about 350dp — which is most of a phone in landscape, so the stack it sits in
+            // grew past the window and carried the tool bar off the bottom with it. `StudioToolPanel` takes the same
+            // number from the same place; a panel that shares a slot with another cannot be the one deciding how much
+            // of the screen that slot may take.
+            .heightIn(max = maxHeight)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // **Pinned, because the way out is in it.** `Done` is this row's third item, so letting the row scroll with
+        // the wheel would let the only control that closes the picker leave the screen — the same argument that put
+        // an open effect entry's header at the top of `StudioToolPanel`.
         Row(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -197,16 +211,25 @@ fun StudioColorPickerPanel(
             ChoiceChip(label = "Done", selected = false, onClick = onDone)
         }
 
-        MorphicColorPicker(
-            argb = current,
-            onArgbChange = {
-                current = it
-                request.onPick(it)
-            },
+        // **The wheel scrolls, and `weight(1f, fill = false)` is what keeps it from stretching.** Filling would make
+        // the panel the full cap on every device, including the tall ones where the wheel already fits — the same
+        // pair of reasons `StudioToolPanel`'s body states.
+        Column(
             modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .widthIn(max = 280.dp),
-        )
+                .fillMaxWidth()
+                .weight(1f, fill = false)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            MorphicColorPicker(
+                argb = current,
+                onArgbChange = {
+                    current = it
+                    request.onPick(it)
+                },
+                modifier = Modifier.widthIn(max = 280.dp),
+            )
+        }
     }
 }
 

@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -281,6 +282,29 @@ fun IconStudioScreen(
             // it, and two derivations of "below the chrome" would be one edit away from disagreeing.
             val insets = uiInsets.asPaddingValues()
             val topChrome = insets.calculateTopPadding() + 12.dp + 40.dp + 8.dp
+
+            // **How tall a panel may be — measured from the canvas, not stated as a constant.** A panel is one band
+            // in the bottom stack below, which also carries the view buttons and the tool bar, and the one thing it
+            // must not do is cover the icon it is editing. At the flat 320dp it used to take, it did all of that on a
+            // phone in landscape: 320 of 411dp went to the panel, the icon disappeared behind it, and the stack grew
+            // past the window — which carried the **tool bar off the bottom**, so no other tool could be selected and
+            // system back was the only way out.
+            //
+            // Half is the plainest statement of "the work keeps at least as much as the controls", and it is halves
+            // of [topChrome]'s **workspace** rather than of the window — the same quantity, used for the same reason
+            // it was named. Measuring from the window instead left the stack tall enough to ride up into the top
+            // chrome, where the view buttons printed over the back button: two round targets a finger apart, one of
+            // them the way out.
+            val panelSpace = (maxHeight - topChrome) / 2
+
+            // **The tool panel takes 320dp of that, and the color picker takes all of it** — the difference being
+            // what each is. A tool section is a scrolling list of controls with no length of its own, so how much of
+            // it to show is a judgment and 320dp is that judgment; every posture but the phone on its side has the
+            // room for it, so nothing else moves. The picker is a fixed instrument — a hex row, a wheel, a hue strip
+            // — with a height it actually wants, and capping it at the *list's* number cut the hue strip off on a
+            // tablet, where there was room for all of it. `heightIn` only bounds, so on a tall window the picker
+            // still measures to its own size; the bound is there for the one window that cannot hold it.
+            val toolPanelMaxHeight = minOf(panelSpace, 320.dp)
 
             // The area a floating panel may occupy: the canvas less `uiInsets`. Whole pixels, since that is what the
             // placement arithmetic works in.
@@ -574,6 +598,13 @@ fun IconStudioScreen(
                     // and grow it downward over the rail, which is the opposite of coming out from behind it.
                     contentAlignment = Alignment.BottomCenter,
                     label = "studio panel",
+                    // **Bounded and centered, because a panel is a column of labeled rows and not a sheet.** Filling
+                    // the width put a rotation slider on a 1100dp throw across a tablet in landscape, with its label
+                    // at one edge of the screen and its value at the other — the pair the row exists to associate.
+                    // The bar and the buttons below fill as before; only the panel is held to a readable column.
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .widthIn(max = 480.dp),
                     // The outgoing panel is composed with the state it was opened on, which is what lets a closing
                     // picker keep drawing its request after `colorPicker.request` is already null.
                 ) { (request, panel) ->
@@ -596,6 +627,7 @@ fun IconStudioScreen(
                     ) {
                         when {
                             request != null -> StudioColorPickerPanel(
+                                maxHeight = panelSpace,
                                 modifier = Modifier.padding(vertical = 6.dp),
                                 request = request,
                                 hazeState = screenHaze,
@@ -607,6 +639,7 @@ fun IconStudioScreen(
                                 // only things that ask for a color, and the host is what they ask.
                                 CompositionLocalProvider(LocalStudioColorPicker provides colorPicker) {
                                     StudioToolPanel(
+                                        maxHeight = toolPanelMaxHeight,
                                         modifier = Modifier.padding(vertical = 6.dp),
                                         tool = panel,
                                         state = state,

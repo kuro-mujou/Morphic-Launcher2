@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
 import inkspire.morphic.core.model.icon.IconLayerSpec
@@ -87,8 +88,14 @@ data class StudioActions(
  * chips, Effects is nine controls — and a panel that grew to whatever its contents wanted would bury the icon at
  * exactly the moment the user was coloring it.
  *
+ * **The cap is [maxHeight], and it belongs to the caller.** It was a flat 320dp, which is a judgment about how much
+ * of *the screen* a panel may take — and this composable cannot see the screen. On a phone in landscape 320dp is
+ * four fifths of it: the panel buried the icon it edits, and the bottom stack it sits in grew past the window, which
+ * pushed the tool bar off the bottom. A bar that is off screen cannot be pressed, so the open panel was the last one
+ * reachable and system back was the only way out. Only `IconStudioScreen` measures the canvas, so only it can say.
+ *
  * **Two bands: a pinned header and a scroll.** The header is measured first and the scroll takes what is left of
- * [PanelMaxHeight], which is what lets the header stay put without the panel growing to fit it.
+ * [maxHeight], which is what lets the header stay put without the panel growing to fit it.
  *
  * There was a third — a footer, for controls that must not scroll away because they act on what is scrolling. It was
  * added for the layer stack's reorder buttons, which then moved to `StudioLayerRail`, and it spent the time since as
@@ -104,6 +111,7 @@ fun StudioToolPanel(
     hazeState: HazeState,
     customImage: (path: String) -> Drawable?,
     packImage: (packPackage: String, drawableName: String?) -> Drawable?,
+    maxHeight: Dp,
     modifier: Modifier = Modifier,
 ) {
     // **Built here rather than in the `when` below, because two bands need it**: the pinned header, when an effect
@@ -134,7 +142,7 @@ fun StudioToolPanel(
                 animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                 alignment = Alignment.BottomStart,
             )
-            .heightIn(max = 320.dp)
+            .heightIn(max = maxHeight)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
