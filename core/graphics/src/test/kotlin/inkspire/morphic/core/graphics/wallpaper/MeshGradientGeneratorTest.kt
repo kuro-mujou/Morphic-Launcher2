@@ -3,6 +3,8 @@ package inkspire.morphic.core.graphics.wallpaper
 import inkspire.morphic.core.model.wallpaper.Palette
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -130,4 +132,56 @@ class MeshGradientGeneratorTest {
         assertEquals(MeshGradientGenerator.sampleColor(m, 0f, 0f), MeshGradientGenerator.sampleColor(m, -0.5f, -2f))
         assertEquals(MeshGradientGenerator.sampleColor(m, 1f, 1f), MeshGradientGenerator.sampleColor(m, 3f, 1.2f))
     }
+    /**
+     * **A field morph has nothing to pair**, which is what separates this bucket from the primitive one.
+     *
+     * Two lattices of the same shape put every node opposite its counterpart by construction, so a moment between
+     * them is a linear pass and no correspondence has to be found, resampled or aligned. The whole of `GlassTree`
+     * exists because a subdivision cannot say that.
+     */
+    @Test
+    fun `a moment of a field morph is its two lattices, node for node`() {
+        val palette = Palette(listOf(0xFF000000.toInt(), 0xFFFFFFFF.toInt()))
+        val from = MeshGradientGenerator.mesh(3, warp = 0.5f, softness = 0f, variant = 0, palette = palette, seed = 1L)
+        val to = MeshGradientGenerator.mesh(3, warp = 0.5f, softness = 0f, variant = 0, palette = palette, seed = 2L)
+        val morph = requireNotNull(MeshGradientGenerator.morph(from, to))
+
+        val middle = morph.at(0.5f)
+        for (i in from.dx.indices) {
+            assertEquals((from.dx[i] + to.dx[i]) / 2f, middle.dx[i], 1e-5f)
+            assertEquals((from.dy[i] + to.dy[i]) / 2f, middle.dy[i], 1e-5f)
+        }
+        assertEquals(from.colors.size, middle.colors.size)
+        assertEquals(from.side, middle.side)
+    }
+
+    /** Both ends of a scrub are the plans themselves, as the primitive bucket's are. */
+    @Test
+    fun `a field morph begins and ends on the lattices themselves`() {
+        val palette = Palette(listOf(0xFF102030.toInt(), 0xFFA0B0C0.toInt()))
+        val from = MeshGradientGenerator.mesh(4, warp = 0.3f, softness = 0.2f, variant = 0, palette = palette, seed = 7L)
+        val to = MeshGradientGenerator.mesh(4, warp = 0.3f, softness = 0.2f, variant = 0, palette = palette, seed = 8L)
+        val morph = requireNotNull(MeshGradientGenerator.morph(from, to))
+
+        assertSame(from, morph.at(0f))
+        assertSame(to, morph.at(1f))
+        assertSame(from, morph.at(-1f))
+        assertSame(to, morph.at(2f))
+    }
+
+    /**
+     * Two lattices of different sizes have no node-for-node correspondence, so there is no morph to give.
+     *
+     * **Refused rather than resampled**, since nothing scrubs between two densities: a shuffle re-seeds and leaves
+     * every knob alone. Resampling one lattice onto the other is what that caller would need, and it does not exist.
+     */
+    @Test
+    fun `two lattices of different densities have no morph between them`() {
+        val palette = Palette(listOf(0xFF000000.toInt(), 0xFFFFFFFF.toInt()))
+        val small = MeshGradientGenerator.mesh(2, 0.4f, 0f, 0, palette, seed = 1L)
+        val large = MeshGradientGenerator.mesh(5, 0.4f, 0f, 0, palette, seed = 1L)
+
+        assertNull(MeshGradientGenerator.morph(small, large))
+    }
+
 }

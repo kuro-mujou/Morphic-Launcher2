@@ -1,6 +1,6 @@
 # Morph Engine
 
-**Status:** M1–M4 built (2026-09-10); M5 next. Drawn from three screen captures of Smart Launcher's wallpaper
+**Status:** M1–M5 built (2026-09-10); M6 next. Drawn from three screen captures of Smart Launcher's wallpaper
 studio taken by the author, each of which overturned a conclusion drawn from the one before.
 
 **Covers:** the render seam both studios draw through — why `Generator.render() → Bitmap` is the wrong shape for a live
@@ -306,10 +306,33 @@ claim to apply.
     61% mid-drag); and a design with no seam shows **nothing** mid-drag and re-rolls on release, as it always did. Across
     a ten-frame burst after a committing release the picture moved 69% (the spring), then 0.30%, then exactly zero
     seven times over — no jump where the canvas hands over to the bitmap.
-- **M5 — the field bucket, on one generator.** Mesh Gradient, since it is the design the third capture proves and the
-  one with the smallest parameter set. `plan` is a struct of control points and ramp positions; `draw` is the existing
-  pixel loop; the scrub evaluates at a fraction of the size and upscales. This is where the per-design safe resolution
-  gets a number rather than a guess.
+- **M5 — the field bucket, on one generator. ✅ (2026-09-10)** Mesh Gradient split into `plan` / `draw`, with a
+  `Morph` beside them and `WallpaperMorphs.between` widened to two designs — one per bucket. Four findings:
+  - **A field plan takes no size at all.** Vitrall's needs one for its aspect; a `Mesh` lives in the unit square and
+    is read at whatever resolution it is asked for. That *is* the bucket difference, stated as a signature.
+  - **One pixel loop, two entry points.** `render` runs it straight into the bitmap it returns and `draw` runs it into
+    whatever buffer a scrub can afford, then blits. Writing the loop twice would have been the same hazard as two
+    renderers and quieter — the two would agree at every setting anyone checked. `theBlitIsExactAtFullSize` pins that
+    a 1:1 blit **is** the bake, pixel for pixel, which is this bucket's version of `VitrallLivePathTest`.
+  - **This design's plan carries resolved colours, against the rule above, and it is the one that cannot follow it.**
+    A node's colour is not a ramp position: under *Corners* it is a blend of four ramp samples, and `soften` then
+    draws every node channel-wise toward its neighbours' mean — a colour average with no meaning in ramp space.
+    Keeping positions would mean softening a different quantity, which is a different design. The cost is that a
+    palette change re-plans rather than re-draws, and that this design in particular cannot morph two palettes.
+  - **A field morph has nothing to pair.** Same-shaped lattices put every node opposite its counterpart by
+    construction, so a moment is one linear pass over two arrays — no correspondence to find, resample or align. All
+    of `GlassTree` exists because a subdivision cannot say that. Lattices of *different* sizes are refused rather than
+    resampled, which is only reachable by scrubbing between two densities, and nothing does.
+  - **The number: 120, not 360** (`FieldDownscaleHarness`, swept over every corner of the knob space at nine
+    resolutions against the full-resolution render). Worst case is the finest colour lattice under *Scattered* at full
+    warp, where a short side of 120 leaves a mean difference of **1.2 of 255** and **0.001%** of pixels differing by
+    more than four levels. At 60 that share is 1.7%; at 30 it is 36% — the lattice being lost rather than softened.
+    A third of the short side is a **ninth of the pixels**: a full-frame phone scrub is 2.6M, this is 32 thousand.
+  - **Verified on emulator-5554.** The scrub runs live and the handoff is invisible: across a burst after a committing
+    release the wallpaper's frame-to-frame difference is mean 0.16 of 255, and the only samples above 20 sit in
+    y = 135..159 — the status-bar clock. Worth knowing about this design specifically: **its seed moves only the
+    warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
+    subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Eighteen extractions left in
   the primitive bucket and twelve parameter structs in the field one, and neither is a rewrite.
 
@@ -367,9 +390,11 @@ Flow Lines (`0.500`), Contour (`0.469`) and Impasto (`0.362`). Everything else c
    mind would also be the odd one out among every other gesture on the device. `ShuffleSwipe.CommitAt` is `0.4`.
 2. **Whether the scrub also drives `DesignParams`**, or only the seed and palette. The coverage collapse is consistent
    with either an inset knob or a scale-out of unmatched primitives.
-3. **Whether the reference's field designs morph — answered *yes* (2026-09-10), on Mesh Gradient.** What is still open
-   is the **per-design safe scrub resolution**: `DraftShortSidePx`'s 360 is set by Contour's lattice and is far more
-   than a mesh gradient needs. M5 is where that stops being a guess.
+3. ~~**Whether the reference's field designs morph**~~ — **answered *yes* (2026-09-10), on Mesh Gradient**, and the
+   **per-design scrub resolution** is answered with it for that design: **120**, measured, against `DraftShortSidePx`'s
+   360. What remains is that every other field design owes its own number, and `FieldDownscaleHarness` is now the way
+   to get one. Contour is the design that will want the largest, and Flow Field and Flow Lines are the ones where the
+   `r2` fit says a downscale is not free at all — those three are the ones to measure before assuming anything.
 4. **Where the ground color comes from** — the palette, or its own field on the plan. It has to lerp either way; only
    the ownership is open.
 5. **Whether `Plan` lives in `core:graphics` or earns a module.** It is data and wants to be plain, but `core:model` is

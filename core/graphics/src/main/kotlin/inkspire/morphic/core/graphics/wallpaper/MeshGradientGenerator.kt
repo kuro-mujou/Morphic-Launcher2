@@ -1,9 +1,14 @@
 package inkspire.morphic.core.graphics.wallpaper
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
+import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlin.random.Random
 
 /**
@@ -70,8 +75,65 @@ object MeshGradientGenerator : Generator {
     }
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
-        val mesh = mesh(Amount.at(params.density), params.irregularity, params.scale, params.variant, palette, seed)
         val bitmap = createBitmap(width, height)
+        paint(plan(params, palette, seed), bitmap)
+        return bitmap
+    }
+
+    /**
+     * The lattice [params], [palette] and [seed] describe — this design's plan, and the whole of what its picture is
+     * a function of.
+     *
+     * **It takes no size at all**, where the primitive bucket's plans take one for their aspect: a [Mesh] lives in the
+     * unit square and is read at whatever resolution it is asked for. That is the field bucket's shape, and it is why
+     * these designs downscale for a scrub while the primitive ones must not — see docs/MORPH_ENGINE_PLAN.md.
+     *
+     * **The colors are resolved here rather than kept as ramp positions**, which is a deliberate departure from the
+     * morph plan's rule and the one design that cannot follow it. A node's color is not a position on the ramp: under
+     * *Corners* it is a blend of four ramp samples, and [soften] then draws every node channel-wise toward its
+     * neighbours' mean, which is a *color* average with no meaning in ramp space. Keeping positions would mean
+     * softening a different quantity, which is a different design. What it costs is that a palette change re-plans
+     * rather than merely re-draws, and that two palettes cannot be interpolated across a scrub — neither of which any
+     * caller asks for, since a shuffle keeps the palette and a palette change re-renders anyway.
+     */
+    internal fun plan(params: DesignParams, palette: Palette, seed: Long): Mesh =
+        mesh(Amount.at(params.density), params.irregularity, params.scale, params.variant, palette, seed)
+
+    /**
+     * Paints [mesh] into [canvas] at `[width]` × `[height]`, evaluating the field on a buffer whose short side is
+     * [shortSide] pixels and letting the canvas scale it up.
+     *
+     * **Evaluating small and scaling up is this bucket's whole economy.** The cost is per *pixel*, not per element,
+     * so a scrub frame at a fraction of the size costs a fraction as much — and it is faithful rather than merely
+     * cheap, because the field is smooth by construction: a bilinear mesh read through a smoothstepped warp has no
+     * detail finer than its own lattice to lose. The primitive bucket is exactly the other way round, which is the
+     * inversion the morph plan is sized by.
+     *
+     * Defaulting [shortSide] to the frame's own leaves the bake at full resolution, where this is one buffer copied
+     * once.
+     */
+    internal fun draw(canvas: Canvas, mesh: Mesh, width: Int, height: Int, shortSide: Int = min(width, height)) {
+        val frame = min(width, height)
+        val scale = if (frame <= 0) 1f else (shortSide.toFloat() / frame).coerceAtMost(1f)
+        val source = createBitmap(
+            (width * scale).roundToInt().coerceAtLeast(1),
+            (height * scale).roundToInt().coerceAtLeast(1),
+        )
+        paint(mesh, source)
+        canvas.drawBitmap(source, null, RectF(0f, 0f, width.toFloat(), height.toFloat()), FieldPaint)
+        source.recycle()
+    }
+
+    /**
+     * The pixel loop, and the only place it exists — [render] runs it straight into the bitmap it hands back, and
+     * [draw] runs it into whatever buffer a scrub can afford.
+     *
+     * Shared rather than written twice because a field evaluated two ways is the same hazard as a picture drawn two
+     * ways, and quieter: the two would agree at every setting anyone checked and drift wherever they were not.
+     */
+    private fun paint(mesh: Mesh, bitmap: Bitmap) {
+        val width = bitmap.width
+        val height = bitmap.height
         val row = IntArray(width)
         for (y in 0 until height) {
             val v = if (height <= 1) 0.5f else y.toFloat() / (height - 1)
@@ -83,7 +145,38 @@ object MeshGradientGenerator : Generator {
             }
             bitmap.setPixels(row, 0, width, 0, y, width, 1)
         }
-        return bitmap
+    }
+
+    /**
+     * Two lattices prepared to interpolate, or **null where they are not the same shape**.
+     *
+     * **A field plan is a struct, so there is nothing to pair and nothing to resample** — every node of one lattice
+     * has an obvious counterpart in the other, and a moment between them is one linear pass over two arrays. That is
+     * the whole of the field bucket's morph, and the contrast with the primitive bucket's is the point: there, the
+     * elements are a *set* with no natural correspondence, and finding one is the hard part.
+     *
+     * The lattices differ in size only when the two recipes differ in density, which a shuffle never does. Resampling
+     * one onto the other is what a scrub *between densities* would need and there is no such caller.
+     */
+    internal fun morph(from: Mesh, to: Mesh): Morph? =
+        if (from.side != to.side) null else Morph(from, to)
+
+    /** Two lattices and every moment between them. */
+    internal class Morph(private val from: Mesh, private val to: Mesh) {
+
+        /** The lattice [t] of the way across; the ends are the plans themselves, as the primitive bucket's are. */
+        fun at(t: Float): Mesh = when {
+            t <= 0f -> from
+            t >= 1f -> to
+            else -> Mesh(
+                side = from.side,
+                colors = IntArray(from.colors.size) {
+                    LinearGradientGenerator.lerpArgb(from.colors[it], to.colors[it], t)
+                },
+                dx = FloatArray(from.dx.size) { from.dx[it] + (to.dx[it] - from.dx[it]) * t },
+                dy = FloatArray(from.dy.size) { from.dy[it] + (to.dy[it] - from.dy[it]) * t },
+            )
+        }
     }
 
     /**
@@ -220,6 +313,31 @@ object MeshGradientGenerator : Generator {
     /** The bilinear sample of [mesh]'s colors at ([u], [v]) — clamped, so a warp off the edge reads the edge. */
     internal fun sampleColor(mesh: Mesh, u: Float, v: Float): Int =
         ColorLattice.sample(mesh.colors, mesh.span, mesh.span, u, v)
+
+    /**
+     * What a downscaled field is blown back up with — bilinear, which for a field is exact rather than merely tidy.
+     *
+     * Nearest-neighbour would show the buffer's own pixel grid, which is the one artifact that would make a scrub
+     * look like a *preview* of the picture rather than the picture. There is no dithering to preserve and no edge to
+     * keep crisp: every gradient here is continuous, so the filter is reconstructing the field rather than guessing.
+     */
+    private val FieldPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+
+    /**
+     * The short side a scrub frame of this design is evaluated at — **measured, not guessed** (2026-09-10,
+     * `FieldDownscaleHarness`).
+     *
+     * Swept over every corner of the knob space at nine resolutions and compared against the full-resolution render,
+     * the worst case is the finest colour lattice (density 8) under *Scattered* at full warp. There, evaluating at a
+     * short side of `120` leaves a mean difference of **1.2 of 255** with **0.001%** of pixels differing by more than
+     * four levels — reconstruction, not a changed picture. At `60` that share is 1.7% and at `30` it is 36%, which is
+     * the lattice starting to be lost rather than softened.
+     *
+     * **`DraftShortSidePx`'s 360 is Contour's number and this design owes it nothing**, which is the whole point of
+     * the measurement: a third of the short side is a *ninth* of the pixels, and this bucket's cost is per pixel. A
+     * full-frame phone scrub is 2.6M pixels; this is 32 thousand.
+     */
+    internal const val ScrubShortSide = 120
 
     /** How many samples of the ramp *Corners* spreads across the lattice — one per corner. */
     private const val CornerSamples = 4
