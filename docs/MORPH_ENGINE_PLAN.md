@@ -342,6 +342,13 @@ claim to apply.
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Seventeen extractions left
   in the primitive bucket and twelve parameter structs in the field one, and neither is a rewrite.
+  - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
+    null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
+    keeps only the refusals that are the studio's rather than a design's, and one was added: **two different knob
+    settings.** A scrub is a shuffle — the table under "Engine verdicts" already said a scrub changes `t` and a knob
+    drag changes the recipe — so a design plans both ends against one set of knobs and never has to say what a scrub
+    between two densities would mean. Open question 2 would widen it again if the reference turns out to drive a knob.
+    Palettes are now compared *resolved*, since the color mode is a knob that reduces the palette.
   - **Confetti ✅ (2026-09-11) — the first scatter, and it is not a scatter.** `plan` / `draw` / `Morph` beside
     `dots()`, which already was the plan. The discs sit on a jittered lattice, so a disc's partner is the disc at its
     own index and the morph is a per-disc lerp — a third kind beside the subdivision's re-cut and the field's re-read,

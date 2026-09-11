@@ -254,6 +254,25 @@ object VitrallGenerator : Generator {
         ),
     )
 
+    /**
+     * A subdivision scrub: the cuts interpolate and the panes are re-derived per frame, at full resolution.
+     *
+     * **Full resolution is not a choice here.** The picture is made of edges, and an edge is exactly the thing a
+     * downscale destroys — the inversion that separates the two buckets. It is affordable because the cost is per
+     * *element*, and there are a few hundred of them.
+     */
+    override fun scrub(
+        width: Int,
+        height: Int,
+        palette: Palette,
+        params: DesignParams,
+        from: Long,
+        to: Long,
+    ): WallpaperMorph {
+        val morph = morph(plan(width, height, params, from), plan(width, height, params, to))
+        return WallpaperMorph { canvas, t, w, h -> draw(canvas, morph.at(t), palette, w, h) }
+    }
+
     /** The cut frame: [aspect] wide and one tall, which every cut is applied to in turn. */
     private fun frameRect(aspect: Float): FloatArray = floatArrayOf(0f, 0f, aspect, 0f, aspect, 1f, 0f, 1f)
 

@@ -67,6 +67,21 @@ interface Generator {
      * rather than assuming a square, which is the difference from the icon bake that always works on a square.
      */
     fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap
+
+    /**
+     * The scrub from seed [from] to seed [to] of this design at [params], in a `[width]` × `[height]` frame — or null
+     * where this design has none, and the studio dissolves instead.
+     *
+     * **Two seeds of one variation, never two variations.** A scrub is a shuffle: the knobs stay where they are and
+     * only the seed moves, while a knob moving is a recipe change and `draftThenSettle`'s job. So each design plans
+     * both ends against the same knobs, and nothing here has to decide what a scrub between two densities would mean.
+     *
+     * **Defaulted to null, where [style] is abstract**, because null is a real answer here rather than a forgotten
+     * declaration: a design with no plan seam paints a different picture than it would bake if it pretended otherwise.
+     * Building a scrub plans both ends, so it belongs off the main thread — see docs/MORPH_ENGINE_PLAN.md.
+     */
+    fun scrub(width: Int, height: Int, palette: Palette, params: DesignParams, from: Long, to: Long): WallpaperMorph? =
+        null
 }
 
 /**

@@ -161,6 +161,24 @@ object MeshGradientGenerator : Generator {
     internal fun morph(from: Mesh, to: Mesh): Morph? =
         if (from.side != to.side) null else Morph(from, to)
 
+    /**
+     * A field scrub: the lattice interpolates and the field is re-evaluated on a small buffer, blown up by the canvas.
+     *
+     * **The downscale is where this bucket's affordability comes from**, and its resolution is the design's own measured
+     * floor rather than one number for everything — see [ScrubShortSide].
+     */
+    override fun scrub(
+        width: Int,
+        height: Int,
+        palette: Palette,
+        params: DesignParams,
+        from: Long,
+        to: Long,
+    ): WallpaperMorph? {
+        val morph = morph(plan(params, palette, from), plan(params, palette, to)) ?: return null
+        return WallpaperMorph { canvas, t, w, h -> draw(canvas, morph.at(t), w, h, ScrubShortSide) }
+    }
+
     /** Two lattices and every moment between them. */
     internal class Morph(private val from: Mesh, private val to: Mesh) {
 

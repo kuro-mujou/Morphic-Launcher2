@@ -190,6 +190,26 @@ object ConfettiGenerator : Generator {
         return if (sameLattice && from.dots.size == to.dots.size) Morph(from, to) else null
     }
 
+    /**
+     * A scatter scrub: every disc walks from its cell position in one frame to its position in the other, at full
+     * resolution.
+     *
+     * **A primitive design like the subdivision, and cheaper**: nothing is re-cut, because the discs are independent
+     * and each already knows its partner — the lattice cell they share.
+     */
+    override fun scrub(
+        width: Int,
+        height: Int,
+        palette: Palette,
+        params: DesignParams,
+        from: Long,
+        to: Long,
+    ): WallpaperMorph? {
+        val inks = palette.size - 1
+        val morph = morph(plan(width, height, params, inks, from), plan(width, height, params, inks, to)) ?: return null
+        return WallpaperMorph { canvas, t, w, h -> draw(canvas, morph.at(t), palette, w, h) }
+    }
+
     /** Two frames of discs, index for index, and every moment between them. */
     internal class Morph(private val from: Plan, private val to: Plan) {
 
