@@ -1,7 +1,7 @@
 # Morph Engine
 
 **Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands, Waves, Wave
-Dividers and Gradient Columns rolled out, and the field bucket re-measured and mostly dissolved (2026-09-11). Drawn
+Dividers, Gradient Columns and Plasma rolled out, and the field bucket re-measured and mostly dissolved (2026-09-11). Drawn
 from three screen captures of Smart Launcher's wallpaper studio taken by the author, each of which overturned a
 conclusion drawn from the one before.
 
@@ -369,8 +369,7 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  sixteen primitive extractions, Plasma as a field with a frequency-dependent floor, and four edge-cut designs
-  waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
+  sixteen primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
   shuffle of either is the same picture.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
     null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
@@ -512,6 +511,24 @@ claim to apply.
     byte-identical, Diagonal Bands' included. The worst differs on 0.093% of pixels past 24 levels, along the seams,
     with one-level steps where an 8-bit shadow alpha rounds differently from the old direct scale. **The render went
     from 214 ms to 15 ms.**
+  - **Plasma ✅ (2026-09-11) — the field bucket's second member, and the one that found the bucket's bug.** A shuffle
+    turns four wave phases the short way and trades one domain warp for another; a moment blends the two warps, since
+    a warp is a point pushed by a field and a point pushed part-way between two pushes moves continuously.
+  - **The survey's verdict on it was mostly a misregistration in the shared loop, not the design.** The pixel loop
+    read buffer pixel `x` at `x / (buffer − 1)` — the frame's formula applied to the buffer — where the blit puts that
+    pixel's center at `(x + ½) · frame / buffer`, so every scrub evaluated the field stretched by up to half a buffer
+    pixel toward each edge. On the mesh gradient's gentle colors that hid; on the plasma's steep run round a looped
+    palette it was most of the error. Read where the pixels land (`FieldRaster`, now the loop both field designs share),
+    the default plasma at 120 goes from **26%** of pixels past four levels to **0.6%**. At full size the two formulas
+    are the same, and every bake stayed byte-identical.
+  - **Its floor rises with frequency — 120 at the broadest waves to 240 at the busiest**, where the mesh gradient's is
+    one number. Held to one bar across the knob (about 0.6% of pixels past four levels, none past twenty, at either
+    end of the turbulence), measured by `FieldDownscaleHarness.measurePlasma`.
+  - **It costs four times the mesh gradient's scrub** — a 65 ms median frame on the emulator against 17 — and the cost
+    is spread over the plasma's own arithmetic, about 470 ns a pixel, rather than any one call: a table sine measured no
+    faster than `sin` here and was taken back out. The author judged it smooth enough on device. If a slower phone
+    disagrees, the answers are a fixed 120 (twice the mesh gradient's cost, busy plasmas a little soft mid-scrub) or
+    the loop split across cores, which would speed the mesh gradient too.
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a

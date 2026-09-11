@@ -1,12 +1,15 @@
 package inkspire.morphic.core.graphics.wallpaper
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.PI
 import kotlin.math.floor
 import kotlin.math.hypot
+import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -39,6 +42,9 @@ import kotlin.random.Random
  *
  * [sample] is pure and tested: the summed-sine field is arithmetic that is silently wrong (a flat or banded-wrong
  * wallpaper) with no bitmap needed to see it.
+ *
+ * **It plans and then paints**, so a shuffle can be scrubbed: [plan] draws the phases and the warp, and [draw] runs
+ * [FieldRaster]'s loop — into the frame for the bake, into a small buffer for a scrub. See docs/MORPH_ENGINE_PLAN.md.
  */
 object PlasmaGenerator : Generator {
 
@@ -52,30 +58,123 @@ object PlasmaGenerator : Generator {
     /** The phase offsets that make one plasma still distinct from another — drawn once from the seed. */
     internal data class Phases(val x: Float, val y: Float, val diagonal: Float, val radial: Float)
 
+    /**
+     * A plasma planned but not painted — at no particular size and in no particular palette.
+     *
+     * **Everything the seed decides is [phases] and [warp]**; the frequency and the warp's reach are knobs. So a
+     * shuffle turns four phases and trades one warp field for another, and a moment of a scrub is the phases part-way
+     * round and the two warps blended.
+     *
+     * @property frequency the waves' angular frequency, per frame *width* — [frequency] of the knob.
+     * @property warp the push the plane is read through — [DomainWarp] at [warpReach].
+     * @property nextWarp the warp a scrub is on its way to, on a moment of a [Morph]; null on a plasma that was planned.
+     *   **The two are blended rather than one swapped for the other**, since a warp is a point pushed by a field, and a
+     *   point pushed part-way between two fields' pushes moves continuously as the blend does.
+     * @property warpMix how far from [warp] toward [nextWarp] the plane is pushed, `0..1`.
+     */
+    internal class Plan(
+        val phases: Phases,
+        val frequency: Float,
+        val warp: DomainWarp,
+        val nextWarp: DomainWarp? = null,
+        val warpMix: Float = 0f,
+    )
+
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
-        val phases = phases(seed)
-        val frequency = frequency(params.density)
-        val warp = DomainWarp(seed xor WarpSeed, warpReach(params.irregularity, frequency), WarpFrequency)
+        val bitmap = createBitmap(width, height)
+        val plan = plan(params, seed)
         // The waves have to be the same size across the frame as down it — see [sample].
         val heightOverWidth = if (width <= 0) 1f else height.toFloat() / width
-
-        val pixels = IntArray(width * height)
-        for (y in 0 until height) {
-            val ny = if (height <= 1) 0.5f else y.toFloat() / (height - 1)
-            for (x in 0 until width) {
-                val nx = if (width <= 1) 0.5f else x.toFloat() / (width - 1)
-                // Warped in the same width-share metric the waves are read in, so the swirls are round on the screen.
-                val sy = ny * heightOverWidth
-                pixels[y * width + x] = LinearGradientGenerator.colorLooping(
-                    sample(warp.x(nx, sy), warp.y(nx, sy), frequency, phases),
-                    palette,
-                )
-            }
-        }
-
-        val bitmap = createBitmap(width, height)
-        bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
+        FieldRaster.paint(bitmap, width, height) { nx, ny -> colorAt(plan, nx, ny, heightOverWidth, palette) }
         return bitmap
+    }
+
+    /** The plasma [params] and [seed] describe. */
+    internal fun plan(params: DesignParams, seed: Long): Plan {
+        val frequency = frequency(params.density)
+        return Plan(
+            phases = phases(seed),
+            frequency = frequency,
+            warp = DomainWarp(seed xor WarpSeed, warpReach(params.irregularity, frequency), WarpFrequency),
+        )
+    }
+
+    /**
+     * Paints a scrub frame of [plan] into [canvas] at `[width]` × `[height]`, in [palette], evaluated on a buffer whose
+     * short side is [shortSide] and blown up by the canvas — [FieldRaster]'s loop, the one the bake runs at full size.
+     */
+    internal fun draw(
+        canvas: Canvas,
+        plan: Plan,
+        palette: Palette,
+        width: Int,
+        height: Int,
+        shortSide: Int = min(width, height),
+    ) {
+        val heightOverWidth = if (width <= 0) 1f else height.toFloat() / width
+        FieldRaster.draw(canvas, width, height, shortSide) { nx, ny -> colorAt(plan, nx, ny, heightOverWidth, palette) }
+    }
+
+    /**
+     * [plan]'s color at ([nx], [ny]) of the frame, both `0..1` — the plane warped, then the waves summed and read
+     * round the palette.
+     *
+     * Warped in the same width-share metric the waves are read in, so the swirls are round on the screen.
+     */
+    private fun colorAt(plan: Plan, nx: Float, ny: Float, heightOverWidth: Float, palette: Palette): Int {
+        val sy = ny * heightOverWidth
+        var wx = plan.warp.x(nx, sy)
+        var wy = plan.warp.y(nx, sy)
+        val next = plan.nextWarp
+        if (next != null && plan.warpMix > 0f) {
+            wx += (next.x(nx, sy) - wx) * plan.warpMix
+            wy += (next.y(nx, sy) - wy) * plan.warpMix
+        }
+        return LinearGradientGenerator.colorLooping(sample(wx, wy, plan.frequency, plan.phases), palette)
+    }
+
+    /**
+     * A field scrub: the phases turn and the warp blends, and the field is re-evaluated on a small buffer, blown up by
+     * the canvas — see [scrubShortSide] for how small.
+     */
+    override fun scrub(
+        width: Int,
+        height: Int,
+        palette: Palette,
+        params: DesignParams,
+        from: Long,
+        to: Long,
+    ): WallpaperMorph {
+        val morph = Morph(plan(params, from), plan(params, to))
+        val shortSide = scrubShortSide(frequency(params.density))
+        return WallpaperMorph { canvas, t, w, h -> draw(canvas, morph.at(t), palette, w, h, shortSide) }
+    }
+
+    /** Two plasmas and every moment between them. */
+    internal class Morph(private val from: Plan, private val to: Plan) {
+
+        /**
+         * The plasma [t] of the way across; the ends are the plans themselves.
+         *
+         * **A phase turns the short way**, since it is an angle — taken the long way, a wave would roll through most
+         * of a cycle on its way to a partner a few degrees off, and the plasma would churn rather than drift.
+         */
+        fun at(t: Float): Plan = when {
+            t <= 0f -> from
+            t >= 1f -> to
+            else -> Plan(
+                phases = Phases(
+                    x = lerpAngle(from.phases.x, to.phases.x, t),
+                    y = lerpAngle(from.phases.y, to.phases.y, t),
+                    diagonal = lerpAngle(from.phases.diagonal, to.phases.diagonal, t),
+                    radial = lerpAngle(from.phases.radial, to.phases.radial, t),
+                ),
+                frequency = from.frequency + (to.frequency - from.frequency) * t,
+                warp = from.warp,
+                nextWarp = to.warp,
+                warpMix = t,
+            )
+        }
     }
 
     /** The wave frequency [density] asks for — [MinFrequency] broad swells up to [MaxFrequency] a busy ripple. */
@@ -131,6 +230,26 @@ object PlasmaGenerator : Generator {
     // Softened toward broad swells: the default density now opens on calm marbling rather than a busy ripple (W7).
     private const val MinFrequency = 6f
     private const val MaxFrequency = 26f
+
+    /**
+     * The short side a scrub frame of this design is evaluated at, for waves at [frequency] — **measured, not guessed**
+     * (2026-09-11, `FieldDownscaleHarness.measurePlasma`), and rising with the frequency where the mesh gradient's is
+     * one number.
+     *
+     * The busier the waves, the steeper the colors run round the looped palette, and a steep run is what a coarse
+     * buffer shows. Held to the same bar across the knob — no more than about `0.6%` of pixels past four levels and
+     * none past twenty, at either end of the turbulence — the broadest waves need a short side of `120` and the busiest
+     * `240`, with the default's `180` between. A fixed `120` would leave the busiest six percent of the frame visibly
+     * soft; a fixed `240` would spend four times the pixels on the broad swells that need none of them.
+     */
+    internal fun scrubShortSide(frequency: Float): Int {
+        val busy = ((frequency - MinFrequency) / (MaxFrequency - MinFrequency)).coerceIn(0f, 1f)
+        return (ScrubAtBroadest + busy * (ScrubAtBusiest - ScrubAtBroadest)).roundToInt()
+    }
+
+    /** [scrubShortSide] at the broadest waves and at the busiest. */
+    private const val ScrubAtBroadest = 120
+    private const val ScrubAtBusiest = 240
 
     /** How far the warp pushes at full turbulence, in wavelengths — see [warpReach]. */
     private const val MaxWarpWavelengths = 0.5f

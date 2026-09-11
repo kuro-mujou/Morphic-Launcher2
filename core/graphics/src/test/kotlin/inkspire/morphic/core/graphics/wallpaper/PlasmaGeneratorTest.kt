@@ -1,8 +1,12 @@
 package inkspire.morphic.core.graphics.wallpaper
 
+import inkspire.morphic.core.model.wallpaper.DesignParams
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.PI
+import kotlin.math.abs
 
 /**
  * The summed-sine field and its wrap — the plasma value must stay in `0..1` (it indexes the looped palette) and must
@@ -82,5 +86,42 @@ class PlasmaGeneratorTest {
         val frequency = PlasmaGenerator.frequency(0.5f)
         assertEquals(0f, PlasmaGenerator.warpReach(-1f, frequency), 0f)
         assertEquals(PlasmaGenerator.warpReach(1f, frequency), PlasmaGenerator.warpReach(2f, frequency), 0f)
+    }
+
+    /** A phase is an angle, so a scrub turns every wave the short way round rather than rolling it most of a cycle. */
+    @Test
+    fun `a scrub turns every phase the short way round`() {
+        val base = PlasmaGenerator.plan(DesignParams(), seed = 1L)
+        fun at(phase: Float) = PlasmaGenerator.Plan(
+            PlasmaGenerator.Phases(phase, phase, phase, phase),
+            base.frequency,
+            base.warp,
+        )
+        val morph = PlasmaGenerator.Morph(at(0.1f), at((2 * PI).toFloat() - 0.1f))
+        val middle = morph.at(0.5f).phases
+        for (phase in listOf(middle.x, middle.y, middle.diagonal, middle.radial)) {
+            assertTrue("a phase went the long way: $phase", abs(phase) < 0.01f)
+        }
+    }
+
+    @Test
+    fun `a scrub begins and ends on the plans, and blends the two warps between them`() {
+        val from = PlasmaGenerator.plan(DesignParams(irregularity = 1f), seed = 1L)
+        val to = PlasmaGenerator.plan(DesignParams(irregularity = 1f), seed = 2L)
+        val morph = PlasmaGenerator.Morph(from, to)
+        assertSame(from, morph.at(0f))
+        assertSame(to, morph.at(1f))
+        val middle = morph.at(0.25f)
+        assertSame(from.warp, middle.warp)
+        assertSame(to.warp, middle.nextWarp)
+        assertEquals(0.25f, middle.warpMix, 0f)
+    }
+
+    /** The scrub's resolution rises with the frequency, over exactly the range the measurement set. */
+    @Test
+    fun `the scrub evaluates busier waves at a finer buffer`() {
+        assertEquals(120, PlasmaGenerator.scrubShortSide(PlasmaGenerator.frequency(0f)))
+        assertEquals(240, PlasmaGenerator.scrubShortSide(PlasmaGenerator.frequency(1f)))
+        assertEquals(180, PlasmaGenerator.scrubShortSide(PlasmaGenerator.frequency(0.5f)))
     }
 }

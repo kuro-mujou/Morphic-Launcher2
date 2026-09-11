@@ -3,6 +3,7 @@ package inkspire.morphic.core.graphics.wallpaper
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.graphics.createBitmap
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -91,6 +92,44 @@ class FieldDownscaleHarness {
         val blitted = pixels(MeshGradientGenerator.plan(params, palette, Seed), min(Width, Height))
         val differing = direct.indices.count { direct[it] != blitted[it] }
         assertEquals("a full-size blit must be the bake, pixel for pixel", 0, differing)
+    }
+
+    /**
+     * The plasma, through its own plan and draw — how small a scrub may evaluate it before it stops being the same
+     * picture, and what each size costs a frame.
+     *
+     * **Frequency is the knob that sets the floor**: the finest swell scales with it, and so does how steeply the
+     * colors run round the looped palette, which is where a coarse buffer shows. Turbulence at both ends, because the
+     * warp is what bends a steep run into a tight one. The cost column is one scrub frame's [PlasmaGenerator.draw] —
+     * the loop and the blit — on this machine, which says what a size costs relative to another and nothing about a
+     * phone's budget.
+     */
+    @Test
+    fun measurePlasma() {
+        Log.i(Tag, "design  density turbulence | short side | mean/255  max/255  % over $Loud | ms")
+        for (density in listOf(0f, 0.5f, 1f)) {
+            for (turbulence in listOf(0f, 1f)) {
+                val params = DesignParams(density = density, irregularity = turbulence, colorMode = WallpaperColorMode.COLORFUL)
+                val palette = PaletteColorMode.resolve(Palette(Stops), params.colorMode)
+                val plan = PlasmaGenerator.plan(params, Seed)
+                val full = plasmaPixels(plan, palette, Width)
+                for (shortSide in Candidates) {
+                    val started = SystemClock.elapsedRealtimeNanos()
+                    val scaled = plasmaPixels(plan, palette, shortSide)
+                    val ms = (SystemClock.elapsedRealtimeNanos() - started) / NanosPerMilli
+                    Log.i(Tag, "plasma %4.1f %4.1f | %4d | %s | %6.1f".format(density, turbulence, shortSide, difference(full, scaled), ms))
+                }
+            }
+        }
+    }
+
+    private fun plasmaPixels(plan: PlasmaGenerator.Plan, palette: Palette, shortSide: Int): IntArray {
+        val bitmap = createBitmap(Width, Height)
+        PlasmaGenerator.draw(Canvas(bitmap), plan, palette, Width, Height, shortSide)
+        val out = IntArray(Width * Height)
+        bitmap.getPixels(out, 0, Width, 0, 0, Width, Height)
+        bitmap.recycle()
+        return out
     }
 
     /**
@@ -272,6 +311,8 @@ class FieldDownscaleHarness {
         val Candidates = listOf(360, 240, 180, 120, 90, 60, 45, 30, 20)
 
         const val Survey = "FieldSurvey"
+
+        const val NanosPerMilli = 1_000_000.0
 
         /** Coarser than [Candidates]: the survey is finding which designs have a floor at all, not pinning one. */
         val SurveyCandidates = listOf(360, 240, 180, 120, 60)
