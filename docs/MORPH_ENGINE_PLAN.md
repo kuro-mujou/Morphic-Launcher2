@@ -1,7 +1,7 @@
 # Morph Engine
 
 **Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands, Waves, Wave
-Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone and Dot Grid rolled out, and the field bucket re-measured and mostly dissolved
+Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone, Dot Grid and Mondrian rolled out, and the field bucket re-measured and mostly dissolved
 (2026-09-11). Drawn
 from three screen captures of Smart Launcher's wallpaper studio taken by the author, each of which overturned a
 conclusion drawn from the one before.
@@ -370,7 +370,7 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  twelve primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
+  eleven primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
   shuffle of either is the same picture.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
     null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
@@ -620,6 +620,37 @@ claim to apply.
     lumpier than a continuous design, as tiles that switch must be, and no seam ever switches in one frame. The spring
     settles in three frames to a frame pixel-identical to the bake, and a sub-threshold release returns **0.000%** of
     pixels changed.
+  - **Mondrian ✅ (2026-09-11) — a subdivision whose cuts may only slide.** The frame is halved recursively, so the
+    recipe is a tree of halvings, and the scrub merges two trees as `GlassTree` merges Vitrall's. `subdivide` now
+    records which way it halved each block instead of keeping only the pieces. It makes the same random draws in the
+    same order, and halves in place so its walk of the tree is the order the pieces always came out in.
+  - **`GlassTree` was not reused, for two reasons.** Where one tree cuts vertically and the other horizontally, it
+    pairs the two and turns one into the other, so the rulings would tilt mid-scrub, and a Mondrian whose rulings
+    tilt is not a Mondrian. Its cuts are also absolute lines clipped through polygons, where a Mondrian halving is
+    `left + width / 2`; the line intersection rounds differently, which would cost the byte-identical bake.
+  - **So a cut pairs only with one on the same axis, where it holds still.** A cut only one tree makes, or two made
+    across each other, is one-sided: it slides from the middle of its region to the edge, taking the side with fewer
+    blocks away with it. The other side is merged against the whole of the other tree's region, which is `GlassTree`'s
+    flattening, confined to one axis. **A cut stands at a share of its own region**, not at a line on the frame, so a
+    side on its way out carries its whole subdivision down in proportion, and every moment is a partition of
+    rectangles. `the frame stays whole at every moment of a scrub` sums and overlap-checks the blocks at 21 values of
+    `t` over six shuffles, and `a scrub starts on one Mondrian's blocks and ends on the other's` pins that both ends of
+    the walk are the two plans exactly, tones included. The halvings are dyadic, so that holds with no tolerance.
+  - **One function turns a cut into two rectangles**, for the subdivision and every moment of a scrub, so a cut that
+    holds still lands on the pixels the bake put it on.
+  - **A block's color blends.** A shuffle re-tones a large share of the blocks, and nothing here carries each block
+    across at its own moment as Dot Grid's drift does, so switching would flip them all at the midpoint. It shares
+    Confetti's open item as a result: on a colorful palette the middle passes through olives and khakis.
+  - **The plan takes the accent count, not the colors**, as Confetti's takes its inks, and lives in the unit square
+    with no size. The one refusal is two plans made for different accent counts.
+  - **The bake: 961 of 961 harness renders byte-identical.** In the harness's ten frames at the finest density the
+    per-step change rises from 6.7% of pixels to 10.1% and back to 6.2%, with no spike at either end. A leaving
+    sliver keeps a single ruling until it is narrower than the ruling itself, and then merges into the edge.
+  - **Verified on emulator-5554.** A Mondrian shuffle changes most of the frame, so the drag moves 5–14% of pixels
+    per step, rising and falling evenly. The spring settles in three frames and every frame after is pixel-identical
+    to the bake, and a sub-threshold release returns **0.000%** of pixels changed.
+  - **The tree stays in Mondrian until Modern Mosaic arrives.** That design is also cut by axis-aligned guillotine
+    cuts, at fractions other than a half, and is the natural second consumer.
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a

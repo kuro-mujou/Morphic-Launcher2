@@ -1,15 +1,20 @@
 package inkspire.morphic.core.graphics.wallpaper
 
+import inkspire.morphic.core.graphics.wallpaper.MondrianGenerator.Rect
+import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.random.Random
 
 /**
  * The subdivision — the blocks must *partition* the frame (cover it, no overlap), because the fill trusts that and a
- * gap or overlap is a silently-wrong tiling no green build would catch.
+ * gap or overlap is a silently-wrong tiling no green build would catch. And the scrub, which must keep that partition
+ * at every moment and land on each end's own blocks.
  */
 class MondrianGeneratorTest {
 
@@ -37,10 +42,9 @@ class MondrianGeneratorTest {
 
     @Test
     fun `a single-stop palette has nothing to accent with, and every block is ground`() {
-        val only = 0xFF808080.toInt()
-        val accents = MondrianGenerator.accents(Palette(listOf(only)))
+        val accents = MondrianGenerator.accents(Palette(listOf(0xFF808080.toInt())))
         assertTrue(accents.isEmpty())
-        assertEquals(only, MondrianGenerator.blockColor(Random(1), Palette(listOf(only)), accents))
+        assertEquals(MondrianGenerator.Ground, MondrianGenerator.tone(Random(1), accents.size))
     }
 
     @Test
@@ -52,14 +56,78 @@ class MondrianGeneratorTest {
 
     @Test
     fun `the blocks cover the whole frame — their areas sum to one`() {
-        val blocks = MondrianGenerator.subdivide(passes = 6, random = Random(11L))
-        val area = blocks.sumOf { (it.width * it.height).toDouble() }
-        assertEquals(1.0, area, 1e-4)
+        assertEquals(1.0, area(blocks(passes = 6, seed = 11L)), 1e-4)
     }
 
     @Test
     fun `no two blocks overlap`() {
-        val blocks = MondrianGenerator.subdivide(passes = 5, random = Random(3L))
+        assertNoOverlap(blocks(passes = 5, seed = 3L))
+    }
+
+    @Test
+    fun `the same seed yields the same blocks, so a recipe reproduces`() {
+        assertEquals(blocks(5, 42L), blocks(5, 42L))
+    }
+
+    /**
+     * **The frame stays whole at every moment of a scrub** — over shuffles whose trees disagree at the root, where a
+     * cut leaves one way while the other tree's structure arrives across it. The cuts slide, so this cannot fail by
+     * construction unless the slide and the split stop agreeing on a region; this is the check that they do.
+     */
+    @Test
+    fun `the frame stays whole at every moment of a scrub`() {
+        for (seed in 1L..6L) {
+            val morph = morph(seed, seed + 50)
+            for (step in 0..20) {
+                val blocks = ArrayList<Rect>()
+                morph.at(step / 20f) { rect, _, _ -> blocks.add(rect) }
+                assertEquals("seed $seed at ${step / 20f}", 1.0, area(blocks), 1e-4)
+                assertNoOverlap(blocks)
+            }
+        }
+    }
+
+    /**
+     * **A scrub's ends are the two Mondrians it is between**, block for block and tone for tone, once the blocks that
+     * are only arriving or already gone — which stand at no width at all there — are left out. The morph hands over to
+     * the bake at both ends, so a difference here would be a jump the moment the finger lifts.
+     */
+    @Test
+    fun `a scrub starts on one Mondrian's blocks and ends on the other's`() {
+        for (seed in 1L..6L) {
+            val from = MondrianGenerator.plan(DesignParams(), accents = 4, seed = seed)
+            val to = MondrianGenerator.plan(DesignParams(), accents = 4, seed = seed + 50)
+            val morph = requireNotNull(MondrianGenerator.morph(from, to))
+            for ((t, plan) in listOf(0f to from, 1f to to)) {
+                val seen = ArrayList<Pair<Rect, Int>>()
+                morph.at(t) { rect, fromTone, toTone ->
+                    if (rect.width > 0f && rect.height > 0f) seen.add(rect to if (t == 0f) fromTone else toTone)
+                }
+                assertEquals("seed $seed at $t", plan.blocks.map { it.rect to it.tone }, seen)
+            }
+        }
+    }
+
+    @Test
+    fun `two Mondrians toned for different accents are refused rather than paired`() {
+        val four = MondrianGenerator.plan(DesignParams(), accents = 4, seed = 1L)
+        assertNull(MondrianGenerator.morph(four, MondrianGenerator.plan(DesignParams(), accents = 2, seed = 2L)))
+        assertNotNull(MondrianGenerator.morph(four, MondrianGenerator.plan(DesignParams(), accents = 4, seed = 2L)))
+    }
+
+    private fun blocks(passes: Int, seed: Long) =
+        MondrianGenerator.blocks(MondrianGenerator.subdivide(passes, Random(seed))).map { it.rect }
+
+    private fun morph(from: Long, to: Long) = requireNotNull(
+        MondrianGenerator.morph(
+            MondrianGenerator.plan(DesignParams(density = 1f), accents = 4, seed = from),
+            MondrianGenerator.plan(DesignParams(density = 1f), accents = 4, seed = to),
+        ),
+    )
+
+    private fun area(blocks: List<Rect>) = blocks.sumOf { (it.width * it.height).toDouble() }
+
+    private fun assertNoOverlap(blocks: List<Rect>) {
         for (i in blocks.indices) {
             for (j in i + 1 until blocks.size) {
                 val a = blocks[i]
@@ -69,13 +137,5 @@ class MondrianGeneratorTest {
                 assertTrue("blocks $i and $j overlap", overlapX <= 1e-4f || overlapY <= 1e-4f)
             }
         }
-    }
-
-    @Test
-    fun `the same seed yields the same blocks, so a recipe reproduces`() {
-        assertEquals(
-            MondrianGenerator.subdivide(5, Random(42L)),
-            MondrianGenerator.subdivide(5, Random(42L)),
-        )
     }
 }

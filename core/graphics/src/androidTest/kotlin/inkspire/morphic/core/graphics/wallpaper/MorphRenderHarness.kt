@@ -293,6 +293,35 @@ class MorphRenderHarness {
         }
     }
 
+    /**
+     * One Mondrian shuffle at its finest, colorful — ten frames of rulings sliding.
+     *
+     * What to look for: **every ruling should stay horizontal or vertical and slide along its own axis**, never turn;
+     * a block on its way out should narrow into an edge with its own subdivision shrinking inside it; and the ruling
+     * should stay one even weight — a doubled line would mean a leaving sliver's outline reading on its own.
+     */
+    @Test
+    fun renderMondrianMorph() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val colorful = PaletteColorMode.resolve(Palette(Dusk), WallpaperColorMode.COLORFUL)
+        val params = DesignParams(density = 1f, colorMode = WallpaperColorMode.COLORFUL)
+        val accents = MondrianGenerator.accents(colorful).size
+        val morph = requireNotNull(
+            MondrianGenerator.morph(
+                MondrianGenerator.plan(params, accents, seed = 42L),
+                MondrianGenerator.plan(params, accents, seed = 43L),
+            ),
+        )
+
+        for (step in 0..Steps) {
+            val t = step.toFloat() / Steps
+            val bitmap = createBitmap(Width, Height)
+            morph.draw(Canvas(bitmap), t, colorful, Width, Height)
+            saveHarnessPng(resolver, "morph_mondrian_${(t * 100).toInt().toString().padStart(3, '0')}.png", bitmap)
+            bitmap.recycle()
+        }
+    }
+
     private companion object {
         /** "Dusk", the render harness's palette — warm sand and terracotta against deep teal. */
         val Dusk = listOf(
