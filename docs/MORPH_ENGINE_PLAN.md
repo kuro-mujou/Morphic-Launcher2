@@ -1,6 +1,7 @@
 # Morph Engine
 
-**Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps and Voronoi rolled out (2026-09-11). Drawn from three screen captures of Smart Launcher's wallpaper
+**Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps and Voronoi rolled out, and the field
+bucket re-measured and mostly dissolved (2026-09-11). Drawn from three screen captures of Smart Launcher's wallpaper
 studio taken by the author, each of which overturned a conclusion drawn from the one before.
 
 **Covers:** the render seam both studios draw through — why `Generator.render() → Bitmap` is the wrong shape for a live
@@ -155,10 +156,26 @@ Rounded Tiles, Soft Overlaps, Spray, Triangular Facets, Truchet, Vitrall, Vorono
 downscale would soften the edges that *are* the picture. `plan` here extracts what `render` already computes before it
 draws — no new geometry, and the byte-identical bake assertion should hold trivially.
 
-**Field designs — re-evaluation is `O(pixels)`, and they downscale for free (12).** Diagonal Bands, Gradient Columns,
-Linear Gradient, Louvers, Marble, Mesh Gradient, Metaballs, Plasma, Ribbed Glass, Wave Dividers, Waves, Planet. Expensive per full-resolution frame on the CPU, but the field is smooth by construction, so a scrub frame
-evaluated at a fraction of the pixels and bilinearly upscaled is **perceptually identical**. `plan` here is a small
-parameter struct rather than a set of paths, and `draw` runs the pixel loop — the same seam, a different kind of plan.
+**Field designs — re-evaluation is `O(pixels)`, and they downscale for free (3, measured).** Mesh Gradient, Linear
+Gradient, and Plasma at a floor that rises with its frequency. Expensive per full-resolution frame on the CPU, but the
+field is smooth by construction, so a scrub frame evaluated at a fraction of the pixels and bilinearly upscaled is
+**perceptually identical**. `plan` here is a small parameter struct rather than a set of paths, and `draw` runs the
+pixel loop — the same seam, a different kind of plan.
+
+**This bucket held twelve until it was measured, and nine of them left it (2026-09-11).** They were filed here by the
+timing fit — cost per pixel, nothing fixed — and the fit says nothing about whether a picture survives being evaluated
+small. `FieldDownscaleHarness.surveyRemainingFieldDesigns` measured that, and most of them draw each pixel into a flat
+band with no antialiasing, so a downscale stairs every edge. None can afford full resolution per pixel either: the
+cheapest costs 47 ms a frame and the dearest 1.7 s. The survey table is under "Field survey" below. Where they went:
+
+- **Shapes drawn a pixel at a time (5) — to the primitive bucket.** Diagonal Bands, Waves, Wave Dividers, Gradient
+  Columns and Louvers are straight bands, crest-bounded bands and strips of gradient: paths and gradient shaders,
+  written as a pixel loop. Split, they are drawn by the canvas for the bake and the scrub alike, as Voronoi now is —
+  their bakes gain antialiased edges, and drop from 47–363 ms to a few.
+- **Edges cut from an expensive field (4) — no bucket yet; open question 6.** Metaballs (bands of a warped
+  potential), Ribbed Glass (a lens per rib, with hard seams between them), Planet (a per-pixel pigment walk with hard
+  band boundaries) and Marble (creased veins over fine turbulence). The field under them is costly *and* the edges
+  cut from it are sharp, so neither economy covers them.
 
 **That is the inversion worth holding on to: each bucket is cheap in exactly the way the other is not.** The intuition
 that a "cheap draft" helps the expensive designs is right; the intuition that it helps *everything* is wrong, and it is
@@ -170,9 +187,10 @@ rather than soften, which is a different composition rather than a softer one. S
 **per-design**: a mesh gradient can go far below 360, Contour cannot. One global floor is the right default and the
 wrong ceiling.
 
-**AGSL becomes an optimization, not a prerequisite.** It would speed the field bucket, and it is still API 33+ against
-a `minSdk` of 26 — but the downscale already makes that bucket affordable, so nothing is blocked on it and no second
-renderer has to exist.
+**AGSL becomes an optimization, not a prerequisite — for the field bucket.** It would speed that bucket, and it is
+still API 33+ against a `minSdk` of 26 — but the downscale already makes it affordable, so nothing there is blocked
+on it and no second renderer has to exist. The four edge-cut designs are the exception, and the one place AGSL is a
+candidate rather than a speed-up: see open question 6.
 
 ## Engine verdicts
 
@@ -346,8 +364,10 @@ claim to apply.
     y = 135..159 — the status-bar clock. Worth knowing about this design specifically: **its seed moves only the
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
-- **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Sixteen extractions left
-  in the primitive bucket and eleven parameter structs in the field one, and neither is a rewrite.
+- **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
+  sixteen primitive extractions, five shape designs to redraw as primitives (their bakes change, as Voronoi's did),
+  Plasma as a field with a frequency-dependent floor, and four edge-cut designs waiting on open question 6. Linear
+  Gradient is not owed a scrub at all: it ignores the seed, so a shuffle of it is the same picture.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
     null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
     keeps only the refusals that are the studio's rather than a design's, and one was added: **two different knob
@@ -481,6 +501,37 @@ predicted, and it means the per-design floor is owed to at least five designs ra
 The plan-bound designs — the ones M4's speculative pre-planning exists for — are Flow Field (`0.850`), Spray (`0.648`),
 Flow Lines (`0.500`), Contour (`0.469`) and Impasto (`0.362`). Everything else can be planned on demand.
 
+### Field survey — emulator, 2026-09-11
+
+`FieldDownscaleHarness.surveyRemainingFieldDesigns`, run over every design still filed as a field. Each is rendered at
+a short side of 360, 240, 180, 120 and 60 and blown up with the scrub's bilinear filter, over its own knobs one at a
+time, both corners and every choice, and compared against its full-size render. Columns are the share of pixels more
+than 4 levels off at 360 — the worst recipe and the default — against Mesh Gradient's 0.001% at 120, and the
+full-frame cost from `GeneratorTimingHarness` on the same machine. Every noise floor was zero: two full renders of
+one recipe agreed exactly, Planet's included, so the failures are the downscale's.
+
+| design | worst, 360 | default, 360 | full frame | what it draws |
+|---|---|---|---|---|
+| Linear Gradient | 0.000% (at 60, too) | 0.000% | 332 ms | a true field — that ignores the seed |
+| Plasma | 3.99% | 0.54% | 1389 ms | smooth, finer as its frequency rises |
+| Diagonal Bands | 3.53% | 1.94% | 47 ms | straight flat bands on a ground |
+| Waves | 2.07% | 0.80% | 129 ms | flat bands between smooth crests |
+| Wave Dividers | 9.31% | 2.92% | 363 ms | flat bands between identical waves |
+| Gradient Columns | 5.18% | 0.64% | 214 ms | flat columns, edge- and rake-shaded |
+| Louvers | 5.34% | 1.52% | 116 ms | strips each showing a shifted ramp |
+| Metaballs | 2.75% | 1.57% | 904 ms | bands of a warped potential |
+| Ribbed Glass | 4.96% | 2.60% | 1164 ms | refraction per rib, hard rib seams |
+| Planet | 3.08% | 1.51% | 436 ms | per-pixel pigment walk, hard band edges |
+| Marble | 24.76% | 9.02% | 1690 ms | creased veins over fine turbulence |
+
+**The pictures matter more than the numbers.** A downscaled band design does not come back soft, it comes back
+*stepped* — each pixel was classified into a band with no coverage in between, so the blow-up is a staircase along
+every edge, which a softened edge would at least not be. Marble's veins break into rows of dots. The ribbed designs
+blur a crease that is meant to be sharp.
+
+**And a pixel loop is slow on its own terms.** Linear Gradient — one ramp lookup per pixel — costs 332 ms at full frame,
+128 ms per megapixel. Whatever a design does per pixel, doing it for every pixel of a phone on the CPU is not a frame.
+
 ## Open questions
 
 1. ~~**What a release below threshold does**~~ — **answered: it snaps back (2026-09-10)**, and the evidence was
@@ -495,11 +546,18 @@ Flow Lines (`0.500`), Contour (`0.469`) and Impasto (`0.362`). Everything else c
    360. What remains is that every other field design owes its own number, and `FieldDownscaleHarness` is now the way
    to get one. Contour is the design that will want the largest, and Flow Field and Flow Lines are the ones where the
    `r2` fit says a downscale is not free at all — those three are the ones to measure before assuming anything. **And
-   run it before trusting the bucket at all**: Voronoi passed the timing fit perfectly and failed this outright.
+   run it before trusting the bucket at all**: Voronoi passed the timing fit perfectly and failed this outright. *Run
+   over the rest of the bucket on 2026-09-11*: see "Field survey" — only Linear Gradient passes outright, Plasma's
+   floor depends on its frequency and is owed a number when it is split, and nine designs have no floor at all.
 4. **Where the ground color comes from** — the palette, or its own field on the plan. It has to lerp either way; only
    the ownership is open.
 5. **Whether `Plan` lives in `core:graphics` or earns a module.** It is data and wants to be plain, but `core:model` is
    plain *Kotlin* by rule and a plan is not small. `core:graphics` is the honest first home.
+6. **What scrubs a design whose edges are cut from an expensive field** — Metaballs, Ribbed Glass, Planet, Marble.
+   Downscaling stairs the edges and full resolution costs 0.4–1.7 s. Two candidates, neither cheap: **trace the edges**
+   — evaluate the field on a small lattice, march its band thresholds into paths, and let the canvas draw them crisp,
+   which changes the bake to vector edges as Voronoi's did; or **AGSL** — the same per-pixel code as a shader at full
+   resolution, API 33+, with the dissolve below that and a second implementation of each field to keep in step.
 
 ## How this was settled, and why the record is kept
 
