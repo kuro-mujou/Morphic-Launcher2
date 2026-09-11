@@ -2,12 +2,15 @@ package inkspire.morphic.core.graphics.wallpaper
 
 import inkspire.morphic.core.graphics.wallpaper.SoftOverlapsGenerator.OverlapBlend
 import inkspire.morphic.core.graphics.wallpaper.SoftOverlapsGenerator.OverlapLook
+import inkspire.morphic.core.model.wallpaper.DesignParams
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.random.Random
 
 /**
@@ -98,7 +101,7 @@ class SoftOverlapsGeneratorTest {
 
     @Test
     fun `the deformation knob changes how far the ring wanders, never which way`() {
-        // Two values are drawn per point whatever the amplitude, so the seeded stream does not shift as the knob
+        // One value is drawn per point whatever the amplitude, so the seeded stream does not shift as the knob
         // moves — a form keeps its character and only its exaggeration changes.
         val gentle = SoftOverlapsGenerator.radii(points = 8, deform = 0.2f, random = Random(3))
         val strong = SoftOverlapsGenerator.radii(points = 8, deform = 0.8f, random = Random(3))
@@ -107,5 +110,50 @@ class SoftOverlapsGeneratorTest {
             val strongOffset = strong[k] - 1f
             assertEquals("point $k turned the other way", 4f, strongOffset / gentleOffset, 1e-3f)
         }
+    }
+
+    /**
+     * **A form's partner is the form at its own index**, which is what the scrub pairs by and what a misaligned list
+     * would get wrong without failing — every form would sail across the frame to a stranger's place. Two seeds at a
+     * modest scatter put each form nearer its partner than any other form, which is only true if they share a cell.
+     */
+    @Test
+    fun `a shuffle pairs every form with the one in its own lattice cell`() {
+        val params = DesignParams(density = 1f, irregularity = 0.3f)
+        val from = SoftOverlapsGenerator.plan(params, seed = 1L)
+        val to = SoftOverlapsGenerator.plan(params, seed = 2L)
+        assertNotNull(SoftOverlapsGenerator.morph(from, to))
+        assertEquals(10, from.forms.size)
+
+        from.forms.forEachIndexed { i, a ->
+            val nearest = to.forms.indices.minBy { hypot(to.forms[it].x - a.x, to.forms[it].y - a.y) }
+            assertEquals("form $i is nearer another form than its partner", i, nearest)
+        }
+    }
+
+    @Test
+    fun `a moment of the scrub is its two plans, form for form and ring point for ring point`() {
+        val params = DesignParams(roundness = 0f)
+        val from = SoftOverlapsGenerator.plan(params, seed = 5L)
+        val to = SoftOverlapsGenerator.plan(params, seed = 6L)
+        val morph = requireNotNull(SoftOverlapsGenerator.morph(from, to))
+
+        assertSame(from, morph.at(0f))
+        assertSame(to, morph.at(1f))
+        val middle = morph.at(0.5f)
+        middle.forms.forEachIndexed { i, form ->
+            val a = from.forms[i]
+            val b = to.forms[i]
+            assertEquals((a.x + b.x) / 2f, form.x, 1e-6f)
+            assertEquals((a.aspect + b.aspect) / 2f, form.aspect, 1e-6f)
+            for (k in form.factors.indices) assertEquals((a.factors[k] + b.factors[k]) / 2f, form.factors[k], 1e-6f)
+        }
+    }
+
+    @Test
+    fun `two plans with different forms are refused rather than paired`() {
+        val few = SoftOverlapsGenerator.plan(DesignParams(density = 0f), seed = 1L)
+        val many = SoftOverlapsGenerator.plan(DesignParams(density = 1f), seed = 1L)
+        assertNull(SoftOverlapsGenerator.morph(few, many))
     }
 }

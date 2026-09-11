@@ -94,6 +94,34 @@ class MorphRenderHarness {
         }
     }
 
+    /**
+     * One Soft Overlaps shuffle at its most deformed and most crowded, in colorful, in Screen — ten frames.
+     *
+     * What to look for: **each form should slide, swell and change shape without ever folding** — a ring point
+     * crossing its neighbors would show as a pinched or looped outline mid-scrub; and the overlaps, which are where
+     * this design's color lives, should brighten and dim smoothly as forms cross rather than flicker.
+     */
+    @Test
+    fun renderSoftOverlapsMorph() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val colorful = PaletteColorMode.resolve(Palette(Dusk), WallpaperColorMode.COLORFUL)
+        val params = DesignParams(density = 1f, roundness = 0f, colorMode = WallpaperColorMode.COLORFUL)
+        val morph = requireNotNull(
+            SoftOverlapsGenerator.morph(
+                SoftOverlapsGenerator.plan(params, seed = 42L),
+                SoftOverlapsGenerator.plan(params, seed = 43L),
+            ),
+        )
+
+        for (step in 0..Steps) {
+            val t = step.toFloat() / Steps
+            val bitmap = createBitmap(Width, Height)
+            SoftOverlapsGenerator.draw(Canvas(bitmap), morph.at(t), colorful, Width, Height)
+            saveHarnessPng(resolver, "morph_overlaps_${(t * 100).toInt().toString().padStart(3, '0')}.png", bitmap)
+            bitmap.recycle()
+        }
+    }
+
     private companion object {
         /** "Dusk", the render harness's palette — warm sand and terracotta against deep teal. */
         val Dusk = listOf(

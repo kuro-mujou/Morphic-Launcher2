@@ -1,6 +1,6 @@
 # Morph Engine
 
-**Status:** M1–M5 built (2026-09-10); M6 under way — Confetti rolled out (2026-09-11). Drawn from three screen captures of Smart Launcher's wallpaper
+**Status:** M1–M5 built (2026-09-10); M6 under way — Confetti and Soft Overlaps rolled out (2026-09-11). Drawn from three screen captures of Smart Launcher's wallpaper
 studio taken by the author, each of which overturned a conclusion drawn from the one before.
 
 **Covers:** the render seam both studios draw through — why `Generator.render() → Bitmap` is the wrong shape for a live
@@ -340,7 +340,7 @@ claim to apply.
     y = 135..159 — the status-bar clock. Worth knowing about this design specifically: **its seed moves only the
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
-- **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Seventeen extractions left
+- **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Sixteen extractions left
   in the primitive bucket and twelve parameter structs in the field one, and neither is a rewrite.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
     null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
@@ -378,6 +378,28 @@ claim to apply.
     reads as a duller palette. Bichromatic, the default, has one ink and never shows it. A per-disc stagger — each
     disc's color changing over its own short window, perhaps in the swipe's direction — would keep the middle
     saturated. It is a design choice rather than a fix, so it was not made.
+  - **Soft Overlaps ✅ (2026-09-11) — the second scatter, and the one with nothing to recolor.** Its forms sit on
+    `PointScatter`'s jittered lattice, so they pair by index as Confetti's discs do; and a form's tone follows its index
+    rather than the seed, so partners are already the same color and the midpoint cannot go muddy. A form's ring is
+    lerped factor by factor — each scales the radius at a *fixed* angle, so any mix of two rings is still one closed
+    curve around its center, where lerping two outlines' vertices can fold.
+  - **Its plan takes no size and no palette**, like a field plan and unlike Confetti's: the placement is the unit
+    square and every size a share of the short side, and `draw` applies both in the order the render always did — so
+    the plan is resolution-independent *and* the bake byte-identical (943 of 961; the other 18 are below).
+  - **The live-path test found a bug that predated the morph.** Seven of the eight look × blend pairs agreed with the
+    bake as closely as Vitrall does (at most `4.5e-4` of pixels past 24 levels); **Glow × Multiply disagreed over
+    4.5% of the frame**. The cause was the bake, not the GPU: `PorterDuff.Mode.MULTIPLY` is Skia's *modulate*, which
+    multiplies alpha too, so every Multiply form punched a translucent hole in the ground — 81% of a Fill frame at
+    alpha 157, a Glow frame down to fully transparent, and the two rasterizers disagreed only about how to cover a
+    translucent rim. A full scan of the harness found it in those 18 renders and nowhere else in the catalog. Fixed
+    by laying a Multiply form as the opaque color it multiplies to — its tone lerped toward white by its opacity —
+    which over an opaque ground *is* the multiply blend, at every API level. After it, Glow × Multiply agrees to a
+    max of 3 levels, and the test now also asserts every bake is opaque.
+  - **`LivePath`** is the instrument both live-path tests now share: the second consumer arrived, and a bar that
+    two tests hold separately is two bars.
+  - **Verified on emulator-5554**, and Vitrall, Mesh Gradient and Confetti re-checked through the lifted seam. The
+    drag changes the picture evenly (4.5–5.6% mean per step), the spring settles in two frames and every frame after
+    is pixel-identical to the bake, and a sub-threshold release returns **0.000%** of pixels changed.
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a

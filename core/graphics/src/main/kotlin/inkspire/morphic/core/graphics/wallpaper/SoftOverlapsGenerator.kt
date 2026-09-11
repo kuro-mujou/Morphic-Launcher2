@@ -60,6 +60,9 @@ import kotlin.random.Random
  *
  * [blobCount], [radii] and [blendOf] are pure and tested: a shape whose radii leave their bounds, or a blend that
  * silently falls back to painting over, is wrong in a way a bitmap only confirms after the fact.
+ *
+ * **It plans and then paints**, so a shuffle can be scrubbed: [plan] places and shapes the forms, [draw] paints them
+ * onto any canvas, and [morph] walks each form toward its partner in the next seed — see docs/MORPH_ENGINE_PLAN.md.
  */
 object SoftOverlapsGenerator : Generator {
 
@@ -105,25 +108,149 @@ object SoftOverlapsGenerator : Generator {
         finish = VariantKnob("Blend", OverlapBlend.entries.map { it.label }),
     )
 
+    /**
+     * One form, placed and shaped but not painted.
+     *
+     * **In the unit square and in shares of a radius, so at no size at all** — the frame's width and height and its
+     * short side are applied by [draw], in the same order of operations the render has always used, which is what
+     * keeps the bake byte-identical to the render before the split.
+     *
+     * @property x the center across the frame, `0..1`.
+     * @property y the center down the frame, `0..1`.
+     * @property shrink the form's radius as a share of the plan's [Plan.radius] — `1` is full size, and the size
+     *   variation only ever shrinks.
+     * @property aspect how much wider than tall the form is drawn: its radius times this across, divided by it down.
+     * @property factors each ring point's radius factor, [ShapePoints] of them — see [radii].
+     */
+    internal class Form(val x: Float, val y: Float, val shrink: Float, val aspect: Float, val factors: FloatArray)
+
+    /**
+     * The forms a recipe describes, and how they are inked — everything [draw] needs, at no particular size and in no
+     * particular palette.
+     *
+     * **A form's color is not here, because it is not a choice this design makes per seed**: the `i`-th form takes
+     * the `i`-th tone of the ramp, cycling. So a shuffle never recolors a form, and a scrub has no colors to blend.
+     *
+     * @property radius the full-size radius, as a share of the frame's short side.
+     */
+    internal class Plan(
+        val forms: List<Form>,
+        val radius: Float,
+        val look: OverlapLook,
+        val blend: OverlapBlend,
+    )
+
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val bitmap = createBitmap(width, height)
-        val canvas = Canvas(bitmap)
-        canvas.drawColor(palette.colorAt(palette.size - 1)) // the ground is the darkest stop, as theirs is
-        val tones = RampTones.belowGround(palette)
-        if (tones.isEmpty()) return bitmap // a single-stop palette is all ground
+        draw(Canvas(bitmap), plan(params, seed), palette, width, height)
+        return bitmap
+    }
 
+    /**
+     * The forms [params] and [seed] describe.
+     *
+     * **It takes no size and no palette**, like a field design's plan and unlike the other primitive ones: the
+     * placement is `PointScatter`'s unit square and every size is a share of the short side, so there is nothing a
+     * frame has to decide until the forms are drawn.
+     *
+     * **The random draws per form are a fixed sequence — size, aspect, then the ring — and re-ordering them is silent**:
+     * the forms keep their places and their count and simply become different shapes at the same seed.
+     */
+    internal fun plan(params: DesignParams, seed: Long): Plan {
         val count = blobCount(params.density)
         val centers = PointScatter.gridJitter(count, params.irregularity, seed)
-        val shortSide = min(width, height)
-        val look = lookOf(params.variant)
-        val blend = blendOf(params.finish)
         // Salted apart from the placement stream, so the scatter knob moves forms without reshaping or resizing them.
         val random = Random(seed xor ShapeSalt)
-
-        val baseRadius = shortSide * (MinRadius + (MaxRadius - MinRadius) * params.scale.coerceIn(0f, 1f))
         val spread = params.taper.coerceIn(0f, 1f)
         // Their *Irregularity*, read off the round end — see the class note.
         val deform = (1f - params.roundness.coerceIn(0f, 1f)) * MaxDeform
+
+        val forms = List(count) { i ->
+            // Each form is smaller than the full radius by up to the spread, never larger — which is the direction
+            // theirs moves: winding *Size variation* up shrinks most of the forms rather than spreading them either way.
+            val shrink = 1f - spread * random.nextFloat()
+            val aspect = MinAspect + random.nextFloat() * (MaxAspect - MinAspect)
+            Form(centers[i * 2], centers[i * 2 + 1], shrink, aspect, radii(ShapePoints, deform, random))
+        }
+        return Plan(
+            forms = forms,
+            radius = MinRadius + (MaxRadius - MinRadius) * params.scale.coerceIn(0f, 1f),
+            look = lookOf(params.variant),
+            blend = blendOf(params.finish),
+        )
+    }
+
+    /**
+     * A scatter scrub: every form slides, swells and reshapes toward its partner, at full resolution.
+     *
+     * **Nothing to pair and nothing to recolor.** The forms sit on `PointScatter`'s jittered lattice, so the `i`-th
+     * form of one seed and the `i`-th of the next share a cell; and their tones follow the index, so the partners are
+     * the same color already.
+     */
+    override fun scrub(
+        width: Int,
+        height: Int,
+        palette: Palette,
+        params: DesignParams,
+        from: Long,
+        to: Long,
+    ): WallpaperMorph? {
+        val morph = morph(plan(params, from), plan(params, to)) ?: return null
+        return WallpaperMorph { canvas, t, w, h -> draw(canvas, morph.at(t), palette, w, h) }
+    }
+
+    /** Two plans prepared to interpolate, form for form — or **null where they do not hold the same forms**. */
+    internal fun morph(from: Plan, to: Plan): Morph? =
+        if (from.forms.size == to.forms.size) Morph(from, to) else null
+
+    /** Two plans and every moment between them. */
+    internal class Morph(private val from: Plan, private val to: Plan) {
+
+        /**
+         * The forms [t] of the way across; the ends are the plans themselves, as every design's are.
+         *
+         * **A ring is lerped point by point, and that is what keeps a form a form.** Each factor scales the radius at
+         * a *fixed* angle, so any mix of two rings is still one closed curve around its center — never the
+         * self-intersecting scribble that lerping two outlines' vertices can produce.
+         */
+        fun at(t: Float): Plan = when {
+            t <= 0f -> from
+            t >= 1f -> to
+            else -> Plan(
+                forms = List(from.forms.size) { between(from.forms[it], to.forms[it], t) },
+                radius = from.radius + (to.radius - from.radius) * t,
+                // The look and the blend are choices, and a shuffle never changes either.
+                look = if (t < 0.5f) from.look else to.look,
+                blend = if (t < 0.5f) from.blend else to.blend,
+            )
+        }
+
+        private fun between(a: Form, b: Form, t: Float) = Form(
+            x = a.x + (b.x - a.x) * t,
+            y = a.y + (b.y - a.y) * t,
+            shrink = a.shrink + (b.shrink - a.shrink) * t,
+            aspect = a.aspect + (b.aspect - a.aspect) * t,
+            factors = FloatArray(a.factors.size) { a.factors[it] + (b.factors[it] - a.factors[it]) * t },
+        )
+    }
+
+    /**
+     * Paints [plan] into [canvas] at `[width]` × `[height]`, in [palette] — the bake into a software bitmap and a
+     * scrub into a hardware canvas alike.
+     *
+     * **The blend is a `PorterDuffXfermode` against whatever the canvas already holds**, which on a scrub is the
+     * window's own render target rather than a bitmap. It agrees with the bake because the ground is drawn opaque
+     * over the whole frame first, so the forms have exactly the same thing beneath them either way.
+     */
+    internal fun draw(canvas: Canvas, plan: Plan, palette: Palette, width: Int, height: Int) {
+        canvas.drawColor(palette.colorAt(palette.size - 1)) // the ground is the darkest stop, as theirs is
+        val tones = RampTones.belowGround(palette)
+        if (tones.isEmpty()) return // a single-stop palette is all ground
+
+        val shortSide = min(width, height)
+        val look = plan.look
+        val blend = plan.blend
+        val baseRadius = shortSide * plan.radius
 
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.FILL
@@ -135,15 +262,12 @@ object SoftOverlapsGenerator : Generator {
             }
         }
 
-        for (i in 0 until count) {
-            val cx = centers[i * 2] * width
-            val cy = centers[i * 2 + 1] * height
-            // Each form is smaller than [baseRadius] by up to the spread, never larger — which is the direction
-            // theirs moves: winding *Size variation* up shrinks most of the forms rather than spreading them either way.
-            val radius = baseRadius * (1f - spread * random.nextFloat())
-            val aspect = MinAspect + random.nextFloat() * (MaxAspect - MinAspect)
-            val rx = radius * aspect
-            val ry = radius / aspect
+        plan.forms.forEachIndexed { i, form ->
+            val cx = form.x * width
+            val cy = form.y * height
+            val radius = baseRadius * form.shrink
+            val rx = radius * form.aspect
+            val ry = radius / form.aspect
             val tone = tones[i % tones.size]
             // Multiply is laid opaque, as the color the form multiplies to — see [modulated].
             val ink = if (blend == OverlapBlend.MULTIPLY) modulated(tone, FormAlpha) else tone
@@ -164,9 +288,8 @@ object SoftOverlapsGenerator : Generator {
             }
             // After the color, which resets it — and it modulates the shader too, so one line covers both looks.
             paint.alpha = (alpha * ChannelMax).roundToInt()
-            canvas.drawPath(blobPath(cx, cy, rx, ry, radii(ShapePoints, deform, random)), paint)
+            canvas.drawPath(blobPath(cx, cy, rx, ry, form.factors), paint)
         }
-        return bitmap
     }
 
     /**
@@ -196,7 +319,7 @@ object SoftOverlapsGenerator : Generator {
      * One radius factor per point of a form's ring, each `1 ± deform` — `1` exactly when [deform] is `0`, which is
      * the ellipse the reference draws at its *Irregularity* `0`.
      *
-     * Two values are drawn from [random] per point whether or not [deform] is zero, so moving the knob changes how
+     * One value is drawn from [random] per point whether or not [deform] is zero, so moving the knob changes how
      * far the ring departs and never which way — the seeded stream does not shift underneath it.
      */
     internal fun radii(points: Int, deform: Float, random: Random): FloatArray =
