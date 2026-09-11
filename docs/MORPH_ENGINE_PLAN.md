@@ -370,8 +370,8 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  four primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
-  shuffle of either is the same picture.
+  three primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
+  shuffle of either is the same picture. **Impasto is owed none either, for its cost**: see its entry below.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
     null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
     keeps only the refusals that are the studio's rather than a design's, and one was added: **two different knob
@@ -807,6 +807,18 @@ claim to apply.
     most of the remaining travel at once. It settles in three frames, every frame after is pixel-identical to the bake,
     and a sub-threshold release returns **0.000%** of pixels changed. The colorful midpoint goes browner, as every
     flat-color design's does.
+  - **Impasto is owed no scrub, for its cost (2026-09-11).** The mechanism exists and was built: the seed decides
+    every mark's jitter and every dab's walk, each push a zero-mean draw and each outline linear in its pushes, so a
+    moment re-draws both seeds' streams in lockstep and turns each pair (`turnNoise`). The rim then stays as torn as
+    the ends, where a straight blend would smooth the brush by about 0.7. The bake stayed byte-identical and the frames
+    read as paint re-tearing in place. **But a frame is about 7,000 translucent 128-point dabs, and nothing makes that
+    a frame.** On emulator-5554 the hardware canvas took **1.7 s** a frame, with the GPU at about 5 s. Drawn in
+    software, a moment cost **290 ms** at full size, and still **160 ms at 180×400**, since walking the dabs and
+    building their paths costs the same at any size; so the field designs' downscale buys almost nothing here. Drawing
+    fewer layers mid-scrub would change the texture at both ends of the gesture. **The author chose to leave it
+    unscrubbed**, and the studio keeps the dissolve, as it does for Louvers. Worth knowing for a retry: most of a
+    moment's CPU cost was a cosine and a sine per push, which one pair per moment removes. What is left is the dab
+    count itself.
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a
