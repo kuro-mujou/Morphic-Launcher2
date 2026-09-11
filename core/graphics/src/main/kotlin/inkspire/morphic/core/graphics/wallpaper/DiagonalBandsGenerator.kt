@@ -1,9 +1,13 @@
 package inkspire.morphic.core.graphics.wallpaper
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
+import kotlin.math.hypot
 
 /**
  * A slab of parallel bands lying across a calm ground — *Diagonal Bands*, the most restrained design in the catalog.
@@ -34,7 +38,11 @@ import inkspire.morphic.core.model.wallpaper.Palette
  * control neither the model nor the panel has. It is the second design to want one, after Dot Grid.
  *
  * [DesignParams.irregularity] is their *Variation* — perfectly even bands at `0`, a hand-torn set at `1`. The
- * variable-width banding is [Bands], shared with the columns. Deterministic in [seed].
+ * variable-width banding is [Bands], shared with the columns. Deterministic in the seed.
+ *
+ * **The bands are drawn as shapes, not classified a pixel at a time**, so the bake and a scrub issue the same canvas
+ * calls ([plan] and [draw]) and a shuffle can be scrubbed — see docs/MORPH_ENGINE_PLAN.md, whose field survey is why:
+ * a per-pixel slab has hard unantialiased edges that a downscale stairs, and costs tens of milliseconds a frame.
  */
 object DiagonalBandsGenerator : Generator {
 
@@ -90,38 +98,134 @@ object DiagonalBandsGenerator : Generator {
     internal fun axisOf(angle: Angle, width: Int, height: Int): FrameAxis =
         frameAxis(angle.degrees + QuarterTurn, width, height)
 
+    /**
+     * A slab of bands planned but not painted — at no particular size and in no particular palette.
+     *
+     * **It takes no size**, because every number here is a share of the band axis, and the axis is laid across
+     * whatever frame [draw] is given. A band's color is not here either: the `i`-th band takes the `i`-th tone above
+     * the ground, so a shuffle never recolors one.
+     *
+     * @property coverage how much of the axis the slab spans, `0..1` — [coverage] of the knob.
+     * @property boundaries the edges between bands, as shares of the slab, sorted — [Bands.boundaries].
+     */
+    internal class Plan(val angle: Angle, val coverage: Float, val boundaries: FloatArray)
+
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
-        val angle = Angle.entries[params.variant.coerceIn(0, Angle.entries.lastIndex)]
-        val count = bandCount(params.density)
-        val boundaries = Bands.boundaries(count, params.irregularity, seed)
-        val coverage = coverage(params.scale)
-        val tones = RampTones.aboveGround(palette)
-        val ground = palette.colorAt(0)
-
         val bitmap = createBitmap(width, height)
-        if (tones.isEmpty()) {
-            // An all-ground palette has nothing to lay across it, which is the honest picture rather than an error.
-            bitmap.eraseColor(ground)
-            return bitmap
-        }
-
-        val axis = axisOf(angle, width, height)
-        val start = (1f - coverage) / 2f
-        val pixels = IntArray(width * height)
-        for (y in 0 until height) {
-            val row = y * width
-            val fy = y.toFloat()
-            for (x in 0 until width) {
-                val within = (axis.at(x.toFloat(), fy) - start) / coverage
-                pixels[row + x] = if (within < 0f || within > 1f) {
-                    ground
-                } else {
-                    tones[Bands.bandAt(within, boundaries) % tones.size]
-                }
-            }
-        }
-        bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
+        draw(Canvas(bitmap), plan(params, seed), palette, width, height)
         return bitmap
+    }
+
+    /** The slab [params] and [seed] describe. The seed moves only the band widths, and only under *Variation*. */
+    internal fun plan(params: DesignParams, seed: Long): Plan = Plan(
+        angle = Angle.entries[params.variant.coerceIn(0, Angle.entries.lastIndex)],
+        coverage = coverage(params.scale),
+        boundaries = Bands.boundaries(bandCount(params.density), params.irregularity, seed),
+    )
+
+    /**
+     * Paints [plan] into [canvas] at `[width]` × `[height]`, in [palette] — the bake into a software bitmap and a
+     * scrub into a hardware canvas alike.
+     *
+     * **Each band is drawn from its own start to the slab's far end, and the next one covers the rest.** Two
+     * antialiased fills that merely *meet* each leave a partly covered pixel along the edge, and the ground shows
+     * through the pair as a hairline; drawn this way every shared edge is antialiased once, over a solid band.
+     *
+     * **Half a pixel in, because the axis is measured at pixel centers**: [FrameAxis] reads pixel `x` at `x`, and a
+     * canvas puts that pixel's center at `x + 0.5`.
+     */
+    internal fun draw(canvas: Canvas, plan: Plan, palette: Palette, width: Int, height: Int) {
+        canvas.drawColor(palette.colorAt(0))
+        val tones = RampTones.aboveGround(palette)
+        // An all-ground palette has nothing to lay across it, which is the honest picture rather than an error.
+        if (tones.isEmpty()) return
+
+        val axis = axisOf(plan.angle, width, height)
+        val start = (1f - plan.coverage) / 2f
+        val end = start + plan.coverage
+        val reach = (width + height).toFloat()
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        canvas.save()
+        canvas.translate(PixelCenter, PixelCenter)
+        for (band in 0..plan.boundaries.size) {
+            val from = if (band == 0) 0f else plan.boundaries[band - 1]
+            paint.color = tones[band % tones.size]
+            canvas.drawPath(path(slab(axis, start + plan.coverage * from, end, reach)), paint)
+        }
+        canvas.restore()
+    }
+
+    /**
+     * The quad covering [axis] from share [from] to share [to], reaching [reach] pixels either side of it —
+     * interleaved `x, y`, in the axis' own pixel coordinates.
+     *
+     * Built from the axis' two ends rather than from its angle, so the band edges lie exactly where [FrameAxis.at]
+     * reads the boundaries: a quad worked out from the degrees a second time would be the projection written twice.
+     */
+    internal fun slab(axis: FrameAxis, from: Float, to: Float, reach: Float): FloatArray {
+        val ax = axis.endX - axis.startX
+        val ay = axis.endY - axis.startY
+        val length = hypot(ax, ay)
+        if (length <= 0f) return FloatArray(0)
+        val px = -ay / length * reach
+        val py = ax / length * reach
+        val fx = axis.startX + ax * from
+        val fy = axis.startY + ay * from
+        val tx = axis.startX + ax * to
+        val ty = axis.startY + ay * to
+        return floatArrayOf(fx + px, fy + py, tx + px, ty + py, tx - px, ty - py, fx - px, fy - py)
+    }
+
+    private fun path(quad: FloatArray): Path = Path().apply {
+        if (quad.isEmpty()) return@apply
+        moveTo(quad[0], quad[1])
+        for (i in 2 until quad.size step 2) lineTo(quad[i], quad[i + 1])
+        close()
+    }
+
+    /**
+     * A scrub between two slabs: the band edges slide, and nothing else moves.
+     *
+     * **The simplest scrub in the catalog, and a shuffle is exactly this subtle.** The seed only sets the band widths,
+     * and only while *Variation* is up; at `0` two seeds are the same picture and the scrub is a still one.
+     */
+    override fun scrub(
+        width: Int,
+        height: Int,
+        palette: Palette,
+        params: DesignParams,
+        from: Long,
+        to: Long,
+    ): WallpaperMorph? {
+        val morph = morph(plan(params, from), plan(params, to)) ?: return null
+        return WallpaperMorph { canvas, t, w, h -> draw(canvas, morph.at(t), palette, w, h) }
+    }
+
+    /** Two slabs prepared to interpolate, edge for edge — or **null where they hold different numbers of bands**. */
+    internal fun morph(from: Plan, to: Plan): Morph? =
+        if (from.boundaries.size == to.boundaries.size) Morph(from, to) else null
+
+    /** Two slabs and every moment between them. */
+    internal class Morph(private val from: Plan, private val to: Plan) {
+
+        /**
+         * The slab [t] of the way across; the ends are the plans themselves.
+         *
+         * **The edges cannot cross.** Both ends are sorted, and a point between two sorted lists taken edge for edge is
+         * sorted too — so no band ever turns inside out mid-scrub, and there is nothing to guard.
+         */
+        fun at(t: Float): Plan = when {
+            t <= 0f -> from
+            t >= 1f -> to
+            else -> Plan(
+                // A choice, and one a shuffle never changes.
+                angle = if (t < 0.5f) from.angle else to.angle,
+                coverage = from.coverage + (to.coverage - from.coverage) * t,
+                boundaries = FloatArray(from.boundaries.size) {
+                    from.boundaries[it] + (to.boundaries[it] - from.boundaries[it]) * t
+                },
+            )
+        }
     }
 
     /** How many bands [density] asks for — a couple of bold stripes up to a fine set. */
@@ -141,4 +245,7 @@ object DiagonalBandsGenerator : Generator {
 
     /** From a band's own direction to the axis across it, in degrees. */
     private const val QuarterTurn = 90f
+
+    /** Where a pixel's center sits within it, in canvas units — see [draw]. */
+    private const val PixelCenter = 0.5f
 }

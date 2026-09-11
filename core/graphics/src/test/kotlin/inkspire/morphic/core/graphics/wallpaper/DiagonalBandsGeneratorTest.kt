@@ -1,6 +1,9 @@
 package inkspire.morphic.core.graphics.wallpaper
 
+import inkspire.morphic.core.model.wallpaper.DesignParams
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
@@ -84,6 +87,50 @@ class DiagonalBandsGeneratorTest {
         assertTrue("the bottom of the knob must still draw bands", DiagonalBandsGenerator.coverage(0f) > 0f)
         assertTrue("and only a ribbon of them", DiagonalBandsGenerator.coverage(0f) < 0.2f)
         assertTrue(DiagonalBandsGenerator.coverage(0.5f) > DiagonalBandsGenerator.coverage(0f))
+    }
+
+    /**
+     * **A drawn band edge lies exactly where the axis reads its boundary**, at every angle — the shared derivation
+     * between the shapes [DiagonalBandsGenerator.draw] fills and the projection the knobs are fractions of. Built from
+     * the angle a second time, a band could come out a quarter turn or a pixel-center off and still look like bands.
+     */
+    @Test
+    fun `a band's drawn edges lie where the axis reads its boundaries`() {
+        for (angle in DiagonalBandsGenerator.Angle.entries) {
+            val axis = DiagonalBandsGenerator.axisOf(angle, width = 1080, height = 2400)
+            val quad = DiagonalBandsGenerator.slab(axis, from = 0.3f, to = 0.7f, reach = 3480f)
+            // Corners 0 and 3 are the near edge, 1 and 2 the far one — each an edge run across the whole frame.
+            for (corner in listOf(0, 3)) {
+                assertEquals(angle.label, 0.3f, axis.at(quad[corner * 2], quad[corner * 2 + 1]), 1e-4f)
+            }
+            for (corner in listOf(1, 2)) {
+                assertEquals(angle.label, 0.7f, axis.at(quad[corner * 2], quad[corner * 2 + 1]), 1e-4f)
+            }
+        }
+    }
+
+    /** The band edges slide and never cross, at every moment of a scrub — so no band turns inside out mid-swipe. */
+    @Test
+    fun `the band edges stay in order at every moment of a scrub`() {
+        val params = DesignParams(density = 1f, irregularity = 1f)
+        val from = DiagonalBandsGenerator.plan(params, seed = 1L)
+        val to = DiagonalBandsGenerator.plan(params, seed = 2L)
+        val morph = requireNotNull(DiagonalBandsGenerator.morph(from, to))
+        assertSame(from, morph.at(0f))
+        assertSame(to, morph.at(1f))
+
+        for (step in 0..20) {
+            val edges = morph.at(step / 20f).boundaries.toList()
+            assertEquals("at ${step * 5}%", edges.sorted(), edges)
+            assertTrue(edges.all { it in 0f..1f })
+        }
+    }
+
+    @Test
+    fun `two slabs of different band counts are refused rather than paired`() {
+        val few = DiagonalBandsGenerator.plan(DesignParams(density = 0f), seed = 1L)
+        val many = DiagonalBandsGenerator.plan(DesignParams(density = 1f), seed = 1L)
+        assertNull(DiagonalBandsGenerator.morph(few, many))
     }
 
     @Test

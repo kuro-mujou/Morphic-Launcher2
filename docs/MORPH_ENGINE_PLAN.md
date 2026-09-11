@@ -1,7 +1,7 @@
 # Morph Engine
 
-**Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps and Voronoi rolled out, and the field
-bucket re-measured and mostly dissolved (2026-09-11). Drawn from three screen captures of Smart Launcher's wallpaper
+**Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi and Diagonal Bands rolled out,
+and the field bucket re-measured and mostly dissolved (2026-09-11). Drawn from three screen captures of Smart Launcher's wallpaper
 studio taken by the author, each of which overturned a conclusion drawn from the one before.
 
 **Covers:** the render seam both studios draw through — why `Generator.render() → Bitmap` is the wrong shape for a live
@@ -365,7 +365,7 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  sixteen primitive extractions, five shape designs to redraw as primitives (their bakes change, as Voronoi's did),
+  sixteen primitive extractions, four shape designs to redraw as primitives (their bakes change, as Voronoi's did),
   Plasma as a field with a frequency-dependent floor, and four edge-cut designs waiting on open question 6. Linear
   Gradient is not owed a scrub at all: it ignores the seed, so a shuffle of it is the same picture.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
@@ -450,6 +450,21 @@ claim to apply.
     definition on a phone-shaped frame, where a bisector taken in the unit square would fail it.
   - **Verified on emulator-5554.** The drag re-cuts evenly at 3.1% mean per step, the spring settles in two frames and
     every frame after is pixel-identical to the bake, and a sub-threshold release returns **0.000%** of pixels changed.
+  - **Diagonal Bands ✅ (2026-09-11) — the first of the field survey's shape designs, redrawn as shapes.** Each band
+    is a quad across the band axis, built from `FrameAxis`' own two ends so its edges lie exactly where the axis reads
+    the boundaries — `a band's drawn edges lie where the axis reads its boundaries` pins that at every angle, since a
+    quad worked out from the degrees again could land a quarter turn or a pixel center off and still look like bands.
+    Each is drawn from its own start to the slab's far end and the next covers the rest, so every shared edge is
+    antialiased once over solid color and the ground never shows between two bands as a hairline.
+  - **The scrub is the plainest in the catalog**: the seed only sets band widths, so the edges slide and nothing else
+    moves, and two sorted edge lists interpolated edge for edge stay sorted — no band can turn inside out. At
+    *Variation* `0` two seeds are one picture and the scrub is a still one, which is faithful rather than broken.
+  - **The plan takes no size and no palette**: every number is a share of the axis, and a band's color follows its
+    index.
+  - **The bake changes by its edges alone.** The 40 Diagonal Bands renders changed and the other **921 of 961** are
+    byte-identical; against the old bake the default differs on 0.88% of pixels with 0.29% past 24 levels, the worst
+    recipe (thirty bands at 45°) 1.48% past 24 — all of it along band edges, now antialiased where they were stepped.
+    **The render went from 47 ms to 6.8 ms** a full frame.
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a
