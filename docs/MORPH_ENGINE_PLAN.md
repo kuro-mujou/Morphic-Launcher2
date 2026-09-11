@@ -1,7 +1,7 @@
 # Morph Engine
 
 **Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands, Waves, Wave
-Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone, Dot Grid, Mondrian, Modern Mosaic, Rounded Tiles, Ribbon Flow, Ribbons, Polygon Cascade, Flow Lines, Triangular Facets and Spray rolled out, and the field bucket re-measured and mostly dissolved
+Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone, Dot Grid, Mondrian, Modern Mosaic, Rounded Tiles, Ribbon Flow, Ribbons, Polygon Cascade, Flow Lines, Triangular Facets, Spray and Contour rolled out, and the field bucket re-measured and mostly dissolved
 (2026-09-11). Drawn
 from three screen captures of Smart Launcher's wallpaper studio taken by the author, each of which overturned a
 conclusion drawn from the one before.
@@ -373,7 +373,7 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  two primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
+  one primitive extraction and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
   shuffle of either is the same picture. **Impasto is owed none either, for its cost**: see its entry below.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
     null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
@@ -843,6 +843,28 @@ claim to apply.
     it slow.**
   - **Verified on emulator-5554.** The drag moves about 52% of pixels per step, since every grain moves. After release
     every frame is pixel-identical to the bake, and a sub-threshold release returns **0.000%** of pixels changed.
+  - **Contour ✅ (2026-09-11) — the flattering case, as predicted, for the Lines look.** The seed decides the terrain,
+    a fractal noise field on a lattice 360 cells across the short side, plus the *Hills* layout's region field and
+    the *Random* layout's scatter. The plan keeps the terrain **raw**. A moment turns the two seeds' lattices
+    (`turnNoise`, which keeps the relief's swing, measured within 10% of the ends') and only then normalizes over what
+    the turned field reached, as the bake does. Every frame is then traced by marching squares, so the contours slide,
+    pinch off and merge as the hills rise and sink: the behavior this plan's first capture singled out as the case a
+    crossfade cannot fake. The regions turn with the terrain, so a contour's color holds as it moves.
+  - **Two parts are refused, each for its own reason.** *Embossed* fills every pixel by band and casts a per-pixel
+    shadow: a hard-edged picture cut from a field, which is open question 6, at a cost no frame affords. *Random*
+    colors each contour by its place in the tracing order, which reshuffles whenever a line splits or merges, so its
+    colors would flicker through the whole scrub. Both keep the dissolve, and `only the lines look in steady colors
+    scrubs` holds the line.
+  - **The tracer moved to `Isolines.kt`**, marching squares and chaining with its float buffer. The split added four
+    functions to a design that was already at detekt's ceiling, and tracing iso-lines out of a lattice is an
+    algorithm of its own that knows nothing about maps. It has one caller.
+  - **The bake: 961 of 961 harness renders byte-identical**, through the split and the move. A moment costs about 50 ms
+    in software, the same as the bake, since the lattice is sampled once per gesture and only traced per frame. The
+    harness frames change 11–12% of pixels per step, with no step at either end, and the ink holds at 6.2–6.9% of the
+    frame across the scrub.
+  - **Verified on emulator-5554.** A studio frame takes about 65 ms (GPU 8 ms), Plasma's class. The drag changes 9–12%
+    of pixels per step, evenly, the spring settles in three frames and every frame after is pixel-identical to the
+    bake, and a sub-threshold release returns **0.000%** of pixels changed.
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a

@@ -1,8 +1,12 @@
 package inkspire.morphic.core.graphics.wallpaper
 
+import inkspire.morphic.core.model.wallpaper.DesignParams
+import inkspire.morphic.core.model.wallpaper.Palette
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.sqrt
 
 /**
  * Where the contours sit, how wide they are drawn and which one is picked out — the arithmetic behind a map that
@@ -83,6 +87,39 @@ class ContourGeneratorTest {
     }
 
     /** The reference's own Thickness units, recovered from the pixel width — see `strokeWidthPx`. */
+    /**
+     * **The looks and layouts a scrub would draw as a different picture are refused**, and the rest are not —
+     * *Embossed* for its cost, *Random* because its colors follow the tracing order, which reshuffles as lines split.
+     */
+    @Test
+    fun `only the lines look in steady colors scrubs`() {
+        val palette = Palette(listOf(0xFFF2E2C4.toInt(), 0xFFC9603E.toInt(), 0xFF121E2B.toInt()))
+        fun scrubs(params: DesignParams) = ContourGenerator.scrub(108, 240, palette, params, 1L, 2L) != null
+        assertTrue(scrubs(DesignParams()))
+        assertTrue(scrubs(DesignParams(colorLayout = 1)))
+        assertFalse(scrubs(DesignParams(colorLayout = 2)))
+        assertFalse(scrubs(DesignParams(variant = 1)))
+    }
+
+    /**
+     * **A scrub turns the raw terrain and leaves the rest alone** — its ends are the two seeds' own lattices, and a
+     * moment between them keeps the swing of either, where a straight blend would flatten the relief the levels are
+     * spread across. The normalization after it is what every frame shares with the bake.
+     */
+    @Test
+    fun `a moment's terrain turns between the two seeds' lattices and keeps their swing`() {
+        val a = ContourGenerator.plan(216, 480, DesignParams(), seed = 1L)
+        val b = ContourGenerator.plan(216, 480, DesignParams(), seed = 2L)
+        assertTrue(ContourGenerator.between(a, b, 0f) === a)
+        assertTrue(ContourGenerator.between(a, b, 1f) === b)
+        val mid = ContourGenerator.between(a, b, 0.5f)
+        fun spread(values: FloatArray): Double {
+            val mean = values.average()
+            return sqrt(values.sumOf { (it - mean) * (it - mean) } / values.size)
+        }
+        assertEquals(1.0, spread(mid.raw) / ((spread(a.raw) + spread(b.raw)) / 2), 0.1)
+    }
+
     private fun thicknessUnits(thickness: Float): Float =
         (ContourGenerator.strokeWidthPx(thickness, 1080f) - 1.2f) / 0.157f
 }
