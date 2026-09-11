@@ -1,12 +1,17 @@
 package inkspire.morphic.core.graphics.wallpaper
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.PI
+import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.random.Random
 
 /**
@@ -46,6 +51,9 @@ import kotlin.random.Random
  *
  * The palette **cycles through every stop**, including the first: unlike [DiagonalBandsGenerator] this design reserves
  * no ground, which the reference confirms — at *Count* `20` all four of its stops paint bands and none is held back.
+ *
+ * **The bands are painted as shapes, not floored a pixel at a time**, so the bake and a scrub issue the same canvas
+ * calls ([plan] and [draw]) and a shuffle can be scrubbed — see docs/MORPH_ENGINE_PLAN.md's field survey for why.
  */
 object WaveDividersGenerator : Generator {
 
@@ -86,35 +94,161 @@ object WaveDividersGenerator : Generator {
         REVERSE("135°", degrees = 135f),
     }
 
+    /**
+     * A stack of dividers planned but not painted — at no particular size and in no particular palette.
+     *
+     * **The seed is only [phase]**: every other field is a knob, which is why a shuffle of this design slides the whole
+     * stack of waves along their length and changes nothing else.
+     *
+     * @property count how many bands the stack divides the frame into.
+     * @property depth how far a divider swings off straight, as a share of the axis across the bands — [waveDepth].
+     * @property cycles how many wave cycles fit in one frame *height* — [waveCycles].
+     * @property phase where along its cycle every divider starts, in radians — the reference's *Offset*, seeded.
+     */
+    internal class Plan(
+        val direction: Direction,
+        val count: Int,
+        val depth: Float,
+        val cycles: Float,
+        val phase: Float,
+    )
+
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
-        val direction = Direction.entries[params.variant.coerceIn(0, Direction.entries.lastIndex)]
-        val count = bandCount(params.density)
-        val depth = waveDepth(params.irregularity)
-        // The phase is the reference's Offset, taken from the seed instead: it is variety, not a choice worth a knob.
-        val phase = Random(seed).nextFloat() * TwoPi
-
-        val across = frameAxis(direction.degrees + QuarterTurn, width, height)
-        val along = frameAxis(direction.degrees, width, height)
-        // Cycles over the axis the wave runs along, from a wavelength set against the frame's height. See the KDoc.
-        val turns = along.lengthPx * waveCycles(params.scale) / height
-
-        val pixels = IntArray(width * height)
-        for (y in 0 until height) {
-            val fy = y.toFloat()
-            val row = y * width
-            for (x in 0 until width) {
-                val fx = x.toFloat()
-                val offset = depth * sin(along.at(fx, fy) * turns * TwoPi + phase)
-                // The stack keeps cycling past both ends of the frame, so a band displaced off it wraps rather than
-                // clamping into a flat strip along the edge.
-                val band = floor((across.at(fx, fy) - offset) * count).toInt()
-                pixels[row + x] = palette.colorAt(band.mod(palette.size))
-            }
-        }
-
         val bitmap = createBitmap(width, height)
-        bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
+        draw(Canvas(bitmap), plan(params, seed), palette, width, height)
         return bitmap
+    }
+
+    /** The stack [params] and [seed] describe. */
+    internal fun plan(params: DesignParams, seed: Long): Plan = Plan(
+        direction = Direction.entries[params.variant.coerceIn(0, Direction.entries.lastIndex)],
+        count = bandCount(params.density),
+        depth = waveDepth(params.irregularity),
+        cycles = waveCycles(params.scale),
+        // The phase is the reference's Offset, taken from the seed instead: it is variety, not a choice worth a knob.
+        phase = Random(seed).nextFloat() * TwoPi,
+    )
+
+    /**
+     * Paints [plan] into [canvas] at `[width]` × `[height]`, in [palette] — the bake into a software bitmap and a
+     * scrub into a hardware canvas alike.
+     *
+     * **A band is everything between two dividers, and each is filled from its divider to past the far side of the
+     * frame, the next one over it** — so every shared edge is antialiased once. The stack keeps cycling past both ends,
+     * as it always did: a band displaced off the frame wraps rather than clamping into a flat strip along the edge, so
+     * the dividers run from the one that can reach the frame's near side to the one that can reach its far side.
+     *
+     * **Half a pixel in**, because the axes read pixel `x` at `x` and a canvas puts that pixel's center at `x + 0.5`.
+     */
+    internal fun draw(canvas: Canvas, plan: Plan, palette: Palette, width: Int, height: Int) {
+        val across = frameAxis(plan.direction.degrees + QuarterTurn, width, height)
+        val along = frameAxis(plan.direction.degrees, width, height)
+        // Cycles over the axis the wave runs along, from a wavelength set against the frame's height. See the KDoc.
+        val turns = along.lengthPx * plan.cycles / height
+        val ls = samplesAlong(plan, along, across, turns)
+
+        val first = floor(-plan.depth * plan.count).toInt()
+        val last = floor((1f + plan.depth) * plan.count).toInt()
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        canvas.save()
+        canvas.translate(PixelCenter, PixelCenter)
+        paint.color = palette.colorAt(first.mod(palette.size))
+        canvas.drawRect(-1f, -1f, width + 1f, height + 1f, paint)
+        for (band in first + 1..last) {
+            paint.color = palette.colorAt(band.mod(palette.size))
+            canvas.drawPath(beyond(ls, divider(plan, band, ls, turns), along, across), paint)
+        }
+        canvas.restore()
+    }
+
+    /**
+     * Where the dividers are sampled along their length, as shares of the along axis — a little past both ends, so the
+     * traced edges reach the frame's corners.
+     *
+     * **The step is set by the wave's own steepest bend**, so a chord never strays more than [ChordError] pixels
+     * from the curve: at full depth and the tightest wavelength a divider swings hundreds of pixels in a period of a
+     * hundred or so, and needs a sample a pixel; a straight one needs almost none.
+     */
+    private fun samplesAlong(plan: Plan, along: FrameAxis, across: FrameAxis, turns: Float): FloatArray {
+        val amplitude = plan.depth * across.lengthPx
+        val wavenumber = if (along.lengthPx <= 0f) 0f else turns * TwoPi / along.lengthPx
+        val bend = amplitude * wavenumber * wavenumber
+        val step = if (bend <= 0f) MaxStep else sqrt(ChordBound * ChordError / bend).coerceIn(MinStep, MaxStep)
+        val length = along.lengthPx.coerceAtLeast(1f)
+        val count = ceil(length * (1f + 2f * Overhang) / step).toInt().coerceAtLeast(1)
+        return FloatArray(count + 1) { -Overhang + (1f + 2f * Overhang) * it / count }
+    }
+
+    /** Divider [band]'s shares of the across axis at each of [ls] — the band boundary the pixel loop floored against. */
+    internal fun divider(plan: Plan, band: Int, ls: FloatArray, turns: Float): FloatArray =
+        FloatArray(ls.size) { band.toFloat() / plan.count + plan.depth * sin(ls[it] * turns * TwoPi + plan.phase) }
+
+    /**
+     * The region on the far side of the [edge] traced at the along-axis shares [ls] — out to well past the frame — in
+     * pixels.
+     *
+     * **A point is the two axes' own ends combined**, `alongStart + l·(alongEnd − alongStart)` plus the same across,
+     * which is exact because the two axes are perpendicular and each spans the frame corner to corner. Working the
+     * point out from the angle instead would be [FrameAxis]' projection written a second time.
+     */
+    private fun beyond(ls: FloatArray, edge: FloatArray, along: FrameAxis, across: FrameAxis): Path = Path().apply {
+        fun point(l: Float, a: Float, first: Boolean) {
+            val x = pixelX(l, a, along, across)
+            val y = pixelY(l, a, along, across)
+            if (first) moveTo(x, y) else lineTo(x, y)
+        }
+        for (j in ls.indices) point(ls[j], edge[j], j == 0)
+        point(ls.last(), Beyond, first = false)
+        point(ls.first(), Beyond, first = false)
+        close()
+    }
+
+    /** The pixel column where [along] reads [l] and [across] reads [a] — see [beyond]. */
+    internal fun pixelX(l: Float, a: Float, along: FrameAxis, across: FrameAxis): Float =
+        along.startX + l * (along.endX - along.startX) + across.startX + a * (across.endX - across.startX)
+
+    /** The pixel row where [along] reads [l] and [across] reads [a] — see [beyond]. */
+    internal fun pixelY(l: Float, a: Float, along: FrameAxis, across: FrameAxis): Float =
+        along.startY + l * (along.endY - along.startY) + across.startY + a * (across.endY - across.startY)
+
+    /**
+     * A scrub between two stacks: the waves slide along their length to the next phase, and that is all a shuffle of
+     * this design is.
+     *
+     * **The phase turns the short way**, so a shuffle that lands a few degrees on slides a few degrees rather than most
+     * of a cycle; at *Wave depth* `0` there is no wave to slide and the scrub is a still one.
+     */
+    override fun scrub(
+        width: Int,
+        height: Int,
+        palette: Palette,
+        params: DesignParams,
+        from: Long,
+        to: Long,
+    ): WallpaperMorph? {
+        val morph = morph(plan(params, from), plan(params, to)) ?: return null
+        return WallpaperMorph { canvas, t, w, h -> draw(canvas, morph.at(t), palette, w, h) }
+    }
+
+    /** Two stacks prepared to interpolate — or **null where they divide the frame into different numbers of bands**. */
+    internal fun morph(from: Plan, to: Plan): Morph? = if (from.count == to.count) Morph(from, to) else null
+
+    /** Two stacks and every moment between them. */
+    internal class Morph(private val from: Plan, private val to: Plan) {
+
+        /** The stack [t] of the way across; the ends are the plans themselves. */
+        fun at(t: Float): Plan = when {
+            t <= 0f -> from
+            t >= 1f -> to
+            else -> Plan(
+                // A choice, and one a shuffle never changes.
+                direction = if (t < 0.5f) from.direction else to.direction,
+                count = from.count,
+                depth = from.depth + (to.depth - from.depth) * t,
+                cycles = from.cycles + (to.cycles - from.cycles) * t,
+                phase = lerpAngle(from.phase, to.phase, t),
+            )
+        }
     }
 
     /** How many bands [density] asks for — a pair of broad sweeps up to a finely rippled stack. Theirs exactly. */
@@ -149,6 +283,25 @@ object WaveDividersGenerator : Generator {
 
     /** From the dividers' own direction to the axis that measures across them. */
     private const val QuarterTurn = 90f
+
+    /** Where a pixel's center sits within it, in canvas units — see [draw]. */
+    private const val PixelCenter = 0.5f
+
+    /** The most a traced divider may stray from the true wave between two samples, in pixels. */
+    private const val ChordError = 0.25f
+
+    /** A chord of length `L` across a curve of bend `κ` strays by `κL²/8` — so `L = √(8·error/κ)`. */
+    private const val ChordBound = 8f
+
+    /** The closest and furthest two samples along a divider may sit, in pixels. */
+    private const val MinStep = 1f
+    private const val MaxStep = 8f
+
+    /** How far past each end of the along axis a divider is traced, as a share of it — enough to reach the corners. */
+    private const val Overhang = 0.01f
+
+    /** How far across the axis a band's fill reaches past its divider — beyond the frame at any depth. */
+    private const val Beyond = 3f
 
     private val TwoPi = (2.0 * PI).toFloat()
 }

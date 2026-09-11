@@ -1,7 +1,7 @@
 # Morph Engine
 
-**Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands and Waves rolled
-out, and the field bucket re-measured and mostly dissolved (2026-09-11). Drawn from three screen captures of Smart Launcher's wallpaper
+**Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands, Waves and Wave
+Dividers rolled out, and the field bucket re-measured and mostly dissolved (2026-09-11). Drawn from three screen captures of Smart Launcher's wallpaper
 studio taken by the author, each of which overturned a conclusion drawn from the one before.
 
 **Covers:** the render seam both studios draw through — why `Generator.render() → Bitmap` is the wrong shape for a live
@@ -365,7 +365,7 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  sixteen primitive extractions, three shape designs to redraw as primitives (their bakes change, as Voronoi's did),
+  sixteen primitive extractions, two shape designs to redraw as primitives (their bakes change, as Voronoi's did),
   Plasma as a field with a frequency-dependent floor, and four edge-cut designs waiting on open question 6. Linear
   Gradient is not owed a scrub at all: it ignores the seed, so a shuffle of it is the same picture.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
@@ -481,6 +481,19 @@ claim to apply.
   - **The bake changes by its edges alone**: the 23 Waves renders changed and the other **938 of 961** are
     byte-identical; the worst differs on 0.17% of pixels past 24 levels, all along crests. **The render went from 129
     ms to 27 ms** a full frame.
+  - **Wave Dividers ✅ (2026-09-11) — a shuffle is a phase, so the scrub slides the waves.** The seed sets only where
+    the shared wave starts its cycle; everything else is a knob. So the scrub turns that phase the short way and the
+    whole stack travels along its length, and at *Wave depth* `0` it is a still one.
+  - **The design is two perpendicular `FrameAxis` readings, and a traced point is the two axes' ends combined** —
+    `alongStart + l·(alongEnd − alongStart)` plus the same across — exact because the axes are perpendicular and each
+    spans the frame corner to corner. `a traced point lands where both axes read it, at every direction` pins it,
+    since that combination is the one piece of geometry the drawn bands add.
+  - **The trace step is set by the wave's steepest bend**, so a chord strays no more than a quarter pixel: at full
+    depth and the tightest wavelength a divider swings hundreds of pixels in a period of about a hundred and needs a
+    sample a pixel, where a straight one needs one every eight.
+  - **The bake changes by its edges alone**: the 40 Wave Dividers renders changed and the other **921 of 961** are
+    byte-identical. The default differs on 0.38% of pixels past 24 levels; full depth on 2.9%, because a stack folded
+    that far is mostly near-vertical flank, every pixel of which is an edge. **The render went from 363 ms to 8.5 ms.**
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a
