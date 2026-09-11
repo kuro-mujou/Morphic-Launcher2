@@ -564,6 +564,47 @@ class MorphRenderHarness {
         }
     }
 
+    /**
+     * One Flow Field shuffle at the default, colorful — ten frames of marks bending into their partners, each timed.
+     *
+     * What to look for: **a mark should bend, turn and slide into a nearby one, never sweep across the frame**; the
+     * marks without a partner should fade rather than pop; and the orbs should drift, with marks passing over and
+     * under them changing sides one at a time. Marks crossing mid-scrub are expected — see [FlowFieldMorph].
+     */
+    @Test
+    fun renderFlowFieldMorph() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val colorful = PaletteColorMode.resolve(Palette(Dusk), WallpaperColorMode.COLORFUL)
+        val params = DesignParams(colorMode = WallpaperColorMode.COLORFUL)
+        val planned = System.nanoTime()
+        val from = FlowFieldGenerator.plan(Width, Height, colorful, params, seed = 42L)
+        val to = FlowFieldGenerator.plan(Width, Height, colorful, params, seed = 43L)
+        val morph = FlowFieldMorph(from, to)
+        android.util.Log.i(
+            "MorphTiming",
+            "flowfield prepared ${(System.nanoTime() - planned) / 1_000_000} ms, paired/leaving/arriving ${morph.counts}",
+        )
+
+        for (step in 0..Steps) {
+            val t = step.toFloat() / Steps
+            val bitmap = createBitmap(Width, Height)
+            val started = System.nanoTime()
+            val items = when (step) {
+                0 -> from.items
+                Steps -> to.items
+                else -> morph.at(t)
+            }
+            val moment = System.nanoTime()
+            FlowFieldGenerator.draw(Canvas(bitmap), items, if (step == Steps) to else from, Width, Height)
+            android.util.Log.i(
+                "MorphTiming",
+                "flowfield t=$t moment ${(moment - started) / 1_000_000} ms, draw ${(System.nanoTime() - moment) / 1_000_000} ms",
+            )
+            saveHarnessPng(resolver, "morph_flowfield_${(t * 100).toInt().toString().padStart(3, '0')}.png", bitmap)
+            bitmap.recycle()
+        }
+    }
+
     private companion object {
         /** "Dusk", the render harness's palette — warm sand and terracotta against deep teal. */
         val Dusk = listOf(

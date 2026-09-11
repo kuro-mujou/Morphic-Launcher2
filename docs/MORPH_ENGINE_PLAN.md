@@ -1,7 +1,7 @@
 # Morph Engine
 
 **Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands, Waves, Wave
-Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone, Dot Grid, Mondrian, Modern Mosaic, Rounded Tiles, Ribbon Flow, Ribbons, Polygon Cascade, Flow Lines, Triangular Facets, Spray and Contour rolled out, and the field bucket re-measured and mostly dissolved
+Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone, Dot Grid, Mondrian, Modern Mosaic, Rounded Tiles, Ribbon Flow, Ribbons, Polygon Cascade, Flow Lines, Triangular Facets, Spray, Contour and Flow Field rolled out, and the field bucket re-measured and mostly dissolved
 (2026-09-11). Drawn
 from three screen captures of Smart Launcher's wallpaper studio taken by the author, each of which overturned a
 conclusion drawn from the one before.
@@ -373,7 +373,7 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  one primitive extraction and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
+  no primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
   shuffle of either is the same picture. **Impasto is owed none either, for its cost**: see its entry below.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
     null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
@@ -865,6 +865,31 @@ claim to apply.
   - **Verified on emulator-5554.** A studio frame takes about 65 ms (GPU 8 ms), Plasma's class. The drag changes 9–12%
     of pixels per step, evenly, the spring settles in three frames and every frame after is pixel-identical to the
     bake, and a sub-threshold release returns **0.000%** of pixels changed.
+  - **Flow Field ✅ (2026-09-11) — the one design with no continuous path, scrubbed by pairing its marks.** Its trails
+    are grown one at a time off each other's flanks, in an order the seed's random stream picks, so the picture is not
+    a continuous function of the seed. Re-growing through a turned field would boil, and it could not land on the
+    other end without switching streams, which pops. It was offered as a refusal; **the author chose to pair and
+    morph** instead, knowing the even spacing that defines the design would break mid-swipe.
+  - **The unit is the mark, not the trail**, since the picture is its marks. The plan collects every dash (polyline,
+    width, color, stroked or beaded) and every orb as data, drawing both random streams in exactly the bake's order,
+    so the bake is byte-identical. `FlowFieldMorph` pairs each mark with the nearest unpaired one within three lanes
+    (by midpoint, through a spatial grid) and the orbs by nearness. Unpaired marks fade. A pair is resampled to one
+    point count; a mark's points are already a hop apart, so a mark resampled up lies on the line it already was.
+    Where the two ends lie nearer reversed, one is flipped, since a dash's direction means nothing. A stroke that
+    beads at the other end crossfades. **Depth interpolates** and a moment is drawn in depth order, so a mark passing
+    an orb changes sides at its own moment and lands on the other end's order exactly.
+  - **The numbers.** At the default, 318 of about 353 marks pair (90%), and 35 at each end fade. Preparing a scrub
+    costs 284 ms once, off the main thread; a moment is 2 ms and a software draw 26 ms, the cheapest of the three
+    expensive designs. In the studio a frame takes 34 ms (GPU 13 ms). The harness frames change 20–21% of pixels per
+    step, evenly. The colorful midpoint goes dusty, since *Eclectic*'s tones are random per mark and most change on a
+    shuffle: the flat-color designs' shared open item.
+  - **The handoff shows the rasterizer, once.** After the spring ends, the settled bake replaces the scrub's last
+    frame a few frames later, because this bake takes about 300 ms on the emulator where the other designs' were ready
+    first. The two differ only along antialiased edges (0.65% of pixels past 20 levels, every one an outline): the
+    hardware-versus-software difference M2 measured on Vitrall, visible here because the swap is late rather than
+    because anything moved.
+  - **Verified on emulator-5554.** The drag changes about 10% of pixels per step, evenly; every frame after the
+    handoff is pixel-identical to the bake; and a sub-threshold release returns **0.000%** of pixels changed.
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a

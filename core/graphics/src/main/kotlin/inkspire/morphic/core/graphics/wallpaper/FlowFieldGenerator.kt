@@ -189,22 +189,84 @@ object FlowFieldGenerator : Generator {
     internal enum class Weave { SCATTERED, GRADED }
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
-        val look = lookAt(params.variant)
         val bitmap = createBitmap(width, height)
-        val canvas = Canvas(bitmap)
+        val plan = plan(width, height, palette, params, seed)
+        draw(Canvas(bitmap), plan.items, plan, width, height)
+        return bitmap
+    }
+
+    /**
+     * One mark as it is inked — a dash of streamline, stroked or beaded — or, mid-scrub, a moment of one.
+     *
+     * @property points the stretch of streamline it covers, in pixels.
+     * @property width what it is stroked at, or its beads' diameter, in pixels.
+     * @property beads how much of it is drawn as beads rather than a stroke — `0` or `1` in a bake, between mid-scrub
+     *   where one end beads the mark and the other strokes it.
+     * @property opacity how much of it is drawn at all — below `1` only for a mark one end of a scrub lacks.
+     * @property depth where it falls in the drawing order, as a share of the trails grown.
+     */
+    @Suppress("LongParameterList") // A mark's shape, its ink, and where it sits among the rest.
+    internal class Mark(
+        val points: FloatArray,
+        val width: Float,
+        val color: Int,
+        val beads: Float,
+        val opacity: Float,
+        override val depth: Float,
+    ) : Item
+
+    /** One orb — a disc among the marks, ringed in the ground color in *Pearls* — or a moment of one. */
+    @Suppress("LongParameterList") // Where it is, how big, its ink, and where it sits among the rest.
+    internal class Orb(
+        val x: Float,
+        val y: Float,
+        val radius: Float,
+        val color: Int,
+        val opacity: Float,
+        override val depth: Float,
+    ) : Item
+
+    /** Something the picture draws, in order: a [Mark] or an [Orb]. */
+    internal sealed interface Item {
+        /** Where it falls in the drawing order, as a share of the trails grown. */
+        val depth: Float
+    }
+
+    /**
+     * A flow field planned but not painted: every mark and orb, resolved to pixels and colors, in drawing order.
+     *
+     * **In pixels, like Confetti's plan**, since the trails are grown in pixels and stop where they meet; [draw]
+     * reaches another size by scaling the canvas.
+     *
+     * @property items every mark and orb, in the order the bake draws them.
+     * @property step how far one hop of a trail carries — what a beaded mark spaces its beads by.
+     * @property separation the design's unit — how far apart two lanes are, and so how far a mark may look for its
+     *   partner in a scrub.
+     */
+    @Suppress("LongParameterList") // The picture, the frame it was grown in, and the few numbers drawing it needs.
+    internal class Plan(
+        val items: List<Item>,
+        val look: Look,
+        val ground: Int,
+        val step: Float,
+        val separation: Float,
+        val shortSide: Float,
+        val width: Int,
+        val height: Int,
+    )
+
+    /** The flow field [params] and [seed] describe in a `[width]` × `[height]` frame, in [palette]. */
+    internal fun plan(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Plan {
+        val look = lookAt(params.variant)
         val ground = palette.colorAt(palette.size - 1)
-        canvas.drawColor(ground)
-
         val tones = RampTones.belowGround(palette)
-        // An all-ground palette has nothing to comb with, which is the honest picture rather than an error.
-        if (tones.isEmpty()) return bitmap
-
         val shortSide = min(width, height).toFloat()
         val longSide = max(width, height).toFloat()
         val separation = spacing(params.density) * shortSide
         val detail = detailSpan(params.irregularity)
-        val angleAt = fieldOf(look, longSide, detail, seed)
-        val walk = Walk(look, separation, detail, longSide, width, height, angleAt)
+        val walk = Walk(look, separation, detail, longSide, width, height, fieldOf(look, longSide, detail, seed))
+        // An all-ground palette has nothing to comb with, which is the honest picture rather than an error.
+        if (tones.isEmpty()) return Plan(emptyList(), look, ground, walk.step, separation, shortSide, width, height)
 
         val random = Random(seed)
         val trails = growTrails(walk, random)
@@ -214,26 +276,72 @@ object FlowFieldGenerator : Generator {
         // every trail behind them.
         val orbRandom = Random(seed xor OrbSeed)
         val orbs = orbCount(params.depth)
-        val orbSize = orbScale(params.depthScale)
+        val frame = Frame(width, height, shortSide, orbScale(params.depthScale))
         val beaded = if (look.beadable) beadedShare(params.roundness) else 0f
+        val count = trails.size.coerceAtLeast(1).toFloat()
+
+        val items = ArrayList<Item>()
+        var placed = 0
+        for ((index, trail) in trails.withIndex()) {
+            while (placed < orbs && index * orbs >= placed * trails.size) {
+                orbOf(tones, frame, orbRandom, (index - Half) / count)?.let(items::add)
+                placed++
+            }
+            marksOf(Ink(look, tones, shortSide, thickness), trail, walk, beaded, random, index / count, items)
+        }
+        while (placed < orbs) {
+            orbOf(tones, frame, orbRandom, (trails.size + placed) / count)?.let(items::add)
+            placed++
+        }
+        return Plan(items, look, ground, walk.step, separation, shortSide, width, height)
+    }
+
+    /**
+     * Paints [items], planned for [plan]'s frame, into [canvas] at `[width]` × `[height]` — the bake, and every moment
+     * of a scrub.
+     */
+    internal fun draw(canvas: Canvas, items: List<Item>, plan: Plan, width: Int, height: Int) {
+        canvas.drawColor(plan.ground)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             strokeCap = Paint.Cap.ROUND
             strokeJoin = Paint.Join.ROUND
         }
-
-        var placed = 0
-        for ((index, trail) in trails.withIndex()) {
-            while (placed < orbs && index * orbs >= placed * trails.size) {
-                drawOrb(canvas, look, tones, ground, Frame(width, height, shortSide, orbSize), paint, orbRandom)
-                placed++
+        val resized = width != plan.width || height != plan.height
+        if (resized) {
+            canvas.save()
+            canvas.scale(width.toFloat() / plan.width, height.toFloat() / plan.height)
+        }
+        for (item in items) {
+            when (item) {
+                is Mark -> drawMark(canvas, item, plan.step, paint)
+                is Orb -> drawOrb(canvas, item, plan, paint)
             }
-            drawTrail(canvas, Ink(look, tones, shortSide, thickness), trail, walk, beaded, paint, random)
         }
-        while (placed < orbs) {
-            drawOrb(canvas, look, tones, ground, Frame(width, height, shortSide, orbSize), paint, orbRandom)
-            placed++
+        if (resized) canvas.restore()
+    }
+
+    /**
+     * A scrub between two flow fields: every mark bends, slides and recolors into its nearest counterpart in the other,
+     * and a mark with none fades — see [FlowFieldMorph].
+     */
+    override fun scrub(
+        width: Int,
+        height: Int,
+        palette: Palette,
+        params: DesignParams,
+        from: Long,
+        to: Long,
+    ): WallpaperMorph? {
+        val a = plan(width, height, palette, params, from)
+        val b = plan(width, height, palette, params, to)
+        val morph = FlowFieldMorph(a, b)
+        return WallpaperMorph { canvas, t, w, h ->
+            when {
+                t <= 0f -> draw(canvas, a.items, a, w, h)
+                t >= 1f -> draw(canvas, b.items, b, w, h)
+                else -> draw(canvas, morph.at(t), a, w, h)
+            }
         }
-        return bitmap
     }
 
     /**
@@ -570,7 +678,7 @@ object FlowFieldGenerator : Generator {
         x < 0f || y < 0f || x >= width || y >= height
 
     /**
-     * Draws one trail in [paint]'s color, at [width] pixels — cut into dashes, or beaded whole.
+     * One trail's marks, appended to [into] — cut into dashes, each stroked or beaded, all at [depth].
      *
      * **Both looks dash, and a mark is beaded rather than stroked — not a whole lane.** *Pearls* had been drawing
      * whole undashed paths here, and then whole beaded ones; the reference's *Pearls* is as plainly dashed as its
@@ -586,27 +694,39 @@ object FlowFieldGenerator : Generator {
      * grid, so it goes on holding its lane against every later trail while drawing nothing. Dropping them cost a
      * third of the frame's ink, and the reference has short stubs everywhere.
      */
-    @Suppress("LongParameterList")
-    private fun drawTrail(
-        canvas: Canvas,
+    @Suppress("LongParameterList") // The trail, how to ink it, the stream it draws from, and where the marks go.
+    private fun marksOf(
         ink: Ink,
         points: FloatArray,
         walk: Walk,
         beaded: Float,
-        paint: Paint,
         random: Random,
+        depth: Float,
+        into: MutableList<Item>,
     ) {
         if (points.size < MinDrawnValues) return
         for (dash in dashes(ink, points, walk, random)) {
             val width = widthOf(ink, walk, dash.grade)
-            paint.color = ink.tones[toneIndex(ink.look, dash.grade, ink.tones.size, random)]
-            if (beaded > 0f && random.nextFloat() < beaded) {
-                drawBeads(canvas, dash.points, width, walk.step, paint)
-            } else {
-                paint.style = Paint.Style.STROKE
-                paint.strokeWidth = width
-                canvas.drawPath(Streamlines.pathOfPixels(dash.points), paint)
-            }
+            val color = ink.tones[toneIndex(ink.look, dash.grade, ink.tones.size, random)]
+            val beads = if (beaded > 0f && random.nextFloat() < beaded) 1f else 0f
+            into.add(Mark(dash.points, width, color, beads, 1f, depth))
+        }
+    }
+
+    /** Draws [mark] — stroked, beaded, or mid-scrub some of each — at its own opacity. */
+    private fun drawMark(canvas: Canvas, mark: Mark, step: Float, paint: Paint) {
+        if (mark.beads > 0f) {
+            paint.color = mark.color
+            drawBeads(canvas, mark.points, mark.width, step, paint, mark.opacity * mark.beads)
+        }
+        if (mark.beads < 1f) {
+            paint.color = mark.color
+            val opacity = mark.opacity * (1f - mark.beads)
+            // The bake's paint exactly, at full opacity, rather than an alpha that rounds to it.
+            if (opacity < 1f) paint.alpha = (opacity * ChannelMax).roundToInt()
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = mark.width
+            canvas.drawPath(Streamlines.pathOfPixels(mark.points), paint)
         }
     }
 
@@ -693,10 +813,11 @@ object FlowFieldGenerator : Generator {
      * lower alpha. Opaque beads read as a second, louder mark competing with the strokes; at `0.70` the chain sits
      * behind them, which is the depth the look is named for.
      */
-    private fun drawBeads(canvas: Canvas, points: FloatArray, width: Float, step: Float, paint: Paint) {
+    @Suppress("LongParameterList") // The chain, how it is spaced, and the paint and share of it to lay down.
+    private fun drawBeads(canvas: Canvas, points: FloatArray, width: Float, step: Float, paint: Paint, opacity: Float) {
         paint.style = Paint.Style.FILL
         val opaque = paint.color
-        paint.alpha = BeadAlpha
+        paint.alpha = if (opacity >= 1f) BeadAlpha else (BeadAlpha * opacity).roundToInt()
         val stride = (width * BeadSpacing / step).toInt().coerceAtLeast(1)
         var i = 0
         while (i * 2 + 1 < points.size) {
@@ -723,32 +844,35 @@ object FlowFieldGenerator : Generator {
     /** Where the orbs may fall and how big they are drawn — the frame, plus what *Orb size* multiplies a radius by. */
     private class Frame(val width: Int, val height: Int, val shortSide: Float, val orbScale: Float)
 
-    @Suppress("LongParameterList")
-    private fun drawOrb(
-        canvas: Canvas,
-        look: Look,
-        tones: IntArray,
-        ground: Int,
-        frame: Frame,
-        paint: Paint,
-        random: Random,
-    ) {
+    /**
+     * The next orb off [random], at [depth] in the drawing order — or null for one of no size, which *Orb size* `0`
+     * means, and which draws no tone from the stream.
+     */
+    private fun orbOf(tones: IntArray, frame: Frame, random: Random, depth: Float): Orb? {
         val x = random.nextFloat() * frame.width
         val y = random.nextFloat() * frame.height
         val spread = MinOrb + random.nextFloat() * (MaxOrb - MinOrb)
         val radius = spread * frame.orbScale * frame.shortSide
         // Drawn even at a radius of zero would be a stray dot from the round cap; *Orb size* `0` means no orb at all.
-        if (radius <= 0f) return
+        if (radius <= 0f) return null
+        return Orb(x, y, radius, tones[random.nextInt(tones.size)], 1f, depth)
+    }
+
+    /** Draws [orb], and in *Pearls* the ring of ground color around it, at its own opacity. */
+    private fun drawOrb(canvas: Canvas, orb: Orb, plan: Plan, paint: Paint) {
+        val faded = orb.opacity < 1f
         paint.style = Paint.Style.FILL
-        paint.color = tones[random.nextInt(tones.size)]
-        canvas.drawCircle(x, y, radius, paint)
-        if (!look.ringedOrbs) return
+        paint.color = orb.color
+        if (faded) paint.alpha = (orb.opacity * ChannelMax).roundToInt()
+        canvas.drawCircle(orb.x, orb.y, orb.radius, paint)
+        if (!plan.look.ringedOrbs) return
         paint.style = Paint.Style.STROKE
         // Capped against the radius so a small orb keeps a visible middle rather than being swallowed by its own
         // ring — gart's is a flat twenty pixels because its orbs are all large.
-        paint.strokeWidth = min(OrbRing * frame.shortSide, radius * MaxRingShare)
-        paint.color = ground
-        canvas.drawCircle(x, y, radius, paint)
+        paint.strokeWidth = min(OrbRing * plan.shortSide, orb.radius * MaxRingShare)
+        paint.color = plan.ground
+        if (faded) paint.alpha = (orb.opacity * ChannelMax).roundToInt()
+        canvas.drawCircle(orb.x, orb.y, orb.radius, paint)
     }
 
     /** The look at [variant], clamping an index this design does not have rather than failing on a stored recipe. */
@@ -1046,6 +1170,12 @@ object FlowFieldGenerator : Generator {
      * lines rather than an error. A `const val` is resolved by the compiler and has no initialization order at all.
      */
     private const val TwoPi = 6.2831855f
+
+    /** Half a trail's place in the drawing order — where an orb drawn just before a trail falls. */
+    private const val Half = 0.5f
+
+    /** A byte's greatest value — what an opacity scales to when it becomes a paint's alpha. */
+    private const val ChannelMax = 255
 
     /** A quarter turn in radians, and `const` for [TwoPi]'s reason — it is read while [Look] loads. */
     private const val QuarterTurn = 1.5707964f
