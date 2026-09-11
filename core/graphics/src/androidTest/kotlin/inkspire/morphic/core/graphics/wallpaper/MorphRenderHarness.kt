@@ -502,6 +502,42 @@ class MorphRenderHarness {
         }
     }
 
+    /**
+     * One Spray shuffle at the default, colorful — ten frames, each moment's cost logged under `MorphTiming`.
+     *
+     * What to look for: **every cloud should slide as a cloud, as grainy mid-scrub as at the ends** — a middle of
+     * tight clumps would mean the offsets were blending, one of long streaks that the drift was being turned; and the
+     * dots of trails that only one mist has should fade rather than gather at their start.
+     */
+    @Test
+    fun renderSprayMorph() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val colorful = PaletteColorMode.resolve(Palette(Dusk), WallpaperColorMode.COLORFUL)
+        val params = DesignParams(colorMode = WallpaperColorMode.COLORFUL)
+        val from = SprayGenerator.plan(Width, Height, params, seed = 42L)
+        val to = SprayGenerator.plan(Width, Height, params, seed = 43L)
+        val morph = SprayGenerator.Morph(from, to)
+
+        for (step in 0..Steps) {
+            val t = step.toFloat() / Steps
+            val bitmap = createBitmap(Width, Height)
+            val started = System.nanoTime()
+            val layers = when (step) {
+                0 -> listOf(SprayGenerator.sorted(from))
+                Steps -> listOf(SprayGenerator.sorted(to))
+                else -> morph.at(t)
+            }
+            val sorted = System.nanoTime()
+            SprayGenerator.draw(Canvas(bitmap), layers, from, colorful, Width, Height)
+            android.util.Log.i(
+                "MorphTiming",
+                "spray t=$t moment ${(sorted - started) / 1_000_000} ms, draw ${(System.nanoTime() - sorted) / 1_000_000} ms",
+            )
+            saveHarnessPng(resolver, "morph_spray_${(t * 100).toInt().toString().padStart(3, '0')}.png", bitmap)
+            bitmap.recycle()
+        }
+    }
+
     private companion object {
         /** "Dusk", the render harness's palette — warm sand and terracotta against deep teal. */
         val Dusk = listOf(

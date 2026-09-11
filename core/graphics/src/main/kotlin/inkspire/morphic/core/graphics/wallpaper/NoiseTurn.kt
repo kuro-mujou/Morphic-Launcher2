@@ -22,9 +22,18 @@ import kotlin.math.sin
  * which matters to a design that bounds its amplitude by the field's slope. Ribbon Flow is that design, and says what
  * it measured.
  */
-internal fun turnNoise(a: Float, b: Float, t: Float): Float {
-    val angle = t * QuarterTurn
-    return a * cos(angle) + b * sin(angle)
+internal fun turnNoise(a: Float, b: Float, t: Float): Float = NoiseTurn(t).of(a, b)
+
+/**
+ * [turnNoise] at one moment [t], its two weights worked out once — for a design turning hundreds of thousands of
+ * samples a frame, where a cosine and a sine per sample are most of the cost. Spray's dots are that design.
+ */
+internal class NoiseTurn(t: Float) {
+    private val first = cos(t * QuarterTurn)
+    private val second = sin(t * QuarterTurn)
+
+    /** Sample [a] turned into [b] at this moment. */
+    fun of(a: Float, b: Float): Float = a * first + b * second
 }
 
 /** A quarter turn, in radians — [turnNoise]'s whole travel. */

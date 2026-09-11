@@ -1,5 +1,6 @@
 package inkspire.morphic.core.graphics.wallpaper
 
+import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -8,6 +9,7 @@ import org.junit.Test
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * The field, the walk it produces and the trail's ramp. All three fail the same quiet way — a field read at the wrong
@@ -167,5 +169,94 @@ class SprayGeneratorTest {
                 assertTrue(SprayGenerator.bandAt(from, along) in 0f..1f)
             }
         }
+    }
+
+    /**
+     * **A moment holds every dot of both mists**: those both have, at full opacity, and those only one has, fading —
+     * so nothing goes missing or is doubled on the way across.
+     */
+    @Test
+    fun `a moment holds both mists' dots, the unshared ones fading`() {
+        val a = SprayGenerator.plan(1080, 2400, DesignParams(), seed = 1L)
+        val b = SprayGenerator.plan(1080, 2400, DesignParams(), seed = 2L)
+        val (both, leaving, arriving) = SprayGenerator.Morph(a, b).at(0.3f)
+        assertEquals(a.lengths.sum(), both.counts.sum() + leaving.counts.sum())
+        assertEquals(b.lengths.sum(), both.counts.sum() + arriving.counts.sum())
+        assertEquals(0.7f, leaving.opacity, 1e-6f)
+        assertEquals(0.3f, arriving.opacity, 1e-6f)
+    }
+
+    /**
+     * **A cloud keeps its spread through the middle of a scrub, and the mist its drift.** The spread is every shared
+     * dot's distance from its step's mean offset, which a straight blend of two unrelated walks would pull in to about
+     * 0.7, and a turn of the whole offset would inflate along the drift. Measured on the scrub's own positions.
+     */
+    @Test
+    fun `a cloud keeps its spread mid-scrub and the mist its drift`() {
+        val a = SprayGenerator.plan(1080, 2400, DesignParams(), seed = 3L)
+        val b = SprayGenerator.plan(1080, 2400, DesignParams(), seed = 4L)
+        val morph = SprayGenerator.Morph(a, b)
+        val (spreadA, driftA) = statistics(morph, a, b, 0f)
+        val (spreadB, driftB) = statistics(morph, a, b, 1f)
+        val (spreadMid, driftMid) = statistics(morph, a, b, 0.5f)
+        assertEquals("the spread holds", 1.0, spreadMid / ((spreadA + spreadB) / 2), 0.05)
+        // Relative, and loose enough for the sampling: the mean is over the trails that reach that step in both mists,
+        // a slightly different set from either end's own. A drift turned whole would read about 1.4 here.
+        assertEquals("the drift is the ends' own, halfway", 1.0, driftMid / ((driftA + driftB) / 2), 0.03)
+    }
+
+    /**
+     * **The mist keeps its reach to the frame's edges mid-scrub.** Trail starts are uniform over the frame, and two
+     * unrelated uniform points averaged fall toward the middle — so paired by index, the whole mist pulls in from the
+     * sides halfway. Paired by nearness, a start moves only locally and the share near an edge holds.
+     */
+    @Test
+    fun `mid-scrub the trails still start all the way out to the frame's edges`() {
+        val a = SprayGenerator.plan(1080, 2400, DesignParams(), seed = 5L)
+        val b = SprayGenerator.plan(1080, 2400, DesignParams(), seed = 6L)
+        val morph = SprayGenerator.Morph(a, b)
+        fun nearEdge(x: Float) = x < 108f || x > 972f
+        val ends = a.lengths.indices.count { nearEdge(a.xs[it * a.steps]) } +
+            b.lengths.indices.count { nearEdge(b.xs[it * b.steps]) }
+        val mid = a.lengths.indices.count { trail ->
+            nearEdge((a.xs[trail * a.steps] + b.xs[morph.partner[trail] * b.steps]) / 2f)
+        }
+        assertTrue("mid-scrub $mid near an edge, against ${ends / 2} at the ends", mid > 0.8 * ends / 2)
+    }
+
+    /**
+     * The shared dots' spread about their step's mean offset, and that mean's `x` at the last step every trail shares
+     * — the drift — at the moment [t], read through [morph] itself.
+     */
+    private fun statistics(
+        morph: SprayGenerator.Morph,
+        a: SprayGenerator.Plan,
+        b: SprayGenerator.Plan,
+        t: Float,
+    ): Pair<Double, Double> {
+        val turn = NoiseTurn(t)
+        val out = FloatArray(2)
+        val offsets = List(a.steps) { ArrayList<Pair<Double, Double>>() }
+        for (trail in a.lengths.indices) {
+            val first = trail * a.steps
+            val other = morph.partner[trail] * b.steps
+            val x0 = a.xs[first] + (b.xs[other] - a.xs[first]) * t
+            val y0 = a.ys[first] + (b.ys[other] - a.ys[first]) * t
+            for (i in 0 until minOf(a.lengths[trail], b.lengths[morph.partner[trail]])) {
+                morph.shared(trail, i, t, turn, out)
+                offsets[i].add((out[0] - x0).toDouble() to (out[1] - y0).toDouble())
+            }
+        }
+        var squares = 0.0
+        var count = 0
+        for (step in offsets) {
+            if (step.isEmpty()) continue
+            val mx = step.sumOf { it.first } / step.size
+            val my = step.sumOf { it.second } / step.size
+            for ((x, y) in step) squares += (x - mx) * (x - mx) + (y - my) * (y - my)
+            count += step.size
+        }
+        val deep = offsets.indexOfLast { it.size > 50 }
+        return sqrt(squares / count) to offsets[deep].sumOf { it.first } / offsets[deep].size
     }
 }

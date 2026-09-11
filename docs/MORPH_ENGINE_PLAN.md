@@ -1,7 +1,7 @@
 # Morph Engine
 
 **Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands, Waves, Wave
-Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone, Dot Grid, Mondrian, Modern Mosaic, Rounded Tiles, Ribbon Flow, Ribbons, Polygon Cascade, Flow Lines and Triangular Facets rolled out, and the field bucket re-measured and mostly dissolved
+Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone, Dot Grid, Mondrian, Modern Mosaic, Rounded Tiles, Ribbon Flow, Ribbons, Polygon Cascade, Flow Lines, Triangular Facets and Spray rolled out, and the field bucket re-measured and mostly dissolved
 (2026-09-11). Drawn
 from three screen captures of Smart Launcher's wallpaper studio taken by the author, each of which overturned a
 conclusion drawn from the one before.
@@ -123,7 +123,10 @@ centroid assumed scattered primitives have no identity. This catalog's don't sca
 and `PointScatter`'s points under Voronoi, Soft Overlaps and Flow Lines, all sit on a **jittered lattice**, so every
 primitive belongs to a cell and two seeds on one lattice hold the same cells. The partner is the primitive at the same
 index, and neither end has pushed it more than half a pitch off its cell. The pairing rule above survives only for a
-design that really does place primitives with no lattice under them, and none has been found yet.
+design that really does place primitives with no lattice under them. **Spray is the one found**: its trails start
+anywhere, and paired by index the whole mist pulls in from the frame's edges mid-scrub, since two unrelated uniform
+points averaged fall toward the middle. Its partners are the nearest ones, found cheaply by ranking both sets of starts
+along one Hilbert curve and pairing rank for rank; no optimal assignment was needed, as predicted.
 
 ## Which generators can follow — all of them
 
@@ -370,7 +373,7 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  three primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
+  two primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
   shuffle of either is the same picture. **Impasto is owed none either, for its cost**: see its entry below.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
     null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
@@ -819,6 +822,27 @@ claim to apply.
     unscrubbed**, and the studio keeps the dissolve, as it does for Louvers. Worth knowing for a retry: most of a
     moment's CPU cost was a cosine and a sine per push, which one pair per moment removes. What is left is the dab
     count itself.
+  - **Spray ✅ (2026-09-11) — the first scatter with no lattice, and a scrub shipped slow by choice.** The seed decides
+    only where each trail starts, but the field turns faster than a particle steps, so a start nudged by a fraction of
+    a pixel walks an unrelated trail: re-walking interpolated starts would boil. So every dot keeps the place its own
+    walk left it, and the plan is every walked dot, in pixels, as the bake always drew them. The bake is byte-identical.
+  - **Three things the mist forced.** First, **partners by nearness** (see the matching rule above): paired by index,
+    the whole mist pulled in from the frame's sides halfway, and Hilbert-rank pairing keeps the share of trails
+    starting near an edge where the ends have it. Second, **the drift is split from the deviation.** The field's angle
+    is symmetric about zero, so its cosine averages above zero and every particle drifts the same way, which means an
+    offset is not a zero-mean sample. Turned whole, that shared drift stretched clouds by 8% and could reach `√2`; a
+    straight blend would pull the random spread in to about 0.7. So the drift at each step (the mean offset over the
+    trails that reached it) is interpolated and only the deviation from it turns: measured, a cloud's spread holds at
+    1.03 of the ends' and the drift within 1.2%. That was found by a test failing, not by reading. Third, **dots only
+    one end has fade** with the scrub rather than collapse onto their start, since trails walk off the frame at
+    different lengths in the two mists. `NoiseTurn` came back with this, as the per-moment turn Spray's 155,000 pairs
+    need.
+  - **The cost, and the author's call.** A moment's CPU work is 12 ms, but a frame in the studio takes about 250 ms:
+    the renderer turns about 155,000 antialiased round dots into geometry every frame, on the CPU (the GPU's share is
+    20 ms). That is about 4 frames a second. It was offered as a refusal like Impasto's, and **the author chose to ship
+    it slow.**
+  - **Verified on emulator-5554.** The drag moves about 52% of pixels per step, since every grain moves. After release
+    every frame is pixel-identical to the bake, and a sub-threshold release returns **0.000%** of pixels changed.
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a
