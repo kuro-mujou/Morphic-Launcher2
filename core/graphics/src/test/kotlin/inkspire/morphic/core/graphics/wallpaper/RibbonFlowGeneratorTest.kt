@@ -1,5 +1,6 @@
 package inkspire.morphic.core.graphics.wallpaper
 
+import inkspire.morphic.core.model.wallpaper.DesignParams
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -114,6 +115,36 @@ class RibbonFlowGeneratorTest {
             val amplitude = RibbonFlowGenerator.amplitudeFor(frequency, diagonal)
             for (seed in 1L..6L) assertLanesInOrder(PerlinNoise2d(seed)::at, count, spacing, amplitude, frequency)
         }
+    }
+
+    /**
+     * **At the default Distortion no two lines cross at any moment of a scrub**, though the turn between two fields is
+     * up to `√2` times steeper than either — the ordering bound has the headroom there, and this holds it to that.
+     */
+    @Test
+    fun `at the default distortion no two lines cross anywhere in a scrub`() {
+        val diagonal = hypot(1079f, 2399f)
+        for (roundness in listOf(0f, 0.25f, 0.5f, 0.75f, 1f)) for (density in listOf(0f, 0.5f, 1f)) {
+            val params = DesignParams(density = density, roundness = roundness)
+            val count = RibbonFlowGenerator.lineCount(density)
+            val spacing = RibbonFlowGenerator.spacingPx(diagonal, count)
+            val frequency = RibbonFlowGenerator.detailFor(roundness) / 2400f
+            val amplitude = params.irregularity * RibbonFlowGenerator.amplitudeFor(frequency, diagonal)
+            val moments = (1L..3L).flatMap { seed ->
+                val a = RibbonFlowGenerator.plan(params, seed)
+                val b = RibbonFlowGenerator.plan(params, seed + 50)
+                listOf(0.25f, 0.5f, 0.75f).map { RibbonFlowGenerator.between(a, b, it) }
+            }
+            for (moment in moments) assertLanesInOrder(moment.field, count, spacing, amplitude, frequency)
+        }
+    }
+
+    @Test
+    fun `a scrub starts on one field and ends on the other`() {
+        val a = RibbonFlowGenerator.plan(DesignParams(), seed = 1L)
+        val b = RibbonFlowGenerator.plan(DesignParams(), seed = 2L)
+        assertEquals(a.field(0.3f, 0.7f), RibbonFlowGenerator.between(a, b, 0f).field(0.3f, 0.7f), 0f)
+        assertEquals(b.field(0.3f, 0.7f), RibbonFlowGenerator.between(a, b, 1f).field(0.3f, 0.7f), 0f)
     }
 
     /** Every lane of [count] lies strictly before the next, all along a frame's length. */

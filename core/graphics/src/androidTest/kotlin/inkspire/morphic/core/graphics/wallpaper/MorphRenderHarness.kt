@@ -375,6 +375,30 @@ class MorphRenderHarness {
         }
     }
 
+    /**
+     * One Ribbon Flow shuffle at full Distortion on the densest rank, colorful — ten frames of the lines' wander moving.
+     *
+     * The setting where the turn is steepest against the ordering bound. What to look for: **the lines should bend
+     * and straighten continuously and never touch**, and the middle should wander as much as the ends — a calmer
+     * middle would mean the fields were blending rather than turning.
+     */
+    @Test
+    fun renderRibbonFlowMorph() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val colorful = PaletteColorMode.resolve(Palette(Dusk), WallpaperColorMode.COLORFUL)
+        val params = DesignParams(density = 1f, irregularity = 1f, colorMode = WallpaperColorMode.COLORFUL)
+        val from = RibbonFlowGenerator.plan(params, seed = 42L)
+        val to = RibbonFlowGenerator.plan(params, seed = 43L)
+
+        for (step in 0..Steps) {
+            val t = step.toFloat() / Steps
+            val bitmap = createBitmap(Width, Height)
+            RibbonFlowGenerator.draw(Canvas(bitmap), RibbonFlowGenerator.between(from, to, t), colorful, Width, Height)
+            saveHarnessPng(resolver, "morph_ribbonflow_${(t * 100).toInt().toString().padStart(3, '0')}.png", bitmap)
+            bitmap.recycle()
+        }
+    }
+
     private companion object {
         /** "Dusk", the render harness's palette — warm sand and terracotta against deep teal. */
         val Dusk = listOf(

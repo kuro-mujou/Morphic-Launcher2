@@ -1,7 +1,7 @@
 # Morph Engine
 
 **Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands, Waves, Wave
-Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone, Dot Grid, Mondrian, Modern Mosaic and Rounded Tiles rolled out, and the field bucket re-measured and mostly dissolved
+Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone, Dot Grid, Mondrian, Modern Mosaic, Rounded Tiles and Ribbon Flow rolled out, and the field bucket re-measured and mostly dissolved
 (2026-09-11). Drawn
 from three screen captures of Smart Launcher's wallpaper studio taken by the author, each of which overturned a
 conclusion drawn from the one before.
@@ -370,7 +370,7 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  nine primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
+  eight primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
   shuffle of either is the same picture.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
     null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
@@ -698,6 +698,31 @@ claim to apply.
     2,000 random pairs confirmed the spread is healthy (median 0.27 of a lane), so those were low draws rather than a
     correlated seed. A shuffle near the bottom of that range is a scrub that barely moves, which is faithful to what
     the seed decides.
+  - **Ribbon Flow ✅ (2026-09-11) — a turned field, and the ordering bound it found wrong.** The seed decides one noise
+    field, the one that combs the lines off their lanes, so the scrub turns one seed's field into the other's
+    (`turnNoise`, its fourth consumer). The plan is the knobs and the field; a moment is a plan whose field is the turn.
+  - **The design promises its lines never cross, and at high *Distortion* they did.** The amplitude is capped by a
+    bound on the field's slope across the rank, and the bound assumed a slope of `2`; sampled, this Perlin field
+    climbs to about `2.75` where its quintic fade is steepest. On the densest rank at the default detail, 29 of 1,470
+    neighboring pairs crossed over thirty seeds at full *Distortion*, and none at the default *Distortion*. Every line
+    still looked like a line, so nothing had caught it: the test beside the bound held it against the same assumed `2`
+    on both sides. **The author chose to correct the bound to `2.8`** over leaving the bake or clamping the knob's top.
+    It changes the bake: every render whose slope ceiling binds wanders about 29% less, the default included, and the
+    14 such harness renders changed (8.7% of the default's pixels past 24 levels, 15% at full *Distortion*). The other
+    947 are byte-identical. At full *Distortion* the old bake pinched pairs of lines together; the new one keeps them
+    apart. Two tests now guard it: one samples the field's slope against the bound, the other checks lane order on the
+    render's own offsets over every detail and count. Both fail at the old `2`.
+  - **The turn is steeper than either field, and that was the scrub's real decision.** Where both fields climb
+    together, a turn climbs up to `√2` as steeply, so the ordering bound built on one field's slope stops being a
+    guarantee mid-scrub. Measured over every detail and count at full *Distortion*, 2 of 13,050 neighboring pairs touch
+    at the midpoint, by under a pixel. At the default *Distortion* the headroom covers the `√2`, and a test holds every
+    lane in order through the scrub there. A straight blend would hold the bound exactly, at the cost of a third of the
+    wander at the midpoint, which reads as the knob dipping mid-swipe. **The author chose the turn.**
+  - **The bake: the scrub's split is byte-identical** to the corrected bake, 961 of 961. The harness frames at full
+    *Distortion* on the densest rank change 10.9–11.7% of pixels per step, and the middle wanders as much as the ends.
+  - **Verified on emulator-5554.** The drag changes the picture evenly at 3% of pixels per step, the spring settles in
+    three frames and every frame after is pixel-identical to the bake, and a sub-threshold release returns **0.000%** of
+    pixels changed.
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a

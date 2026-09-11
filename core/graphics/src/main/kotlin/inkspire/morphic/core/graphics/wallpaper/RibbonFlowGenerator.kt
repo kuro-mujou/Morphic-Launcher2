@@ -85,9 +85,55 @@ object RibbonFlowGenerator : Generator {
         rotation = "Rotation",
     )
 
+    /**
+     * A rank planned but not painted: the knobs, and the field the seed combs the lines with.
+     *
+     * @property field the noise, read in the rank's own frame in cycles — the seed's, or a moment's turn between two.
+     */
+    internal class Plan(val params: DesignParams, val field: (Float, Float) -> Float)
+
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val bitmap = createBitmap(width, height)
-        val canvas = Canvas(bitmap)
+        draw(Canvas(bitmap), plan(params, seed), palette, width, height)
+        return bitmap
+    }
+
+    /** The rank [params] and [seed] describe. */
+    internal fun plan(params: DesignParams, seed: Long): Plan = Plan(params, PerlinNoise2d(seed)::at)
+
+    /**
+     * A scrub between two ranks: one seed's field turns into the other's ([turnNoise]), so the lines' wander moves
+     * and keeps its strength, and nothing else changes.
+     *
+     * **The turn is steeper than either field at the middle** — up to `√2` times, where the two climb together — so
+     * the ordering bound, which is built on one field's slope, is not a guarantee mid-scrub. Measured at full
+     * *Distortion* over every detail and count, 2 of 13,050 neighboring pairs touch at the midpoint, by under a pixel;
+     * at the default *Distortion* the headroom covers the `√2` and none can. A straight blend would hold the bound
+     * exactly and cost a third of the wander at the midpoint, which reads as the knob dipping mid-swipe.
+     */
+    override fun scrub(
+        width: Int,
+        height: Int,
+        palette: Palette,
+        params: DesignParams,
+        from: Long,
+        to: Long,
+    ): WallpaperMorph? {
+        val a = plan(params, from)
+        val b = plan(params, to)
+        return WallpaperMorph { canvas, t, w, h -> draw(canvas, between(a, b, t), palette, w, h) }
+    }
+
+    /** The rank [t] of the way from [a] to [b]; the ends are the plans themselves, as every design's are. */
+    internal fun between(a: Plan, b: Plan, t: Float): Plan = when {
+        t <= 0f -> a
+        t >= 1f -> b
+        else -> Plan(a.params) { x, y -> turnNoise(a.field(x, y), b.field(x, y), t) }
+    }
+
+    /** Paints [plan] into [canvas] at `[width]` × `[height]`, in [palette] — the bake and every scrub frame alike. */
+    internal fun draw(canvas: Canvas, plan: Plan, palette: Palette, width: Int, height: Int) {
+        val params = plan.params
         canvas.drawColor(palette.colorAt(palette.size - 1)) // darkest stop — the ground the rank is ruled on
         // The ramp is the lighter stops only, so a line's gradient never passes through the ground and vanishes.
         val ramp = if (palette.size > 1) palette.colors.dropLast(1) else palette.colors
@@ -111,7 +157,6 @@ object RibbonFlowGenerator : Generator {
         val detail = detailFor(params.roundness)
         val frequency = detail / reference
         val amplitude = params.irregularity.coerceIn(0f, 1f) * amplitudeFor(frequency, diagonal)
-        val noise = PerlinNoise2d(seed)
 
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
@@ -147,14 +192,13 @@ object RibbonFlowGenerator : Generator {
             var first = true
             while (along < alongEnd + step) {
                 val at = min(along, alongEnd)
-                val offset = offsetAt(noise::at, at, across, amplitude, frequency)
+                val offset = offsetAt(plan.field, at, across, amplitude, frequency)
                 path.pointAt(at * alongX + offset * acrossX, at * alongY + offset * acrossY, first)
                 first = false
                 along += step
             }
             canvas.drawPath(path, paint)
         }
-        return bitmap
     }
 
     /**

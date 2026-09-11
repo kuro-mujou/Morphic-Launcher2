@@ -14,9 +14,13 @@ import kotlin.math.sin
  * turn, the squares of the two weights sum to one at every moment, so the swing holds from end to end; and a smooth
  * field turned into another moves its features rather than fading them in place.
  *
- * **Shared by every design whose seed is a noise field** — Halftone's dot sizes, Dot Grid's seam drifts and Modern
- * Mosaic's corner skew — because the failure is silent: a straight blend still scrubs smoothly, and only a measurement
- * says the middle went flat.
+ * **Shared by every design whose seed is a noise field** — Halftone's dot sizes, Dot Grid's seam drifts, Modern
+ * Mosaic's corner skew and Ribbon Flow's combing — because the failure is silent: a straight blend still scrubs
+ * smoothly, and only a measurement says the middle went flat.
+ *
+ * **What it costs is slope**: where both fields climb together the turn climbs up to `√2` times as steeply as either,
+ * which matters to a design that bounds its amplitude by the field's slope. Ribbon Flow is that design, and says what
+ * it measured.
  */
 internal fun turnNoise(a: Float, b: Float, t: Float): Float {
     val angle = t * QuarterTurn
