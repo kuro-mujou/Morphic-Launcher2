@@ -1,8 +1,9 @@
 # Morph Engine
 
 **Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands, Waves, Wave
-Dividers and Gradient Columns rolled out, and the field bucket re-measured and mostly dissolved (2026-09-11). Drawn from three screen captures of Smart Launcher's wallpaper
-studio taken by the author, each of which overturned a conclusion drawn from the one before.
+Dividers and Gradient Columns rolled out, and the field bucket re-measured and mostly dissolved (2026-09-11). Drawn
+from three screen captures of Smart Launcher's wallpaper studio taken by the author, each of which overturned a
+conclusion drawn from the one before.
 
 **Covers:** the render seam both studios draw through — why `Generator.render() → Bitmap` is the wrong shape for a live
 transition, what replaces it, and what following it costs each design. It is the *how the picture is made and moved*;
@@ -171,7 +172,10 @@ cheapest costs 47 ms a frame and the dearest 1.7 s. The survey table is under "F
 - **Shapes drawn a pixel at a time (5) — to the primitive bucket.** Diagonal Bands, Waves, Wave Dividers, Gradient
   Columns and Louvers are straight bands, crest-bounded bands and strips of gradient: paths and gradient shaders,
   written as a pixel loop. Split, they are drawn by the canvas for the bake and the scrub alike, as Voronoi now is —
-  their bakes gain antialiased edges, and drop from 47–363 ms to a few.
+  their bakes gain antialiased edges, and drop from 47–363 ms to a few. **Four were, and Louvers was not**: it ignores
+  the seed, so a shuffle of it is the same picture and there is no scrub to build. Redrawing it would still buy
+  antialiased seams and a render of a few milliseconds rather than 116, which is the knob drag's gain rather than the
+  morph engine's; the author chose to leave it (2026-09-11).
 - **Edges cut from an expensive field (4) — no bucket yet; open question 6.** Metaballs (bands of a warped
   potential), Ribbed Glass (a lens per rib, with hard seams between them), Planet (a per-pixel pigment walk with hard
   band boundaries) and Marble (creased veins over fine turbulence). The field under them is costly *and* the edges
@@ -365,9 +369,9 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  sixteen primitive extractions, one shape design to redraw as primitives (its bake changes, as Voronoi's did),
-  Plasma as a field with a frequency-dependent floor, and four edge-cut designs waiting on open question 6. Linear
-  Gradient is not owed a scrub at all: it ignores the seed, so a shuffle of it is the same picture.
+  sixteen primitive extractions, Plasma as a field with a frequency-dependent floor, and four edge-cut designs
+  waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
+  shuffle of either is the same picture.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
     null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
     keeps only the refusals that are the studio's rather than a design's, and one was added: **two different knob
