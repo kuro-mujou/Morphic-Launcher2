@@ -436,17 +436,7 @@ internal object GlassTree {
     }
 
     /** How far apart two directions are, the short way round. */
-    private fun gap(from: Float, to: Float): Float = abs(shortest(to - from))
-
-    private fun shortest(delta: Float): Float {
-        var turned = delta % GlassCut.Turn
-        if (turned > Half) turned -= GlassCut.Turn
-        if (turned < -Half) turned += GlassCut.Turn
-        return turned
-    }
-
-    /** [from] to [to] at [t] the short way round, so a cut turns ten degrees rather than three hundred and fifty. */
-    fun lerpAngle(from: Float, to: Float, t: Float): Float = from + shortest(to - from) * t
+    private fun gap(from: Float, to: Float): Float = abs(shortestTurn(to - from))
 
     /** Plain linear interpolation, named so a call site reads as interpolation rather than as arithmetic. */
     fun lerp(from: Float, to: Float, t: Float): Float = from + (to - from) * t

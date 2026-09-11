@@ -230,7 +230,7 @@ object VitrallGenerator : Generator {
                 // midpoint. It lands on about one pane in fifty and moves that pane's color by a fifth, which is a
                 // step small enough and rare enough to cost less than fading two fills over each other.
                 flashed = if (t < 0.5f) a.flashed else b.flashed,
-                angle = GlassTree.lerpAngle(a.angle, b.angle, t),
+                angle = lerpAngle(a.angle, b.angle, t),
                 lift = GlassTree.lerp(a.lift, b.lift, t),
             )
         }

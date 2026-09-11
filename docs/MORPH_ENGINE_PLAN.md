@@ -1,7 +1,7 @@
 # Morph Engine
 
-**Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi and Diagonal Bands rolled out,
-and the field bucket re-measured and mostly dissolved (2026-09-11). Drawn from three screen captures of Smart Launcher's wallpaper
+**Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands and Waves rolled
+out, and the field bucket re-measured and mostly dissolved (2026-09-11). Drawn from three screen captures of Smart Launcher's wallpaper
 studio taken by the author, each of which overturned a conclusion drawn from the one before.
 
 **Covers:** the render seam both studios draw through — why `Generator.render() → Bitmap` is the wrong shape for a live
@@ -365,7 +365,7 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  sixteen primitive extractions, four shape designs to redraw as primitives (their bakes change, as Voronoi's did),
+  sixteen primitive extractions, three shape designs to redraw as primitives (their bakes change, as Voronoi's did),
   Plasma as a field with a frequency-dependent floor, and four edge-cut designs waiting on open question 6. Linear
   Gradient is not owed a scrub at all: it ignores the seed, so a shuffle of it is the same picture.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
@@ -465,6 +465,22 @@ claim to apply.
     byte-identical; against the old bake the default differs on 0.88% of pixels with 0.29% past 24 levels, the worst
     recipe (thirty bands at 45°) 1.48% past 24 — all of it along band edges, now antialiased where they were stepped.
     **The render went from 47 ms to 6.8 ms** a full frame.
+  - **Waves ✅ (2026-09-11) — counted bands, painted.** A pixel's band is how many crests sit at or above it, and
+    crests cross; so each column's crests are sorted and the `k`-th of them, traced across the frame, is the edge band
+    `k` is filled below. The last fill over a pixel is then exactly the count, which `the traced edges give every pixel
+    the band the crests count for it` checks at full distortion, where crests cross and swallow each other. (The class
+    note had said per-column sorting would *lose* that swallowing; it keeps it, and the note now names what would —
+    a band per fixed pair of crests.) Traced every 4 px, a chord departs from the curve by a fraction of a pixel.
+  - **The shadow is a bitmap mesh laid along each traced edge**, a fade stretched over a sixteenth of the frame, because
+    the fade follows a curve and a gradient shader can only follow a line. `drawBitmapMesh` is drawn by the hardware
+    canvas at every API level the launcher runs on, where `drawVertices` is only from 29 — and a dropped call draws
+    nothing. `WavesLivePathTest` measured it at full shadow in both fills: **6.7e-5** of pixels past 24 levels between
+    GPU and bake, so the mesh is drawn.
+  - **Two ends of a ripple's phase are angles**, so the scrub turns them the short way — the second consumer of
+    `lerpAngle`, which moved out of `GlassTree` into `Angles.kt` with it.
+  - **The bake changes by its edges alone**: the 23 Waves renders changed and the other **938 of 961** are
+    byte-identical; the worst differs on 0.17% of pixels past 24 levels, all along crests. **The render went from 129
+    ms to 27 ms** a full frame.
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a

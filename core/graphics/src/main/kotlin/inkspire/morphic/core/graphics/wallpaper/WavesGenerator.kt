@@ -1,6 +1,11 @@
 package inkspire.morphic.core.graphics.wallpaper
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.Shader
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
@@ -39,8 +44,8 @@ import kotlin.random.Random
  *
  * **A crossed crest hides the band above it, and that is deliberate.** A pixel's band is the *number* of crests at or
  * above it, so a crest that dives past its neighbor simply stops being counted and the band between them pinches out.
- * Sorting the crests per column would keep every band alive as a sliver instead, and would lose the swallowing that is
- * most of what the reference's *Distortion* looks like at the top of its range.
+ * Giving each band to a fixed pair of neighboring crests would keep every band alive as a sliver instead, and would
+ * lose the swallowing that is most of what the reference's *Distortion* looks like at the top of its range.
  *
  * **[DesignParams.depth] is *Shadow*, and the reference has no knob for it — it is always on.** Measured down a
  * column of theirs: `×0.815` at the crest, recovering **linearly** to `×1` over about a sixteenth of the frame's
@@ -62,6 +67,9 @@ import kotlin.random.Random
  *
  * The one departure from theirs is the count: their *Count* `1` draws two crests, and ours draws the one the number
  * says.
+ *
+ * **The bands are painted as shapes, not counted a pixel at a time**, so the bake and a scrub issue the same canvas
+ * calls ([plan] and [draw]) and a shuffle can be scrubbed — see docs/MORPH_ENGINE_PLAN.md's field survey for why.
  */
 object WavesGenerator : Generator {
 
@@ -89,32 +97,241 @@ object WavesGenerator : Generator {
         GRADIENT("Gradient"),
     }
 
+    /**
+     * A frame of crests planned but not painted — at no particular size and in no particular palette.
+     *
+     * **It takes no size**: every height is a share of the frame and every crest is a function of `0..1` across it.
+     * A band's color is not here either — the `k`-th band down takes the `k`-th tone above the ground — so a shuffle
+     * never recolors one.
+     *
+     * @property left each crest's height at the frame's left edge, `0` the top — [Bands.boundaries], sorted.
+     * @property right the same down the right edge, from a layout of its own.
+     * @property lobes each crest's interior shape, which [distortion] scales.
+     * @property distortion the *Distortion* knob, `0..1`, before [crestAt] squares it.
+     * @property shadow how far a crest darkens the band under it — [shadowDepth] of the knob.
+     */
+    internal class Plan(
+        val left: FloatArray,
+        val right: FloatArray,
+        val lobes: List<Lobe>,
+        val distortion: Float,
+        val shadow: Float,
+        val fill: Fill,
+    )
+
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
+        val bitmap = createBitmap(width, height)
+        draw(Canvas(bitmap), plan(params, seed), palette, width, height)
+        return bitmap
+    }
+
+    /**
+     * The crests [params] and [seed] describe.
+     *
+     * The two band layouts sit one down each edge; at *Variation* `0` both are even, which leaves every crest nothing
+     * to sweep between.
+     */
+    internal fun plan(params: DesignParams, seed: Long): Plan {
         val crests = layerCount(params.density)
         val variation = params.scale.coerceIn(0f, 1f)
-        val distortion = params.irregularity.coerceIn(0f, 1f)
-        val shadow = shadowDepth(params.depth)
-        val fill = Fill.entries[params.variant.coerceIn(0, Fill.entries.lastIndex)]
-
-        // The two band layouts, one down each edge. At variation 0 both are even, leaving every crest nothing to sweep.
-        val bands = crests + 1
-        val left = Bands.boundaries(bands, variation, seed)
-        val right = Bands.boundaries(bands, variation, seed xor RightEdgeSeed)
         val random = Random(seed xor LobeSeed)
-        val lobes = List(crests) { Lobe.random(random) }
-        val ink = bandColors(bands, palette, fill, width)
+        return Plan(
+            left = Bands.boundaries(crests + 1, variation, seed),
+            right = Bands.boundaries(crests + 1, variation, seed xor RightEdgeSeed),
+            lobes = List(crests) { Lobe.random(random) },
+            distortion = params.irregularity.coerceIn(0f, 1f),
+            shadow = shadowDepth(params.depth),
+            fill = Fill.entries[params.variant.coerceIn(0, Fill.entries.lastIndex)],
+        )
+    }
 
-        val pixels = IntArray(width * height)
+    /**
+     * Paints [plan] into [canvas] at `[width]` × `[height]`, in [palette] — the bake into a software bitmap and a
+     * scrub into a hardware canvas alike.
+     *
+     * **A pixel's band is how many crests sit at or above it, and that is painted rather than counted.** Where the
+     * count reaches `k` is everywhere below the `k`-th highest crest of that column, so each column's crests are sorted
+     * and the `k`-th of them traced across the frame is the edge band `k` is filled below — later bands over earlier,
+     * so every shared edge is antialiased once. Sorting per column is what keeps the counting: a crest that dives past
+     * its neighbor swaps places with it in the sort, and the band between them pinches out exactly as it did.
+     *
+     * **The shadow hangs from that same traced edge**, a darkening that fades linearly over [ShadowSpan] of the frame
+     * below it, laid by [shade]; each band's fill covers the shadow of the edge above it, which is the "nearest crest
+     * above" the counting chose.
+     *
+     * **Half a pixel in**, because a crest is read at pixel `y` and a canvas puts that pixel's center at `y + 0.5`.
+     */
+    internal fun draw(canvas: Canvas, plan: Plan, palette: Palette, width: Int, height: Int) {
+        val tones = RampTones.aboveGround(palette)
+        // A palette with nothing above its ground has only the ground to paint with — the same answer [RampTones]
+        // gives, and the honest picture rather than an error.
+        val stops = if (tones.isEmpty()) intArrayOf(palette.colorAt(0)) else tones
+        val xs = columnsFor(width)
+        val edges = edges(plan, xs, width, height)
+
+        val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        val shadow = if (plan.shadow > 0f) ShadowStrip(plan.shadow, height * ShadowSpan) else null
+        canvas.save()
+        canvas.translate(PixelCenter, PixelCenter)
+        for (band in 0..edges.size) {
+            paintBand(fillPaint, band, stops, plan.fill, width)
+            if (band == 0) {
+                canvas.drawRect(-1f, -1f, width + 1f, height + 1f, fillPaint)
+            } else {
+                canvas.drawPath(below(xs, edges[band - 1], height), fillPaint)
+                shadow?.shade(canvas, xs, edges[band - 1])
+            }
+        }
+        canvas.restore()
+    }
+
+    /**
+     * Where the crests are sampled across a frame [width] wide, in pixels, with a column past each edge so the traced
+     * edges reach the frame's sides.
+     *
+     * **Every [ColumnStep] pixels**, which is fine enough to be exact: a crest turns at most once and a half between
+     * the edges, so a chord that short departs from the curve by a small fraction of a pixel even at full distortion.
+     */
+    private fun columnsFor(width: Int): FloatArray {
+        val steps = ((width - 1) / ColumnStep).toInt().coerceAtLeast(1)
+        val inside = FloatArray(steps + 1) { (width - 1) * it.toFloat() / steps }
+        return floatArrayOf(-1f) + inside + floatArrayOf(width.toFloat())
+    }
+
+    /**
+     * The edge each band is filled below, in pixels: for every column in [xs], the crests' heights sorted top to
+     * bottom — so `edges[k][j]` is the `k`-th highest crest at column `j`.
+     */
+    internal fun edges(plan: Plan, xs: FloatArray, width: Int, height: Int): Array<FloatArray> {
+        val crests = plan.lobes.size
+        val out = Array(crests) { FloatArray(xs.size) }
         val column = FloatArray(crests)
-        for (x in 0 until width) {
-            val nx = if (width <= 1) 0f else x.toFloat() / (width - 1)
-            for (i in 0 until crests) column[i] = crestAt(left[i], right[i], lobes[i], distortion, nx)
-            paintColumn(pixels, x, width, height, column, ink, shadow)
+        for (j in xs.indices) {
+            val nx = if (width <= 1) 0f else xs[j] / (width - 1)
+            for (i in 0 until crests) {
+                column[i] = crestAt(plan.left[i], plan.right[i], plan.lobes[i], plan.distortion, nx)
+            }
+            column.sort()
+            for (k in 0 until crests) out[k][j] = column[k] * height
+        }
+        return out
+    }
+
+    /** The region below the traced [edge] across [xs], to past the bottom of a frame [height] tall. */
+    private fun below(xs: FloatArray, edge: FloatArray, height: Int): Path = Path().apply {
+        moveTo(xs[0], edge[0])
+        for (j in 1 until xs.size) lineTo(xs[j], edge[j])
+        lineTo(xs.last(), height + 1f)
+        lineTo(xs[0], height + 1f)
+        close()
+    }
+
+    /**
+     * Sets [paint] to band [band]'s fill — its stop, flat, or ramping across the frame to a turn of that stop
+     * ([turned]), from pixel `0` to pixel `width - 1`.
+     */
+    private fun paintBand(paint: Paint, band: Int, stops: IntArray, fill: Fill, width: Int) {
+        val from = stops[band % stops.size]
+        if (fill == Fill.FLAT) {
+            paint.shader = null
+            paint.color = from
+        } else {
+            val to = turned(from, up = band % 2 == 1)
+            paint.shader = LinearGradient(0f, 0f, (width - 1).toFloat(), 0f, from, to, Shader.TileMode.CLAMP)
+        }
+    }
+
+    /**
+     * A crest's shadow: black at [depth] of opacity along the crest, fading linearly to nothing [span] pixels below
+     * it — which over an opaque band is the band's own color scaled by `1 - depth` recovering to `1`.
+     *
+     * **Laid as a bitmap mesh along the crest**, because the fade follows a curve and a gradient shader can only
+     * follow a line. `drawBitmapMesh` is drawn by the hardware canvas at every API level the launcher runs on, where
+     * `drawVertices` — the other way to shade a curved strip — is only from 29, and an unsupported call draws nothing
+     * rather than failing.
+     */
+    private class ShadowStrip(depth: Float, private val span: Float) {
+
+        private val fade: Bitmap = createBitmap(1, FadeTexels).apply {
+            val alpha = (depth * ChannelMax).roundToInt().coerceIn(0, ChannelMask)
+            for (row in 0 until FadeTexels) {
+                val left = 1f - row.toFloat() / (FadeTexels - 1)
+                setPixel(0, row, ((alpha * left).roundToInt() shl AlphaShift))
+            }
         }
 
-        val bitmap = createBitmap(width, height)
-        bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
-        return bitmap
+        private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+
+        /** Shades below the traced [edge] across [xs] into [canvas]. */
+        fun shade(canvas: Canvas, xs: FloatArray, edge: FloatArray) {
+            val verts = FloatArray(xs.size * 4)
+            for (j in xs.indices) {
+                verts[j * 2] = xs[j]
+                verts[j * 2 + 1] = edge[j]
+                verts[(xs.size + j) * 2] = xs[j]
+                verts[(xs.size + j) * 2 + 1] = edge[j] + span
+            }
+            canvas.drawBitmapMesh(fade, xs.size - 1, 1, verts, 0, null, 0, paint)
+        }
+    }
+
+    /**
+     * A scrub between two frames of crests: the band layouts slide along both edges and every crest's lobes reshape,
+     * and the bands are re-traced under them at every moment.
+     *
+     * **Counted bands need no pairing.** A band is not an object that could be matched — it is wherever a count
+     * reaches a number — so moving the crests is the whole morph, and the count re-derives the bands from them.
+     */
+    override fun scrub(
+        width: Int,
+        height: Int,
+        palette: Palette,
+        params: DesignParams,
+        from: Long,
+        to: Long,
+    ): WallpaperMorph? {
+        val morph = morph(plan(params, from), plan(params, to)) ?: return null
+        return WallpaperMorph { canvas, t, w, h -> draw(canvas, morph.at(t), palette, w, h) }
+    }
+
+    /** Two frames prepared to interpolate, crest for crest — or **null where they hold different numbers of crests**. */
+    internal fun morph(from: Plan, to: Plan): Morph? =
+        if (from.lobes.size == to.lobes.size) Morph(from, to) else null
+
+    /** Two frames of crests and every moment between them. */
+    internal class Morph(private val from: Plan, private val to: Plan) {
+
+        /**
+         * The crests [t] of the way across; the ends are the plans themselves.
+         *
+         * **A ripple's phase turns the short way**, since a phase is an angle: taken the long way it would spin a
+         * crest's lobes through most of a cycle on the way to a partner that sits a few degrees off.
+         */
+        fun at(t: Float): Plan = when {
+            t <= 0f -> from
+            t >= 1f -> to
+            else -> Plan(
+                left = between(from.left, to.left, t),
+                right = between(from.right, to.right, t),
+                lobes = List(from.lobes.size) { i ->
+                    Lobe(
+                        from.lobes[i].terms.zip(to.lobes[i].terms) { a, b ->
+                            Term(
+                                amplitude = a.amplitude + (b.amplitude - a.amplitude) * t,
+                                frequency = a.frequency + (b.frequency - a.frequency) * t,
+                                phase = lerpAngle(a.phase, b.phase, t),
+                            )
+                        },
+                    )
+                },
+                distortion = from.distortion + (to.distortion - from.distortion) * t,
+                shadow = from.shadow + (to.shadow - from.shadow) * t,
+                // A choice, and one a shuffle never changes.
+                fill = if (t < 0.5f) from.fill else to.fill,
+            )
+        }
+
+        private fun between(a: FloatArray, b: FloatArray, t: Float) = FloatArray(a.size) { a[it] + (b[it] - a[it]) * t }
     }
 
     /** How many crests [density] asks for — one long horizon up to a finely stratified frame. */
@@ -202,65 +419,6 @@ object WavesGenerator : Generator {
     /** One `0..1` channel as a color byte. */
     private fun byteOf(value: Float): Int = (value * ChannelMax).roundToInt().coerceIn(0, ChannelMask)
 
-    /**
-     * Fills one column of [pixels] from the crest heights in [column].
-     *
-     * A pixel's band is how many crests sit at or above it, and the shadow is cast by the nearest of those — both
-     * counted in one pass, since with crossing crests the array is not sorted and the last crest above a pixel is not
-     * the last one in it.
-     */
-    private fun paintColumn(
-        pixels: IntArray,
-        x: Int,
-        width: Int,
-        height: Int,
-        column: FloatArray,
-        ink: Array<IntArray>,
-        shadow: Float,
-    ) {
-        for (y in 0 until height) {
-            val t = y.toFloat() / height
-            var band = 0
-            // Negative infinity rather than a sentinel inside the frame: a crest pushed off the top by distortion
-            // still casts its shadow into it, and only a band with no crest above it at all goes unshaded.
-            var above = Float.NEGATIVE_INFINITY
-            for (crest in column) {
-                if (crest <= t) {
-                    band++
-                    above = max(above, crest)
-                }
-            }
-            var color = ink[band][x]
-            val fade = (t - above) / ShadowSpan
-            if (fade < 1f) {
-                color = Shades.scale(color, 1f - shadow * (1f - fade))
-            }
-            pixels[y * width + x] = color
-        }
-    }
-
-    /**
-     * The color of each of [bands] bands, resolved per column so a gradient fill costs nothing in the pixel loop.
-     *
-     * A palette with nothing above its ground has only the ground to paint with, which is the honest picture rather
-     * than an error — the same answer [RampTones] gives.
-     */
-    private fun bandColors(bands: Int, palette: Palette, fill: Fill, width: Int): Array<IntArray> {
-        val tones = RampTones.aboveGround(palette)
-        val stops = if (tones.isEmpty()) intArrayOf(palette.colorAt(0)) else tones
-        return Array(bands) { band ->
-            val from = stops[band % stops.size]
-            if (fill == Fill.FLAT) {
-                IntArray(width) { from }
-            } else {
-                val to = turned(from, up = band % 2 == 1)
-                IntArray(width) { x ->
-                    LinearGradientGenerator.lerpArgb(from, to, if (width <= 1) 0f else x.toFloat() / (width - 1))
-                }
-            }
-        }
-    }
-
     /** One ripple term of a crest's interior shape: how tall, how many cycles across the frame, and where it starts. */
     internal data class Term(val amplitude: Float, val frequency: Float, val phase: Float)
 
@@ -293,6 +451,15 @@ object WavesGenerator : Generator {
 
     /** How far full distortion may push a crest off its sweep, as a fraction of the frame — far enough to cross. */
     private const val WarpSweep = 0.35f
+
+    /** How often a crest is sampled across the frame, in pixels — see [columnsFor]. */
+    private const val ColumnStep = 4f
+
+    /** Where a pixel's center sits within it, in canvas units — see [draw]. */
+    private const val PixelCenter = 0.5f
+
+    /** How finely a shadow's fade is stored; the mesh stretches it over [ShadowSpan] of the frame. */
+    private const val FadeTexels = 256
 
     /** How far a crest's shadow reaches down the band under it, as a fraction of the frame — theirs, measured. */
     private const val ShadowSpan = 0.0625f

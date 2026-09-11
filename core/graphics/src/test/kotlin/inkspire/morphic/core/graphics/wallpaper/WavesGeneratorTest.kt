@@ -1,8 +1,13 @@
 package inkspire.morphic.core.graphics.wallpaper
 
+import inkspire.morphic.core.model.wallpaper.DesignParams
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.PI
+import kotlin.math.abs
 
 /**
  * The crest arithmetic and the two measurements the design is built on — the shadow's default and the palette turn.
@@ -104,5 +109,68 @@ class WavesGeneratorTest {
         assertEquals("red", (expected shr 16 and 0xFF).toDouble(), (actual shr 16 and 0xFF).toDouble(), 2.0)
         assertEquals("green", (expected shr 8 and 0xFF).toDouble(), (actual shr 8 and 0xFF).toDouble(), 2.0)
         assertEquals("blue", (expected and 0xFF).toDouble(), (actual and 0xFF).toDouble(), 2.0)
+    }
+
+    /**
+     * **Painting the traced edges is counting the crests**, which is the shared derivation between the bands the
+     * canvas fills and the design's own rule: a pixel's band is how many crests sit at or above it. Band `k` is filled
+     * below the `k`-th highest crest of its column, so at any height the last fill is the count — and at full
+     * distortion, where crests cross and swallow each other, this is the only place that would show if it were not.
+     */
+    @Test
+    fun `the traced edges give every pixel the band the crests count for it`() {
+        val plan = WavesGenerator.plan(DesignParams(density = 1f, scale = 1f, irregularity = 1f), seed = 7L)
+        val width = 1080
+        val height = 2400
+        val xs = FloatArray(55) { it * 20f }
+        val edges = WavesGenerator.edges(plan, xs, width, height)
+
+        for (j in xs.indices) {
+            val nx = xs[j] / (width - 1)
+            for (y in 0 until height step 7) {
+                val t = y.toFloat() / height
+                val counted = plan.lobes.indices.count {
+                    WavesGenerator.crestAt(plan.left[it], plan.right[it], plan.lobes[it], plan.distortion, nx) <= t
+                }
+                val painted = edges.count { it[j] <= y.toFloat() }
+                assertEquals("column ${xs[j]}, row $y", counted, painted)
+            }
+        }
+    }
+
+    @Test
+    fun `a scrub begins and ends on the plans, and keeps each edge layout in order`() {
+        val params = DesignParams(density = 1f, scale = 1f, irregularity = 1f)
+        val from = WavesGenerator.plan(params, seed = 1L)
+        val to = WavesGenerator.plan(params, seed = 2L)
+        val morph = requireNotNull(WavesGenerator.morph(from, to))
+        assertSame(from, morph.at(0f))
+        assertSame(to, morph.at(1f))
+        for (step in 0..20) {
+            val moment = morph.at(step / 20f)
+            assertEquals(moment.left.toList().sorted(), moment.left.toList())
+            assertEquals(moment.right.toList().sorted(), moment.right.toList())
+        }
+    }
+
+    /** A phase is an angle, so a ripple turns the short way to its partner rather than spinning most of a cycle. */
+    @Test
+    fun `a ripple's phase turns the short way round`() {
+        val plan = WavesGenerator.plan(DesignParams(), seed = 1L)
+        fun withPhase(phase: Float) = WavesGenerator.Plan(
+            plan.left, plan.right,
+            plan.lobes.map { lobe -> WavesGenerator.Lobe(lobe.terms.map { it.copy(phase = phase) }) },
+            plan.distortion, plan.shadow, plan.fill,
+        )
+        val morph = requireNotNull(WavesGenerator.morph(withPhase(0.1f), withPhase((2 * PI).toFloat() - 0.1f)))
+        val middle = morph.at(0.5f).lobes.first().terms.first().phase
+        assertTrue("the phase went the long way: $middle", abs(middle) < 0.01f)
+    }
+
+    @Test
+    fun `two frames of different crest counts are refused rather than paired`() {
+        val few = WavesGenerator.plan(DesignParams(density = 0f), seed = 1L)
+        val many = WavesGenerator.plan(DesignParams(density = 1f), seed = 1L)
+        assertNull(WavesGenerator.morph(few, many))
     }
 }

@@ -149,6 +149,37 @@ class MorphRenderHarness {
         }
     }
 
+    /**
+     * One Waves shuffle at full distortion and full variation, gradient-filled — ten frames.
+     *
+     * What to look for: **crests should bend and slide, and where two cross the band between them should pinch out
+     * and reopen smoothly** — a band flashing to another color at a crossing would mean the traced edges and the
+     * count had come apart; and the shadow should ride under each crest the whole way rather than lag it.
+     */
+    @Test
+    fun renderWavesMorph() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val colorful = PaletteColorMode.resolve(Palette(Dusk), WallpaperColorMode.COLORFUL)
+        val params = DesignParams(
+            density = 1f,
+            scale = 1f,
+            irregularity = 1f,
+            variant = 1,
+            colorMode = WallpaperColorMode.COLORFUL,
+        )
+        val morph = requireNotNull(
+            WavesGenerator.morph(WavesGenerator.plan(params, seed = 42L), WavesGenerator.plan(params, seed = 43L)),
+        )
+
+        for (step in 0..Steps) {
+            val t = step.toFloat() / Steps
+            val bitmap = createBitmap(Width, Height)
+            WavesGenerator.draw(Canvas(bitmap), morph.at(t), colorful, Width, Height)
+            saveHarnessPng(resolver, "morph_waves_${(t * 100).toInt().toString().padStart(3, '0')}.png", bitmap)
+            bitmap.recycle()
+        }
+    }
+
     private companion object {
         /** "Dusk", the render harness's palette — warm sand and terracotta against deep teal. */
         val Dusk = listOf(
