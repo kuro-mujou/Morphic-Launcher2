@@ -1,8 +1,11 @@
 package inkspire.morphic.core.graphics.wallpaper
 
 import inkspire.morphic.core.graphics.wallpaper.DotGridGenerator.Look
+import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -111,5 +114,58 @@ class DotGridGeneratorTest {
     @Test
     fun `a one-stop palette has no ramp at all`() {
         assertEquals(0, RampTones.countFor(1))
+    }
+
+    /**
+     * **A tile switches band at most once each way in a scrub, and never flickers** — at full dither on five bands, the
+     * setting where the drift carries a tile furthest. A tile going back and forth between two bands would read as
+     * noise in a picture whose whole point is its calm.
+     */
+    @Test
+    fun `a tile's band turns back at most once in a scrub, so no tile flickers`() {
+        val params = DesignParams(irregularity = 1f)
+        for (seed in 1L..4L) {
+            val morph = requireNotNull(
+                DotGridGenerator.morph(
+                    DotGridGenerator.plan(1080, 2400, params, seed),
+                    DotGridGenerator.plan(1080, 2400, params, seed + 100),
+                ),
+            )
+            val moments = (0..200).map { morph.at(it / 200f) }
+            val grid = moments.first().grid
+            for (tile in 0 until grid.rows * grid.columns) {
+                val down = (tile / grid.columns).toFloat() / (grid.rows - 1)
+                val bands = moments.map { DotGridGenerator.bandAt(down, it.drift[tile], it.dither, 5) }
+                val steps = bands.zipWithNext { a, b -> b.compareTo(a) }.filter { it != 0 }
+                val turns = steps.zipWithNext { a, b -> a != b }.count { it }
+                assertTrue("tile $tile of seed $seed turned back $turns times: $bands", turns <= 1)
+            }
+        }
+    }
+
+    @Test
+    fun `at no dither the seed decides nothing, and the scrub holds still`() {
+        val params = DesignParams(irregularity = 0f)
+        val from = DotGridGenerator.plan(1080, 2400, params, seed = 1L)
+        val morph = requireNotNull(DotGridGenerator.morph(from, DotGridGenerator.plan(1080, 2400, params, seed = 2L)))
+        val grid = from.grid
+        for (t in listOf(0f, 0.25f, 0.5f, 1f)) {
+            val moment = morph.at(t)
+            for (tile in 0 until grid.rows * grid.columns) {
+                val down = (tile / grid.columns).toFloat() / (grid.rows - 1)
+                assertEquals(
+                    DotGridGenerator.bandAt(down, from.drift[tile], from.dither, 5),
+                    DotGridGenerator.bandAt(down, moment.drift[tile], moment.dither, 5),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `two blocks on different lattices are refused rather than paired`() {
+        val coarse = DotGridGenerator.plan(1080, 2400, DesignParams(density = 0f), seed = 1L)
+        val fine = DotGridGenerator.plan(1080, 2400, DesignParams(density = 1f), seed = 1L)
+        assertNull(DotGridGenerator.morph(coarse, fine))
+        assertNotNull(DotGridGenerator.morph(coarse, DotGridGenerator.plan(1080, 2400, DesignParams(density = 0f), 2L)))
     }
 }

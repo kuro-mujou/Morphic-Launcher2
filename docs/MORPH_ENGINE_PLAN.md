@@ -1,7 +1,7 @@
 # Morph Engine
 
 **Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands, Waves, Wave
-Dividers, Gradient Columns, Plasma, Bauhaus, Truchet and Halftone rolled out, and the field bucket re-measured and mostly dissolved
+Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone and Dot Grid rolled out, and the field bucket re-measured and mostly dissolved
 (2026-09-11). Drawn
 from three screen captures of Smart Launcher's wallpaper studio taken by the author, each of which overturned a
 conclusion drawn from the one before.
@@ -370,7 +370,7 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  thirteen primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
+  twelve primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
   shuffle of either is the same picture.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
     null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
@@ -594,8 +594,32 @@ claim to apply.
   - **Verified on emulator-5554.** The drag changes the picture evenly at 2.7% of pixels per step, the spring settles
     in three frames and every frame after is pixel-identical to the bake, and a sub-threshold release returns
     **0.000%** of pixels changed.
-  - **`turnField` stays in Halftone until a second consumer arrives.** Dot Grid is the likely one: its seed is also
-    only a noise field, which pushes tiles across band seams.
+  - **Dot Grid ✅ (2026-09-11) — the seed is only a drift, and a tile switches rather than blends.** The lattice, the
+    look and the margin are all knobs. The seed decides one noise field, the drift that pushes tiles across band seams,
+    and only while *Dither* is above `0`. With no dither the scrub is a still one, which is faithful. So the scrub turns
+    each tile's drift from one seed's field to the other's, and the intrusions along each seam move with it.
+  - **`turnNoise` is shared now**, on its second consumer: Halftone's turn moved to `NoiseTurn.kt`, and Halftone turns
+    about its field's middle through it. Here the straight blend's failure would be plainly visible: seams ruling
+    straighter through the middle of a scrub and the top edge eroding less, the dither knob appearing to move.
+  - **A tile never blends, in a scrub or out of one.** Every moment's drift sorts every tile into a band exactly as
+    the bake does, so every frame of a scrub is a block this design could have baked. Confetti's rule, blending a
+    changing tile's color, was rejected. It would put tones on the block that belong to no band, and Confetti's
+    reason for it doesn't arise: the drift carries each tile across its seam at its own moment, not all of them in
+    one frame. A quarter turn has at most one peak, so the drift under a tile crosses any seam at most twice in a
+    scrub. `a tile's band turns back at most once in a scrub, so no tile flickers` checks that on every tile at full
+    dither over four shuffles.
+  - **The plan stays in pixels**, as Confetti's does. The lattice is fitted to the frame's pixels, and `draw` reaches
+    another size by scaling the canvas.
+  - **The bake: 961 of 961 harness renders byte-identical.** Halftone's scrub frames moved by 1–8 pixels of 2.6
+    million on dot edges, and never at the ends: `turnNoise` sums the two weighted terms before the middle is added
+    back, which rounds differently. Keeping the old order would mean writing the formula twice, which is what the
+    extraction removed.
+  - **Verified on emulator-5554.** At the default the scrub is subtle: the shuffle measured moved about thirty
+    tiles on the seams, so the drag changes at most 0.3% of pixels per step, some steps none. That is what the seed decides here,
+    as with Mesh Gradient's warp. At full dither and no margin, the harness frames change 0.5–1.7% of pixels per step,
+    lumpier than a continuous design, as tiles that switch must be, and no seam ever switches in one frame. The spring
+    settles in three frames to a frame pixel-identical to the bake, and a sub-threshold release returns **0.000%** of
+    pixels changed.
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a

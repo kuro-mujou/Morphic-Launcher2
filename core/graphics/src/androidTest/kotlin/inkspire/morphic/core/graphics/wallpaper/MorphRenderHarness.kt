@@ -264,6 +264,35 @@ class MorphRenderHarness {
         }
     }
 
+    /**
+     * One Dot Grid shuffle at full dither, colorful, with no margin — ten frames of the seams' drifts moving.
+     *
+     * Colorful for five bands and so four seams; full dither and no margin so the drifts are as large as they get and
+     * fill the frame. What to look for: **the intrusions along each seam should move as drifts, a few tiles switching
+     * at a time**, never a whole seam switching in one frame; and the top edge should keep eroding through the middle,
+     * not rule straight.
+     */
+    @Test
+    fun renderDotGridMorph() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val colorful = PaletteColorMode.resolve(Palette(Dusk), WallpaperColorMode.COLORFUL)
+        val params = DesignParams(irregularity = 1f, scale = 0f, colorMode = WallpaperColorMode.COLORFUL)
+        val morph = requireNotNull(
+            DotGridGenerator.morph(
+                DotGridGenerator.plan(Width, Height, params, seed = 42L),
+                DotGridGenerator.plan(Width, Height, params, seed = 43L),
+            ),
+        )
+
+        for (step in 0..Steps) {
+            val t = step.toFloat() / Steps
+            val bitmap = createBitmap(Width, Height)
+            DotGridGenerator.draw(Canvas(bitmap), morph.at(t), colorful, Width, Height)
+            saveHarnessPng(resolver, "morph_dotgrid_${(t * 100).toInt().toString().padStart(3, '0')}.png", bitmap)
+            bitmap.recycle()
+        }
+    }
+
     private companion object {
         /** "Dusk", the render harness's palette — warm sand and terracotta against deep teal. */
         val Dusk = listOf(

@@ -48,6 +48,9 @@ import kotlin.math.min
  *
  * [gridOf] is pure and tested — the fit is arithmetic that fails silently when it is wrong (a block that overflows the
  * frame, or one that leaves a sliver of unused box), and it needs no canvas to check.
+ *
+ * **It plans and then paints**: [plan] is the lattice and the drift under every tile, [draw] sorts the tiles into
+ * bands, and a scrub is a [Morph] between two plans. See docs/MORPH_ENGINE_PLAN.md.
  */
 object DotGridGenerator : Generator {
 
@@ -106,37 +109,90 @@ object DotGridGenerator : Generator {
         val tileHeight: Float,
     )
 
+    /**
+     * A block planned but not painted — the lattice the knobs fit and the drift under every tile, in a `[width]` ×
+     * `[height]` frame and in no particular palette.
+     *
+     * **In pixels, like Confetti's plan**, since the lattice is fitted to the frame's pixels and the bake is worth more
+     * than the symmetry of planning in shares; [draw] reaches another size by scaling the canvas.
+     *
+     * @property radius the tiles' corner radius, in pixels — the [Look]'s corner resolved against the tile.
+     * @property dither how far along the ramp a drift of `1` pushes a tile — the dither knob, resolved.
+     * @property drift the noise under every tile, row-major and roughly `-1..1` — the whole of what the seed decides,
+     *   and nothing at all while [dither] is `0`.
+     */
+    internal class Plan(
+        val grid: Grid,
+        val radius: Float,
+        val dither: Float,
+        val drift: FloatArray,
+        val width: Int,
+        val height: Int,
+    )
+
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
+        val bitmap = createBitmap(width, height)
+        draw(Canvas(bitmap), plan(width, height, params, seed), palette, width, height)
+        return bitmap
+    }
+
+    /** The block [params] and [seed] describe, in a `[width]` × `[height]` frame. */
+    internal fun plan(width: Int, height: Int, params: DesignParams, seed: Long): Plan {
         val look = Look.entries[params.variant.coerceIn(0, Look.entries.lastIndex)]
         val grid = gridOf(width, height, Amount.at(params.density), params.scale, look)
+        val noise = PerlinNoise2d(seed)
+        val drift = FloatArray(grid.rows * grid.columns)
+        for (row in 0 until grid.rows) {
+            for (col in 0 until grid.columns) {
+                // The field is read in frame-relative coordinates so its swells stay the same size on the picture
+                // however fine the lattice is — a denser grid samples the same drift more finely, it does not get noisier.
+                drift[row * grid.columns + col] = noise.at(
+                    (grid.left + col * grid.cellWidth) / width * Frequency,
+                    (grid.top + row * grid.cellHeight) / height * Frequency,
+                )
+            }
+        }
+        return Plan(
+            grid = grid,
+            radius = look.corner * min(grid.tileWidth, grid.tileHeight) / 2f,
+            // A fraction of the *whole ramp*, not of one band — so the knob means the same thing however many stops the
+            // color mode left behind. In band units it would erode a one-band palette's entire block at the setting
+            // that merely roughens a five-band one's seams.
+            dither = params.irregularity.coerceIn(0f, 1f) * MaxDither,
+            drift = drift,
+            width = width,
+            height = height,
+        )
+    }
+
+    /**
+     * Paints [plan] into [canvas] at `[width]` × `[height]`, in [palette] — the bake into a software bitmap and a
+     * scrub into a hardware canvas alike.
+     *
+     * **A tile never blends, in a scrub or out of one**: every moment's drift sorts every tile into a band exactly as
+     * the bake does, so each frame of a scrub is a block this design could have baked. A tile switches band at the
+     * moment the drift under it crosses a seam, which the turn in [Morph] makes happen tile by tile, not all at once.
+     */
+    internal fun draw(canvas: Canvas, plan: Plan, palette: Palette, width: Int, height: Int) {
+        canvas.drawColor(palette.colorAt(0))
         // The ground takes stop 0 and the bands are the rungs above it. A one-stop palette has no ramp and draws
         // nothing but its ground, which is the honest answer rather than a field of invisible tiles.
         val tones = RampTones.aboveGround(palette)
         val bands = tones.size
-        val noise = PerlinNoise2d(seed)
-        // A fraction of the *whole ramp*, not of one band — so the knob means the same thing however many stops the
-        // color mode left behind. In band units it would erode a one-band palette's entire block at the setting that
-        // merely roughens a five-band one's seams.
-        val dither = params.irregularity.coerceIn(0f, 1f) * MaxDither
-
-        val bitmap = createBitmap(width, height)
-        val canvas = Canvas(bitmap)
-        canvas.drawColor(palette.colorAt(0))
-        if (bands < 1) return bitmap
+        if (bands < 1) return
+        val grid = plan.grid
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-        val radius = look.corner * min(grid.tileWidth, grid.tileHeight) / 2f
         val tile = RectF()
 
+        val resized = width != plan.width || height != plan.height
+        if (resized) {
+            canvas.save()
+            canvas.scale(width.toFloat() / plan.width, height.toFloat() / plan.height)
+        }
         for (row in 0 until grid.rows) {
             val down = if (grid.rows > 1) row.toFloat() / (grid.rows - 1) else 0f
             for (col in 0 until grid.columns) {
-                // The field is read in frame-relative coordinates so its swells stay the same size on the picture
-                // however fine the lattice is — a denser grid samples the same drift more finely, it does not get noisier.
-                val drift = noise.at(
-                    (grid.left + col * grid.cellWidth) / width * Frequency,
-                    (grid.top + row * grid.cellHeight) / height * Frequency,
-                )
-                val band = floor((down + drift * dither) * bands).toInt()
+                val band = bandAt(down, plan.drift[row * grid.columns + col], plan.dither, bands)
                 // Pushed off the light end of the ramp, a tile is simply not drawn — which is what keeps the dither a
                 // live knob on a palette with a single band, where there is no neighbouring tone to trade with. It
                 // erodes the block's top edge, the end the ramp starts from, so the motif fades in rather than ruling.
@@ -148,10 +204,70 @@ object DotGridGenerator : Generator {
                     grid.left + col * grid.cellWidth + grid.tileWidth,
                     grid.top + row * grid.cellHeight + grid.tileHeight,
                 )
-                canvas.drawRoundRect(tile, radius, radius, paint)
+                canvas.drawRoundRect(tile, plan.radius, plan.radius, paint)
             }
         }
-        return bitmap
+        if (resized) canvas.restore()
+    }
+
+    /**
+     * The band a tile [down] of the way down the block falls in, of [bands], once [drift] has pushed it [dither] of the
+     * ramp's length — below `0` where it has been pushed off the light end, and past the last band where it has been
+     * pushed off the dark one, which the caller clamps.
+     */
+    internal fun bandAt(down: Float, drift: Float, dither: Float, bands: Int): Int =
+        floor((down + drift * dither) * bands).toInt()
+
+    /**
+     * A scrub between two blocks: the drifts under the tiles turn from one seed's field to the other's, and the seams
+     * they break up move with them — see [draw] for why a tile switches rather than blends.
+     *
+     * **Nothing to pair**: the lattice is the knobs' and the frame's, so a tile's partner is the tile in its own place.
+     * At no dither the seed decides nothing and the scrub is a still one, which is faithful rather than broken.
+     */
+    override fun scrub(
+        width: Int,
+        height: Int,
+        palette: Palette,
+        params: DesignParams,
+        from: Long,
+        to: Long,
+    ): WallpaperMorph? {
+        val morph = morph(plan(width, height, params, from), plan(width, height, params, to)) ?: return null
+        return WallpaperMorph { canvas, t, w, h -> draw(canvas, morph.at(t), palette, w, h) }
+    }
+
+    /** Two blocks prepared to interpolate, tile for tile — or **null where they are not the same lattice**. */
+    internal fun morph(from: Plan, to: Plan): Morph? {
+        val same = from.grid == to.grid && from.width == to.width && from.height == to.height &&
+            from.radius == to.radius && from.dither == to.dither
+        return if (same) Morph(from, to) else null
+    }
+
+    /** Two blocks, tile for tile, and every moment between them. */
+    internal class Morph(private val from: Plan, private val to: Plan) {
+
+        /**
+         * The block [t] of the way across; the ends are the plans themselves, as every design's are.
+         *
+         * **The drift turns ([turnNoise]) rather than blending straight**, and here the straight blend's failure is
+         * one anybody would see: it cuts the drift's swing by nearly a third at the midpoint, so the seams would rule
+         * straighter through the middle of a scrub and the top edge erode less — the dither knob appearing to move.
+         * And because a quarter turn has at most one peak, the drift under a tile crosses a seam at most twice in a
+         * scrub: a tile can switch band and switch back, but it cannot flicker.
+         */
+        fun at(t: Float): Plan = when {
+            t <= 0f -> from
+            t >= 1f -> to
+            else -> Plan(
+                grid = from.grid,
+                radius = from.radius,
+                dither = from.dither,
+                drift = FloatArray(from.drift.size) { turnNoise(from.drift[it], to.drift[it], t) },
+                width = from.width,
+                height = from.height,
+            )
+        }
     }
 
     /**

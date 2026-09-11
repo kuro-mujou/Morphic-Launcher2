@@ -6,11 +6,8 @@ import android.graphics.Paint
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
-import kotlin.math.PI
-import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.roundToInt
-import kotlin.math.sin
 import kotlin.random.Random
 
 /**
@@ -156,19 +153,12 @@ object HalftoneGenerator : Generator {
     }
 
     /**
-     * The field [t] of the way from one seed's [a] to another's [b] — turned rather than blended straight, because a
-     * straight blend flattens the middle of every scrub.
-     *
-     * **Two seeds' fields are unrelated, and the average of two unrelated fields swings only about 0.7 as far from its
-     * middle as either does.** Blended straight, the middle of a scrub would be a flatter screen passing for the same
-     * one — its bare paper filling in with small dots and its largest dots shrinking. Weighted by the cosine and sine
-     * of a quarter turn, the squares of the two weights sum to one at every moment, so the swing holds and the screen
-     * keeps its contrast from end to end. Clamped, since the two swings can add past either end of the field.
+     * The field [t] of the way from one seed's [a] to another's [b] — [turnNoise] about the field's middle, so the
+     * screen keeps its contrast through a scrub rather than flattening at the midpoint. Clamped, since the two swings
+     * can add past either end of the field.
      */
-    internal fun turnField(a: Float, b: Float, t: Float): Float {
-        val angle = t * QuarterTurn
-        return (Mid + (a - Mid) * cos(angle) + (b - Mid) * sin(angle)).coerceIn(0f, 1f)
-    }
+    internal fun turnField(a: Float, b: Float, t: Float): Float =
+        (Mid + turnNoise(a - Mid, b - Mid, t)).coerceIn(0f, 1f)
 
     /** How many columns of dots [density] asks for — a coarse screen up to a fine one. */
     internal fun gridColumns(density: Float): Int = Amount.at(density)
@@ -197,9 +187,6 @@ object HalftoneGenerator : Generator {
 
     /** The middle of the field, about which a scrub turns it. */
     private const val Mid = 0.5f
-
-    /** A quarter turn, in radians — [turnField]'s whole travel. */
-    private const val QuarterTurn = (PI / 2).toFloat()
 
     /** Below this field strength a dot is not drawn at all, so weak regions are clean paper, not a speckle. */
     private const val DotFloor = 0.25f
