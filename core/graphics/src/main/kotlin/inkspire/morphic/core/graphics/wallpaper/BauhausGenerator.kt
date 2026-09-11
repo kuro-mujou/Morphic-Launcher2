@@ -6,11 +6,7 @@ import android.graphics.Paint
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
-import kotlin.math.PI
 import kotlin.math.ceil
-import kotlin.math.cos
-import kotlin.math.roundToInt
-import kotlin.math.sin
 import kotlin.random.Random
 
 /**
@@ -260,9 +256,9 @@ object BauhausGenerator : Generator {
      * arc meets the two edges away from its corner *exactly*, which is the whole reason two neighbours can read as one
      * larger circle; a path approximating the same curve would line up with its neighbour only by luck.
      *
-     * **At a whole turn the corner is read off [QuarterCorners], and only between turns is it worked out**, by turning
-     * the first corner about the tile's center — so the bake draws exactly the circle it always drew, and a turning
-     * quarter passes through every angle between two corners on its way.
+     * **Anchored by [tileCornerAt]**, which reads the corner off a table at a whole turn and works it out only between
+     * two — so the bake draws exactly the circle it always drew, and a turning quarter passes through every angle
+     * between two corners on its way.
      */
     @Suppress("LongParameterList") // A quarter's pose and its cell.
     private fun drawQuarter(
@@ -275,46 +271,18 @@ object BauhausGenerator : Generator {
         side: Float,
     ) {
         if (bloom <= 0f) return
-        val anchor = anchorAt(turn)
+        val anchor = tileCornerAt(turn)
         canvas.save()
         canvas.clipRect(left, top, left + side, top + side)
         canvas.drawCircle(left + anchor[0] * side, top + anchor[1] * side, side * bloom, paint)
         canvas.restore()
     }
 
-    /**
-     * Where a quarter disc at [turn] quarter turns is anchored, in cell fractions — [QuarterCorners] itself at a whole
-     * turn, and between two the first corner turned about the cell's center.
-     *
-     * The first corner is half a cell up and left of the center, and a turn clockwise on screen — where `y` runs down —
-     * is the plain rotation, which is what carries it round the other three in [QuarterCorners]' order.
-     */
-    internal fun anchorAt(turn: Float): FloatArray {
-        val whole = turn.roundToInt()
-        if (turn == whole.toFloat()) return QuarterCorners[whole.mod(Turns)]
-        val angle = turn * QuarterTurn
-        return floatArrayOf(Half - Half * cos(angle) + Half * sin(angle), Half - Half * sin(angle) - Half * cos(angle))
-    }
-
-    /** Where a quarter disc's circle is centered, in cell fractions — the four corners, clockwise from the top-left. */
-    private val QuarterCorners = arrayOf(
-        floatArrayOf(0f, 0f),
-        floatArrayOf(1f, 0f),
-        floatArrayOf(1f, 1f),
-        floatArrayOf(0f, 1f),
-    )
-
     /** [DesignParams.variant] selecting the shapes floating on one ground over the default per-tile grounds. */
     private const val VariantFloating = 1
 
     /** Quarter-turns a shape can take — which corner it is anchored to. */
     private const val Turns = 4
-
-    /** A quarter turn, in radians. */
-    private const val QuarterTurn = (PI / 2).toFloat()
-
-    /** Half a cell — where its center sits from a corner. */
-    private const val Half = 0.5f
 
     /**
      * What the coverage knob spans: a scattering of shapes on mostly bare tiles, up to one on every tile.

@@ -102,23 +102,6 @@ class BauhausGeneratorTest {
         assertEquals(calm.map { it.shape }, wild.map { it.shape })
     }
 
-    /**
-     * **A turning quarter arrives at the corner the table names**, from either side — so the anchor worked out between
-     * turns and the one read off the table at them are one path, not two. Turned the wrong way, a quarter would still
-     * sweep smoothly; it would just sweep through the wrong corner and jump at the end.
-     */
-    @Test
-    fun `a turning quarter arrives at each corner the table names`() {
-        for (turn in 0..3) {
-            val corner = BauhausGenerator.anchorAt(turn.toFloat())
-            for (near in listOf(turn - 0.001f, turn + 0.001f)) {
-                val anchor = BauhausGenerator.anchorAt(near)
-                assertEquals("x near turn $turn", corner[0], anchor[0], 0.01f)
-                assertEquals("y near turn $turn", corner[1], anchor[1], 0.01f)
-            }
-        }
-    }
-
     @Test
     fun `a quarter turns the short way, and clockwise when opposite`() {
         assertEquals(0.5f, BauhausGenerator.turnAt(0, 1, 0.5f), 1e-6f)

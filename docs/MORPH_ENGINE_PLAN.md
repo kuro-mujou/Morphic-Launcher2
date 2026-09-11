@@ -1,7 +1,7 @@
 # Morph Engine
 
 **Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands, Waves, Wave
-Dividers, Gradient Columns, Plasma and Bauhaus rolled out, and the field bucket re-measured and mostly dissolved
+Dividers, Gradient Columns, Plasma, Bauhaus and Truchet rolled out, and the field bucket re-measured and mostly dissolved
 (2026-09-11). Drawn
 from three screen captures of Smart Launcher's wallpaper studio taken by the author, each of which overturned a
 conclusion drawn from the one before.
@@ -370,7 +370,7 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  fifteen primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
+  fourteen primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
   shuffle of either is the same picture.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
     null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
@@ -548,6 +548,31 @@ claim to apply.
   - **It shares Confetti's open item.** On a colorful palette every recoloring tile is mid-blend at `t = 0.5`, and the
     middle of the scrub reads as a duller palette of gray-browns. The stagger that would answer Confetti would answer
     this too, and it stays unmade for the same reason.
+  - **Truchet ✅ (2026-09-11) — a flip is a quarter turn, so a shuffle turns tiles.** The seed decides one coin flip
+    per cell and nothing else: the grid is a knob, the arc's color is its row's, the line weight is a knob. And the
+    two orientations are one tile turned a quarter, which is the Truchet trick seen from the other side. So a cell that
+    flips turns clockwise about its center with both arcs carried round, and every other cell holds still. Mid-turn
+    the arcs leave the edge midpoints and the loops through that cell break; they join again as it lands. The plan and
+    the moment are Bauhaus's shape, for Bauhaus's reason.
+  - **Clockwise either way**, since both ways round are a quarter turn and neither is shorter. `turnAt` counts turns
+    from the unflipped tile, and `a flipping cell … lands flipped the other way` pins that a flip ends on an odd
+    count: on an even one the tile would sweep smoothly and then jump back when the bake took over.
+  - **`tileCornerAt` is shared now**, on its second consumer: Bauhaus's quarter anchors moved to `TileTurns.kt` with
+    their test. A corner stands at a table entry at a whole turn and is turned about the center between two. The
+    two consumers differ in one way worth knowing: Truchet's cells are not square wherever the grid's rows do not
+    divide the frame, so the fractions are scaled by the cell's width and height separately. A corner then lands
+    exactly on the corner the bake draws, and the path between is stretched with the cell. The arcs stay circles.
+  - **The bake: 961 of 961 harness renders byte-identical**, Bauhaus's included through the extracted helper. A whole
+    turn reads the table, and multiplying a corner of `0` or `1` by the cell is exact, so the four arcs are the same
+    calls in the same order. Across the harness's eleven frames on the coarsest grid, the per-step change rises
+    smoothly from 5.7% of pixels to 8.4% at the middle and back, with no step at either end.
+  - **Verified on emulator-5554.** The drag changes the picture evenly at 3–6% of pixels per step, the spring settles
+    in three frames and every frame after is pixel-identical to the bake, and a sub-threshold release returns
+    **0.000%** of pixels changed.
+  - **What it leaves open: the middle is a maze in pieces.** With about half the cells flipping in unison, `t = 0.5`
+    is a field of crescents and no loop survives it. That is what turning tiles looks like, and it recovers by the
+    last tenth. A stagger in the swipe's direction would keep most of the maze whole at any moment. That is the same
+    design choice as Confetti's, and it is not made here either.
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a

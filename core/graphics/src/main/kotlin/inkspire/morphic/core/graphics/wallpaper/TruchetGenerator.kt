@@ -27,6 +27,10 @@ import kotlin.random.Random
  *
  * [orientations] and [arcWidthFraction] are pure and tested — the per-cell coin flips are what a recipe reproduces,
  * and a line weight that quietly closed the maze would be a solid frame with a plausible reason.
+ *
+ * **It plans and then paints, and a scrub is a pair of plans and a moment between them** — Bauhaus's shape, for
+ * Bauhaus's reason: a flip is a choice, so a moment is not a plan of cells but two of them and a `t`. The bake is the
+ * moment `0` of a plan and itself. See docs/MORPH_ENGINE_PLAN.md.
  */
 object TruchetGenerator : Generator {
 
@@ -38,20 +42,53 @@ object TruchetGenerator : Generator {
         scale = "Thickness",
     )
 
+    /**
+     * A maze planned but not painted — which way every cell turns its arcs, at no particular size and in no particular
+     * palette.
+     *
+     * **In columns and rows, which is all the frame's shape decides**, so a plan is one picture at every size of one
+     * shape.
+     *
+     * @property weight an arc's width as a share of its cell — [arcWidthFraction] of the thickness knob.
+     * @property flipped every cell's orientation, row-major — [orientations].
+     */
+    internal class Plan(val cols: Int, val rows: Int, val weight: Float, val flipped: BooleanArray)
+
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
+        val bitmap = createBitmap(width, height)
+        val plan = plan(width, height, params, seed)
+        draw(Canvas(bitmap), plan, plan, 0f, palette, width, height)
+        return bitmap
+    }
+
+    /** The maze [params] and [seed] describe, in a frame shaped like `[width]` × `[height]`. */
+    internal fun plan(width: Int, height: Int, params: DesignParams, seed: Long): Plan {
         val cols = gridSize(params.density)
         val rows = (cols * height / width.coerceAtLeast(1)).coerceAtLeast(1) // roughly square cells for the frame's shape
-        val flipped = orientations(cols, rows, seed)
+        return Plan(cols, rows, arcWidthFraction(params.scale), orientations(cols, rows, seed))
+    }
 
-        val bitmap = createBitmap(width, height)
-        val canvas = Canvas(bitmap)
+    /**
+     * Paints the moment [t] of the way from [from] to [to] into [canvas] at `[width]` × `[height]`, in [palette] — the
+     * bake being the moment `0` of a plan and itself, and every scrub frame some other moment.
+     *
+     * **A cell that flips turns**, a quarter turn clockwise about its center with both arcs carried round ([turnAt]).
+     * The two orientations are one tile turned, so turning is the one motion that passes between them without drawing
+     * a third tile; mid-turn the arcs leave the edge midpoints and the loops through that cell break, and they join
+     * again as it lands. A cell that keeps its orientation does not move, and an arc's color is its row's, so nothing
+     * else changes.
+     */
+    @Suppress("LongParameterList") // A moment is two plans and a t, and a frame is a canvas and a size.
+    internal fun draw(canvas: Canvas, from: Plan, to: Plan, t: Float, palette: Palette, width: Int, height: Int) {
+        val cols = from.cols
+        val rows = from.rows
         canvas.drawColor(palette.colorAt(0)) // lightest stop — the ground the loops run over
         val cellW = width.toFloat() / cols
         val cellH = height.toFloat() / rows
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeCap = Paint.Cap.ROUND
-            strokeWidth = min(cellW, cellH) * arcWidthFraction(params.scale)
+            strokeWidth = min(cellW, cellH) * from.weight
         }
         val radius = min(cellW, cellH) / 2f
 
@@ -62,16 +99,60 @@ object TruchetGenerator : Generator {
                 // Arcs shift toward the palette's darker half going down the frame, so they stay legible on the ground.
                 val down = ArcRampFloor + (1f - ArcRampFloor) * (r.toFloat() / rows)
                 paint.color = LinearGradientGenerator.colorAt(down, palette)
-                if (flipped[r * cols + c]) {
-                    arc(canvas, x0 + cellW, y0, radius, startAngle = 90f, paint) // top-right corner
-                    arc(canvas, x0, y0 + cellH, radius, startAngle = 270f, paint) // bottom-left corner
-                } else {
-                    arc(canvas, x0, y0, radius, startAngle = 0f, paint) // top-left corner
-                    arc(canvas, x0 + cellW, y0 + cellH, radius, startAngle = 180f, paint) // bottom-right corner
+                val turn = turnAt(from.flipped[r * cols + c], to.flipped[r * cols + c], t)
+                // The two arcs sit at opposite corners, so the second is the first turned half round. At a whole turn
+                // the corner is read off a table, which keeps the bake the four arcs it always drew.
+                for (half in 0..1) {
+                    val at = turn + half * 2
+                    val corner = tileCornerAt(at)
+                    arc(canvas, x0 + corner[0] * cellW, y0 + corner[1] * cellH, radius, at * QuarterTurn, paint)
                 }
             }
         }
-        return bitmap
+    }
+
+    /**
+     * The quarter turns a cell stands at, [t] of the way from orientation [a] to orientation [b] — `0` unflipped, `1`
+     * flipped, and a flip either way taken clockwise, since both ways are a quarter turn and neither is shorter.
+     */
+    internal fun turnAt(a: Boolean, b: Boolean, t: Float): Float {
+        val start = if (a) 1f else 0f
+        return if (a == b) start else start + t
+    }
+
+    /**
+     * A scrub between two mazes: the cells that flip turn, and nothing else moves — see [draw].
+     *
+     * **Nothing to pair**: the grid is the knobs' and the frame's, so two seeds hold the same cells and a cell's partner
+     * is the cell in its own place.
+     */
+    override fun scrub(
+        width: Int,
+        height: Int,
+        palette: Palette,
+        params: DesignParams,
+        from: Long,
+        to: Long,
+    ): WallpaperMorph? {
+        val morph = morph(plan(width, height, params, from), plan(width, height, params, to)) ?: return null
+        return WallpaperMorph { canvas, t, w, h -> morph.draw(canvas, t, palette, w, h) }
+    }
+
+    /** Two mazes prepared to interpolate, cell for cell — or **null where they are not the same grid**. */
+    internal fun morph(from: Plan, to: Plan): Morph? {
+        val same = from.cols == to.cols && from.rows == to.rows && from.weight == to.weight
+        return if (same) Morph(from, to) else null
+    }
+
+    /** Two mazes and every moment between them. */
+    internal class Morph(private val from: Plan, private val to: Plan) {
+
+        /** Paints the moment [t]; the ends are the plans themselves, each drawn as its own bake. */
+        fun draw(canvas: Canvas, t: Float, palette: Palette, width: Int, height: Int) = when {
+            t <= 0f -> draw(canvas, from, from, 0f, palette, width, height)
+            t >= 1f -> draw(canvas, to, to, 0f, palette, width, height)
+            else -> draw(canvas, from, to, t, palette, width, height)
+        }
     }
 
     /** How many columns [density] asks for — bold loops up to a fine weave. */
@@ -97,7 +178,6 @@ object TruchetGenerator : Generator {
         )
     }
 
-    /** Every arc is a quarter circle, in degrees — a Truchet tile's arc runs corner to corner of one cell. */
     /**
      * How wide an arc is drawn at [scale], as a share of its cell — a tracery at `0`, and at `1` wide enough that the
      * arcs meet across the cell and the ground reads as the pattern.
@@ -109,9 +189,12 @@ object TruchetGenerator : Generator {
     internal fun arcWidthFraction(scale: Float): Float =
         MinArcWidth + (MaxArcWidth - MinArcWidth) * scale.coerceIn(0f, 1f).pow(ArcWidthCurve)
 
+    /**
+     * A quarter turn, in degrees — the sweep of every arc, and how far a corner's arc starts from the last corner's,
+     * since a Truchet tile's arc runs edge midpoint to edge midpoint around one corner.
+     */
     private const val QuarterTurn = 90f
 
-    /** Arc stroke as a fraction of the cell — thick enough to read as ribbons of the maze, not hairlines. */
     /** The arc's width as a share of its cell at [DesignParams.scale]'s two ends, and the exponent centring it. */
     private const val MinArcWidth = 0.04f
     private const val MaxArcWidth = 0.9f

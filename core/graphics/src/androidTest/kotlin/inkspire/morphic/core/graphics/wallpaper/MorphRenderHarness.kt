@@ -208,6 +208,34 @@ class MorphRenderHarness {
         }
     }
 
+    /**
+     * One Truchet shuffle on its coarsest grid — ten frames of the cells that flip turning a quarter.
+     *
+     * The coarsest grid because its cells are the largest, so the turn is easiest to read, and on a phone's shape
+     * they are not square — the case where a corner's path is stretched with its cell. What to look for: **a flipping
+     * cell should turn about its own center, both arcs together, and land without a jump at `100`**; the loops
+     * through it should break as it turns and join again as it lands; and a cell that does not flip should not move.
+     */
+    @Test
+    fun renderTruchetMorph() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val params = DesignParams(density = 0f)
+        val morph = requireNotNull(
+            TruchetGenerator.morph(
+                TruchetGenerator.plan(Width, Height, params, seed = 42L),
+                TruchetGenerator.plan(Width, Height, params, seed = 43L),
+            ),
+        )
+
+        for (step in 0..Steps) {
+            val t = step.toFloat() / Steps
+            val bitmap = createBitmap(Width, Height)
+            morph.draw(Canvas(bitmap), t, palette, Width, Height)
+            saveHarnessPng(resolver, "morph_truchet_${(t * 100).toInt().toString().padStart(3, '0')}.png", bitmap)
+            bitmap.recycle()
+        }
+    }
+
     private companion object {
         /** "Dusk", the render harness's palette — warm sand and terracotta against deep teal. */
         val Dusk = listOf(
