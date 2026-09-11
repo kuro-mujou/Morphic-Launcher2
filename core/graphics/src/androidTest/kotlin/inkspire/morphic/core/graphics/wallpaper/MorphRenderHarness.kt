@@ -180,6 +180,34 @@ class MorphRenderHarness {
         }
     }
 
+    /**
+     * One Bauhaus shuffle at full variety and colorful — ten frames of tiles turning, blooming and recoloring.
+     *
+     * What to look for: **a quarter changing corner should turn about its tile, never cross it or jump** — which reads
+     * as the tile rotating, the one motion a Bauhaus poster could make; a quarter arriving should grow out of its own
+     * corner; and neighbouring tiles should stop reading as one larger circle mid-scrub and read as one again at `100`.
+     */
+    @Test
+    fun renderBauhausMorph() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val colorful = PaletteColorMode.resolve(Palette(Dusk), WallpaperColorMode.COLORFUL)
+        val params = DesignParams(irregularity = 1f, colorMode = WallpaperColorMode.COLORFUL)
+        val morph = requireNotNull(
+            BauhausGenerator.morph(
+                BauhausGenerator.plan(Width, Height, params, colorful.size, seed = 42L),
+                BauhausGenerator.plan(Width, Height, params, colorful.size, seed = 43L),
+            ),
+        )
+
+        for (step in 0..Steps) {
+            val t = step.toFloat() / Steps
+            val bitmap = createBitmap(Width, Height)
+            morph.draw(Canvas(bitmap), t, colorful, Width, Height)
+            saveHarnessPng(resolver, "morph_bauhaus_${(t * 100).toInt().toString().padStart(3, '0')}.png", bitmap)
+            bitmap.recycle()
+        }
+    }
+
     private companion object {
         /** "Dusk", the render harness's palette — warm sand and terracotta against deep teal. */
         val Dusk = listOf(

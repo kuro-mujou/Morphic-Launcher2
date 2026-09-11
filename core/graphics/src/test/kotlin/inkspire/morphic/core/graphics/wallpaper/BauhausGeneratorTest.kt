@@ -1,10 +1,14 @@
 package inkspire.morphic.core.graphics.wallpaper
 
+import inkspire.morphic.core.model.wallpaper.DesignParams
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * The tile plan. The one that fails *silently* is the color pair: a tile whose arc is drawn in its own ground color is
@@ -19,7 +23,7 @@ class BauhausGeneratorTest {
         stops: Int = 5,
         floating: Boolean = false,
         seed: Long = 7L,
-    ) = BauhausGenerator.plan(6, 10, coverage, variety, stops, floating, seed)
+    ) = BauhausGenerator.cells(6, 10, coverage, variety, stops, floating, seed)
 
     @Test
     fun `density maps to the column count range`() {
@@ -96,5 +100,43 @@ class BauhausGeneratorTest {
         val wild = plan(coverage = 0.9f, variety = 1f, seed = 9L)
         assertEquals(calm.map { it.ground }, wild.map { it.ground })
         assertEquals(calm.map { it.shape }, wild.map { it.shape })
+    }
+
+    /**
+     * **A turning quarter arrives at the corner the table names**, from either side — so the anchor worked out between
+     * turns and the one read off the table at them are one path, not two. Turned the wrong way, a quarter would still
+     * sweep smoothly; it would just sweep through the wrong corner and jump at the end.
+     */
+    @Test
+    fun `a turning quarter arrives at each corner the table names`() {
+        for (turn in 0..3) {
+            val corner = BauhausGenerator.anchorAt(turn.toFloat())
+            for (near in listOf(turn - 0.001f, turn + 0.001f)) {
+                val anchor = BauhausGenerator.anchorAt(near)
+                assertEquals("x near turn $turn", corner[0], anchor[0], 0.01f)
+                assertEquals("y near turn $turn", corner[1], anchor[1], 0.01f)
+            }
+        }
+    }
+
+    @Test
+    fun `a quarter turns the short way, and clockwise when opposite`() {
+        assertEquals(0.5f, BauhausGenerator.turnAt(0, 1, 0.5f), 1e-6f)
+        assertEquals(-0.5f, BauhausGenerator.turnAt(0, 3, 0.5f), 1e-6f)
+        assertEquals(3.5f, BauhausGenerator.turnAt(3, 0, 0.5f), 1e-6f)
+        assertEquals(1f, BauhausGenerator.turnAt(0, 2, 0.5f), 1e-6f)
+        // Every turn lands on the corner it was going to.
+        for (a in 0..3) for (b in 0..3) {
+            assertEquals("$a to $b", b, BauhausGenerator.turnAt(a, b, 1f).roundToInt().mod(4))
+        }
+    }
+
+    @Test
+    fun `two lattices of different shapes are refused rather than paired`() {
+        val params = DesignParams()
+        val narrow = BauhausGenerator.plan(1080, 2400, params.copy(density = 0f), 6, 1L)
+        val wide = BauhausGenerator.plan(1080, 2400, params.copy(density = 1f), 6, 1L)
+        assertNull(BauhausGenerator.morph(narrow, wide))
+        assertNotNull(BauhausGenerator.morph(narrow, BauhausGenerator.plan(1080, 2400, params.copy(density = 0f), 6, 2L)))
     }
 }

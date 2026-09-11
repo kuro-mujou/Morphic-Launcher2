@@ -1,7 +1,8 @@
 # Morph Engine
 
 **Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands, Waves, Wave
-Dividers, Gradient Columns and Plasma rolled out, and the field bucket re-measured and mostly dissolved (2026-09-11). Drawn
+Dividers, Gradient Columns, Plasma and Bauhaus rolled out, and the field bucket re-measured and mostly dissolved
+(2026-09-11). Drawn
 from three screen captures of Smart Launcher's wallpaper studio taken by the author, each of which overturned a
 conclusion drawn from the one before.
 
@@ -369,7 +370,7 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  sixteen primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
+  fifteen primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
   shuffle of either is the same picture.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
     null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
@@ -529,6 +530,24 @@ claim to apply.
     faster than `sin` here and was taken back out. The author judged it smooth enough on device. If a slower phone
     disagrees, the answers are a fixed 120 (twice the mesh gradient's cost, busy plasmas a little soft mid-scrub) or
     the loop split across cores, which would speed the mesh gradient too.
+  - **Bauhaus ✅ (2026-09-11) — the first design whose seed decides nothing continuous.** Decorated or bare, one
+    corner or another, one stop or another: every roll is a choice, so a moment is not a plan of tiles. It is two plans
+    and a `t`, and `draw` takes exactly that, with the bake as the moment `0` of a plan and itself. The lattice is the
+    knobs' and the frame's, so two seeds hold the same tiles and a tile's partner is the tile in its own place, as
+    Confetti's discs are.
+  - **Each tile moves the way its two rolls ask.** A quarter decorated at both ends **turns** from one corner to the
+    other the short way about the tile's center (clockwise between opposite corners): a quarter at another corner is
+    the same shape turned, and turning is the one motion a Bauhaus poster could make. A quarter at one end only
+    **blooms** out of its corner or shrinks back into it. Grounds and shapes blend their colors.
+  - **At a whole turn the anchor is read off the corner table, and only between turns is it worked out**, so the bake
+    draws exactly the circle it always drew. `a turning quarter arrives at each corner the table names` pins that the
+    two are one path: turned the wrong way, a quarter would still sweep smoothly, then jump at the end.
+  - **The plan is columns and rows**, which is all the frame's shape decides, so it is one picture at every size of one
+    shape. Refused when the lattice differs, which only a different density or variant does.
+  - **The bake: 961 of 961 harness renders byte-identical.** Confirmed on device by the author.
+  - **It shares Confetti's open item.** On a colorful palette every recoloring tile is mid-blend at `t = 0.5`, and the
+    middle of the scrub reads as a duller palette of gray-browns. The stagger that would answer Confetti would answer
+    this too, and it stays unmade for the same reason.
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a
