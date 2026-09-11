@@ -1,13 +1,18 @@
 package inkspire.morphic.core.graphics.wallpaper
 
+import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.hypot
 
 /**
- * The site scatter and the nearest-seed assignment — which cell owns a pixel is index arithmetic that is silently
- * wrong (a wallpaper of one flat color, or seams in the wrong place) long before a bitmap could show it. The seam
+ * The site scatter and the cells cut around it — which seed owns which part of the frame is geometry that is silently
+ * wrong (cells that overlap, or leave the ground showing between them) long before a bitmap could show it. The seam
  * drawing and the fill need a canvas; this checks the part that does not.
  */
 class VoronoiGeneratorTest {
@@ -26,47 +31,72 @@ class VoronoiGeneratorTest {
     @Test
     fun `the same seed yields the same sites, so a recipe reproduces`() {
         assertEquals(
-            VoronoiGenerator.sites(count = 12, irregularity = 0.5f, palette = palette, seed = 99L),
-            VoronoiGenerator.sites(count = 12, irregularity = 0.5f, palette = palette, seed = 99L),
+            VoronoiGenerator.sites(count = 12, irregularity = 0.5f, stops = palette.size, seed = 99L),
+            VoronoiGenerator.sites(count = 12, irregularity = 0.5f, stops = palette.size, seed = 99L),
         )
     }
 
     @Test
     fun `a different seed yields different sites`() {
         assertTrue(
-            VoronoiGenerator.sites(12, 0.5f, palette, seed = 1L) !=
-                VoronoiGenerator.sites(12, 0.5f, palette, seed = 2L),
+            VoronoiGenerator.sites(12, 0.5f, palette.size, seed = 1L) !=
+                VoronoiGenerator.sites(12, 0.5f, palette.size, seed = 2L),
         )
     }
 
     @Test
     fun `irregularity scatters the cells off their lattice`() {
-        val even = VoronoiGenerator.sites(count = 16, irregularity = 0f, palette = palette, seed = 3L)
-        val loose = VoronoiGenerator.sites(count = 16, irregularity = 1f, palette = palette, seed = 3L)
+        val even = VoronoiGenerator.sites(count = 16, irregularity = 0f, stops = palette.size, seed = 3L)
+        val loose = VoronoiGenerator.sites(count = 16, irregularity = 1f, stops = palette.size, seed = 3L)
 
         // At irregularity 0 the seeds sit on a clean lattice; at 1 they scatter — so the two are not the same cells.
         assertTrue("irregularity did not move the cells", even.map { it.x to it.y } != loose.map { it.x to it.y })
     }
 
     @Test
-    fun `a pixel takes the nearer of two seeds`() {
-        val sites = listOf(
-            VoronoiGenerator.Site(x = 0.2f, y = 0.2f, argb = 0),
-            VoronoiGenerator.Site(x = 0.8f, y = 0.8f, argb = 0),
-        )
+    fun `two seeds split the frame along their bisector`() {
+        val sites = listOf(VoronoiGenerator.Site(0.25f, 0.5f, 0f), VoronoiGenerator.Site(0.75f, 0.5f, 0f))
+        val cells = VoronoiGenerator.cells(sites, aspect = 1f)
 
-        assertEquals(0, VoronoiGenerator.nearestSite(0.25f, 0.25f, sites))
-        assertEquals(1, VoronoiGenerator.nearestSite(0.75f, 0.75f, sites))
+        assertEquals(2, cells.size)
+        assertEquals(0.5f, GlassCut.area(cells[0].outline), 1e-5f)
+        assertEquals(0.5f, GlassCut.bounds(cells[0].outline)[2], 1e-5f) // the left cell ends at the bisector
+        assertEquals(0.5f, GlassCut.bounds(cells[1].outline)[0], 1e-5f) // and the right one starts there
     }
 
+    /**
+     * **A cell is everything nearer its seed than any other, measured on the screen** — the definition of the diagram,
+     * and the one property a wrong bisector breaks without breaking anything else: the cells would still tile the
+     * frame, just not around the seeds you can see. On a phone-shaped frame, so a bisector taken in the unit square
+     * rather than the aspect-true one would fail it.
+     */
     @Test
-    fun `a pixel equidistant from two seeds falls to the lower index, so a boundary does not flicker`() {
-        val sites = listOf(
-            VoronoiGenerator.Site(x = 0f, y = 0.5f, argb = 0),
-            VoronoiGenerator.Site(x = 1f, y = 0.5f, argb = 0),
-        )
+    fun `every corner of a cell is nearer its own seed than any other, on the screen`() {
+        val aspect = 2400f / 1080f
+        val sites = VoronoiGenerator.sites(24, 0.8f, palette.size, seed = 5L, heightOverWidth = aspect)
+        val cells = VoronoiGenerator.cells(sites, aspect)
+        assertEquals(sites.size, cells.size)
 
-        assertEquals(0, VoronoiGenerator.nearestSite(0.5f, 0.5f, sites))
+        cells.forEachIndexed { i, cell ->
+            for (k in cell.outline.indices step 2) {
+                val x = cell.outline[k]
+                val y = cell.outline[k + 1]
+                fun distance(site: VoronoiGenerator.Site) = hypot(x - site.x, y - site.y * aspect)
+                val own = distance(sites[i])
+                for (other in sites) assertTrue("cell $i reaches nearer another seed", own <= distance(other) + 1e-4f)
+            }
+        }
+    }
+
+    /** The cells are a partition: together they are exactly the frame, which a missed or doubled clip would not be. */
+    @Test
+    fun `the cells tile the frame with nothing over and nothing missing`() {
+        val aspect = 2400f / 1080f
+        for (seed in 1L..6L) {
+            val sites = VoronoiGenerator.sites(40, 1f, palette.size, seed, heightOverWidth = aspect)
+            val cells = VoronoiGenerator.cells(sites, aspect)
+            assertEquals("seed $seed", aspect, cells.sumOf { GlassCut.area(it.outline).toDouble() }.toFloat(), 1e-3f)
+        }
     }
 
     @Test
@@ -74,7 +104,7 @@ class VoronoiGeneratorTest {
         // With no color jitter a cell would be exactly the gradient at its height, read over the span the seam
         // leaves it; the jitter is bounded, so the cell's red stays within a stop's reach of that un-jittered ramp
         // rather than jumping the palette.
-        val sites = VoronoiGenerator.sites(count = 20, irregularity = 0.5f, palette = palette, seed = 7L)
+        val sites = VoronoiGenerator.sites(count = 20, irregularity = 0.5f, stops = palette.size, seed = 7L)
         val ceiling = VoronoiGenerator.fillCeiling(palette.size)
 
         for (site in sites) {
@@ -83,7 +113,7 @@ class VoronoiGeneratorTest {
                 LinearGradientGenerator.colorAt((site.y - 0.12f).coerceIn(0f, 1f) * ceiling, palette) shr 16 and 0xFF,
                 LinearGradientGenerator.colorAt((site.y + 0.12f).coerceIn(0f, 1f) * ceiling, palette) shr 16 and 0xFF,
             )
-            val red = site.argb shr 16 and 0xFF
+            val red = LinearGradientGenerator.colorAt(site.tone, palette) shr 16 and 0xFF
             val lo = minOf(here, neighborhood[0], neighborhood[1])
             val hi = maxOf(here, neighborhood[0], neighborhood[1])
             assertTrue("cell color left the gradient's neighborhood", red in lo..hi)
@@ -103,8 +133,9 @@ class VoronoiGeneratorTest {
             val reduced = Palette(palette.colors.take(2) + List(stops - 2) { 0xFF808080.toInt() + it })
             val seam = reduced.colorAt(reduced.size - 1)
             for (seed in 1L..8L) {
-                for (site in VoronoiGenerator.sites(24, 0.5f, reduced, seed)) {
-                    assertTrue("a cell was painted the seam at $stops stops, seed $seed", site.argb != seam)
+                for (site in VoronoiGenerator.sites(24, 0.5f, reduced.size, seed)) {
+                    val fill = LinearGradientGenerator.colorAt(site.tone, reduced)
+                    assertTrue("a cell was painted the seam at $stops stops, seed $seed", fill != seam)
                 }
             }
         }
@@ -131,7 +162,7 @@ class VoronoiGeneratorTest {
     @Test
     fun `each color layout paints a different set of cells`() {
         val drawn = (0..2).map { layout ->
-            VoronoiGenerator.sites(24, 0.5f, palette, seed = 11L, layout = layout).map { it.argb }
+            VoronoiGenerator.sites(24, 0.5f, palette.size, seed = 11L, layout = layout).map { it.tone }
         }
 
         assertTrue("radial drew what vertical drew", drawn[0] != drawn[1])
@@ -146,7 +177,7 @@ class VoronoiGeneratorTest {
     @Test
     fun `a layout moves the colors and leaves the cells where they are`() {
         val places = (0..2).map { layout ->
-            VoronoiGenerator.sites(24, 0.5f, palette, seed = 11L, layout = layout).map { it.x to it.y }
+            VoronoiGenerator.sites(24, 0.5f, palette.size, seed = 11L, layout = layout).map { it.x to it.y }
         }
 
         assertEquals(places[0], places[1])
@@ -174,5 +205,51 @@ class VoronoiGeneratorTest {
         val phone = 2400f / 1080f
         assertEquals(0f, VoronoiGenerator.rampPosition(1, 0.5f, 0.5f, 0f, phone), 1e-6f)
         assertEquals(1f, VoronoiGenerator.rampPosition(1, 0f, 0f, 0f, phone), 1e-5f)
+    }
+
+    private fun plan(seed: Long) =
+        VoronoiGenerator.plan(1080, 2400, DesignParams(density = 1f, irregularity = 0.3f), palette.size, seed)
+
+    /**
+     * **A seed's partner is the seed at its own index**, since they sit on `PointScatter`'s lattice — and a
+     * misaligned pairing would not fail, it would draw every cell sweeping across the frame to a stranger's place.
+     * At a modest scatter each seed's partner is the nearest seed of the next shuffle, which holds only if they share
+     * a lattice cell.
+     */
+    @Test
+    fun `a shuffle pairs every seed with the one in its own lattice cell`() {
+        val from = plan(1L)
+        val to = plan(2L)
+        assertNotNull(VoronoiGenerator.morph(from, to))
+        from.sites.forEachIndexed { i, a ->
+            val nearest = to.sites.indices.minBy { hypot(to.sites[it].x - a.x, (to.sites[it].y - a.y) * from.aspect) }
+            assertEquals("seed $i is nearer another seed than its partner", i, nearest)
+        }
+    }
+
+    /**
+     * **The frame stays whole at every moment of a scrub** — the invariant a subdivision's morph owes, and the reason
+     * the cells are re-cut per moment rather than paired off: re-cut, a moment is a Voronoi diagram like any other.
+     */
+    @Test
+    fun `the frame stays whole at every moment of a scrub`() {
+        val from = plan(3L)
+        val to = plan(4L)
+        val morph = requireNotNull(VoronoiGenerator.morph(from, to))
+        assertSame(from, morph.at(0f))
+        assertSame(to, morph.at(1f))
+
+        for (step in 0..20) {
+            val moment = morph.at(step / 20f)
+            assertEquals("at ${step * 5}%", from.sites.size, moment.cells.size)
+            val area = moment.cells.sumOf { GlassCut.area(it.outline).toDouble() }.toFloat()
+            assertEquals("at ${step * 5}%", from.aspect, area, 1e-3f)
+        }
+    }
+
+    @Test
+    fun `two mosaics of different counts are refused rather than paired`() {
+        val few = VoronoiGenerator.plan(1080, 2400, DesignParams(density = 0f), palette.size, 1L)
+        assertNull(VoronoiGenerator.morph(few, plan(1L)))
     }
 }

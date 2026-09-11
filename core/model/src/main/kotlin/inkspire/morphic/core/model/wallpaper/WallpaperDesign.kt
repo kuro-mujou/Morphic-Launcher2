@@ -54,8 +54,9 @@ enum class WallpaperDesign {
 
     /**
      * The frame broken into flat cells around scattered seeds, each edged in the palette's darkest tone — the
-     * stained-glass mosaic. A nearest-seed diagram rather than a polygon Voronoi, so there is no fragile geometry;
-     * the irregular cells are what set it apart from the even triangles of [TRIANGULAR_FACETS].
+     * stained-glass mosaic. Each cell is the frame cut by half-planes around its seed rather than a Delaunay dual, so
+     * there is no fragile geometry; the irregular cells are what set it apart from the even triangles of
+     * [TRIANGULAR_FACETS].
      */
     @SerialName("voronoi")
     VORONOI,

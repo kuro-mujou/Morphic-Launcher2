@@ -1,6 +1,6 @@
 # Morph Engine
 
-**Status:** M1–M5 built (2026-09-10); M6 under way — Confetti and Soft Overlaps rolled out (2026-09-11). Drawn from three screen captures of Smart Launcher's wallpaper
+**Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps and Voronoi rolled out (2026-09-11). Drawn from three screen captures of Smart Launcher's wallpaper
 studio taken by the author, each of which overturned a conclusion drawn from the one before.
 
 **Covers:** the render seam both studios draw through — why `Generator.render() → Bitmap` is the wrong shape for a live
@@ -107,9 +107,10 @@ across a frame. It is false wherever the primitives **partition** the frame, bec
 that one cut made, and pairing them separately tears it. That is a **third bucket**, not a hard case of the first:
 
 > **Subdivision designs — the cells are one structure, so the *cuts* interpolate and the cells are re-derived.**
-> Vitrall, Mondrian, Modern Mosaic, Bauhaus, Triangular Facets, Rounded Tiles — every design whose panes tile what
-> they are cut from. `GlassTree` is the worked example; the recipe is to keep the construction's own recursion
-> instead of discarding it, merge two of them, and clip per frame.
+> Vitrall, Mondrian, Modern Mosaic, Bauhaus, Triangular Facets, Rounded Tiles, Voronoi — every design whose panes
+> tile what they are cut from. `GlassTree` is the worked example; the recipe is to keep the construction's own
+> recursion instead of discarding it, merge two of them, and clip per frame. Voronoi is the easy member: the structure
+> behind its cells is only its seeds, which pair by index, so re-cutting around the moved seeds is the whole morph.
 
 The test for which bucket a design is in is one question: **could two of its primitives be moved independently and
 still leave a legal picture?** A scattered dot, yes. A pane, no.
@@ -137,20 +138,25 @@ radii, Plasma's harmonic phases, Marble's turbulence phase and vein position, Co
 isolines slide, merge and split — the flattering case), Linear Gradient's stops and angle.
 
 **Voronoi deserves a specific correction**, because it looks like the hard one and is not. Its sites lerp, and
-nearest-site assignment is **continuous in site position**, so every boundary slides smoothly without any cell polygon
-ever being built. No Delaunay, no Fortune's sweep, no re-implementation.
+nearest-site assignment is **continuous in site position**, so every boundary slides smoothly. No Delaunay, no
+Fortune's sweep.
+
+**And a second one, because continuity is not affordability (M6, 2026-09-11).** The paragraph above went on to say no
+cell polygon need ever be built, and filed the design as a field. Both were wrong. Its picture is flat cells edged by
+a seam two pixels wide — *edges*, which a downscale thickens — and evaluated per pixel it costs over a second a frame.
+It is a subdivision, and its cells are now built as polygons by half-plane clipping: still no Delaunay, and a bake that
+went from seconds to milliseconds. The M6 entry carries the measurements.
 
 ### The two buckets, by cost — and each is cheap where the other is not
 
-**Primitive designs — re-draw is `O(elements)`, and they need full resolution (19).** Bauhaus, Confetti, Contour, Dot
+**Primitive designs — re-draw is `O(elements)`, and they need full resolution (20).** Bauhaus, Confetti, Contour, Dot
 Grid, Flow Field, Flow Lines, Halftone, Impasto, Modern Mosaic, Mondrian, Polygon Cascade, Ribbon Flow, Ribbons,
-Rounded Tiles, Soft Overlaps, Spray, Triangular Facets, Truchet, Vitrall. Cheap per frame and GPU-rasterizable, but a
+Rounded Tiles, Soft Overlaps, Spray, Triangular Facets, Truchet, Vitrall, Voronoi. Cheap per frame and GPU-rasterizable, but a
 downscale would soften the edges that *are* the picture. `plan` here extracts what `render` already computes before it
 draws — no new geometry, and the byte-identical bake assertion should hold trivially.
 
-**Field designs — re-evaluation is `O(pixels)`, and they downscale for free (13).** Diagonal Bands, Gradient Columns,
-Linear Gradient, Louvers, Marble, Mesh Gradient, Metaballs, Plasma, Ribbed Glass, Voronoi, Wave Dividers, Waves,
-Planet. Expensive per full-resolution frame on the CPU, but the field is smooth by construction, so a scrub frame
+**Field designs — re-evaluation is `O(pixels)`, and they downscale for free (12).** Diagonal Bands, Gradient Columns,
+Linear Gradient, Louvers, Marble, Mesh Gradient, Metaballs, Plasma, Ribbed Glass, Wave Dividers, Waves, Planet. Expensive per full-resolution frame on the CPU, but the field is smooth by construction, so a scrub frame
 evaluated at a fraction of the pixels and bilinearly upscaled is **perceptually identical**. `plan` here is a small
 parameter struct rather than a set of paths, and `draw` runs the pixel loop — the same seam, a different kind of plan.
 
@@ -341,7 +347,7 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Sixteen extractions left
-  in the primitive bucket and twelve parameter structs in the field one, and neither is a rewrite.
+  in the primitive bucket and eleven parameter structs in the field one, and neither is a rewrite.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
     null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
     keeps only the refusals that are the studio's rather than a design's, and one was added: **two different knob
@@ -400,6 +406,30 @@ claim to apply.
   - **Verified on emulator-5554**, and Vitrall, Mesh Gradient and Confetti re-checked through the lifted seam. The
     drag changes the picture evenly (4.5–5.6% mean per step), the spring settles in two frames and every frame after
     is pixel-identical to the bake, and a sub-threshold release returns **0.000%** of pixels changed.
+  - **Voronoi ✅ (2026-09-11) — filed as a field, measured as a subdivision, and rebuilt as one.** The downscale the
+    field bucket runs on was measured before anything was split, and fails: evaluated at a short side of 360 and blown
+    up, **2.9–3.9%** of pixels differ past 24 levels, and the seams come out three times their width; at 240, 4.7–6.3%
+    and four and a half. Nor is full resolution affordable per pixel — a full 1080×2400 render took **1.3–2.1 s** on the
+    emulator. The picture is flat cells and thin edges: a primitive design's picture at a field design's cost, which is
+    the one combination neither bucket's economy covers.
+  - **So the cells are polygons now — the author's call, since it changes the bake.** Each seed's cell is the frame
+    clipped by its bisector with every other seed (`GlassCut.clip`, the one-sided half-plane clip that file's header
+    already named as its job), in an aspect-true frame so "nearest" is nearest on screen. Fills and a stroked seam
+    through the canvas, for the bake and the scrub alike. **The render went from 1.3–2.1 s to 8–9 ms**, and re-cutting
+    one moment of a scrub costs 0.5–1.3 ms.
+  - **The bake changes, by design and only a little.** Same seeds, same cells, same colors; the seams are antialiased
+    strokes rather than aliased pixel pairs, and their width is a share of the short side (two pixels at 1080) where it
+    was two pixels at every size — so a draft is the same picture smaller rather than one with triple-weight leading.
+    Against the old bake: mean **0.49** of 255, **0.65%** of pixels past 24 levels, all along seams. Exactly the 11
+    Voronoi renders changed; the other **950 of 961** are byte-identical.
+  - **The plan holds ramp positions, and the scrub walks the ramp.** A cell's color was always `colorAt(position)`,
+    so the plan keeps the position — a cell moving between two tones passes through the palette's own colors between
+    them rather than a mix of the two ends.
+  - **The partition is an invariant here as it is for `GlassTree`**: `the frame stays whole at every moment of a
+    scrub` sums the cells' areas at 21 values of `t`, and `every corner of a cell is nearer its own seed` pins the
+    definition on a phone-shaped frame, where a bisector taken in the unit square would fail it.
+  - **Verified on emulator-5554.** The drag re-cuts evenly at 3.1% mean per step, the spring settles in two frames and
+    every frame after is pixel-identical to the bake, and a sub-threshold release returns **0.000%** of pixels changed.
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a
@@ -430,6 +460,11 @@ Metaballs, Waves, Louvers, Diagonal Bands, Gradient Columns, Wave Dividers, Roun
 cost, perfectly linear. **Voronoi is `planShare = 0.000, r2 = 1.0000`**, which settles the earlier claim that it would
 need a Delaunay sweep: it plans nothing, and its downscale is exactly free.
 
+*Corrected by M6 (2026-09-11): the cost half of that is right and the downscale half is not.* `planShare` and `r2`
+measure what a design **costs** at each size; they cannot say whether its picture **survives** being evaluated
+smaller, and Voronoi's does not — its seams thicken. Cost and fidelity are two measurements, and a design's bucket
+needs both: the timing fit for the first, `FieldDownscaleHarness` for the second.
+
 **2. Most of the primitive bucket already renders full-frame inside a frame budget — so M2 is less urgent than it
 looks.** Eleven designs land **under 10ms at full 1080×2400 on an emulator**: Mondrian 4.6, Bauhaus 5.9, Confetti 6.2,
 Dot Grid 6.6, Triangular Facets 7.1, Modern Mosaic 7.2, Polygon Cascade 7.3, Soft Overlaps 7.6, Halftone 7.6, Truchet
@@ -459,7 +494,8 @@ Flow Lines (`0.500`), Contour (`0.469`) and Impasto (`0.362`). Everything else c
    **per-design scrub resolution** is answered with it for that design: **120**, measured, against `DraftShortSidePx`'s
    360. What remains is that every other field design owes its own number, and `FieldDownscaleHarness` is now the way
    to get one. Contour is the design that will want the largest, and Flow Field and Flow Lines are the ones where the
-   `r2` fit says a downscale is not free at all — those three are the ones to measure before assuming anything.
+   `r2` fit says a downscale is not free at all — those three are the ones to measure before assuming anything. **And
+   run it before trusting the bucket at all**: Voronoi passed the timing fit perfectly and failed this outright.
 4. **Where the ground color comes from** — the palette, or its own field on the plan. It has to lerp either way; only
    the ownership is open.
 5. **Whether `Plan` lives in `core:graphics` or earns a module.** It is data and wants to be plain, but `core:model` is
@@ -484,6 +520,10 @@ The same question has now been answered wrong twice from video evidence, in oppo
   disproved it — a mesh gradient's elements are its control points, which are evaluated rather than drawn. The error
   cost two false claims that had been argued at length: that a third of the catalog could not morph at all, and that
   Voronoi would need a Delaunay implementation. Both came from measuring the code instead of the design.
+- **2026-09-11 — a design filed by its cost curve.** Voronoi's timing fit was perfect (`planShare = 0.000`,
+  `r2 = 1.0000`) and was read as "its downscale is exactly free". The fit only says its cost is per pixel; a
+  downscaled render thickened every seam. The cost was measured and the picture was not — the same error as the one
+  above, one level up.
 
 What settled the mechanism was a capture of **one** swipe, deliberately slow, plus the author's report that pausing the
 finger pauses the transition. What settled the classification was the author simply naming a design the table had

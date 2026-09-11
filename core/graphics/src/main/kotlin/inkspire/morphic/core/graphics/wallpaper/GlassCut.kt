@@ -85,6 +85,36 @@ internal object GlassCut {
     }
 
     /**
+     * What of the convex [pane] lies on the near side of the line through (`px`, `py`) with normal (`nx`, `ny`) —
+     * where `(x - px) · nx + (y - py) · ny ≤ 0` — or null where none of it does.
+     *
+     * **One side, which [split] cannot say.** It hands back whichever halves are not empty, and a miss as the pane
+     * alone, so a caller keeping one side could not tell a pane wholly inside the line from one wholly outside it.
+     * This is the half-plane clip on its own — Sutherland–Hodgman against a single edge, convex in and convex out.
+     */
+    @Suppress("LongParameterList") // As [split]: a line is four numbers, read once.
+    fun clip(pane: FloatArray, px: Float, py: Float, nx: Float, ny: Float): FloatArray? {
+        val count = pane.size / 2
+        val kept = ArrayList<Float>(pane.size + 4)
+        for (i in 0 until count) {
+            val ax = pane[i * 2]
+            val ay = pane[i * 2 + 1]
+            val j = (i + 1) % count
+            val bx = pane[j * 2]
+            val by = pane[j * 2 + 1]
+            val sa = (ax - px) * nx + (ay - py) * ny
+            val sb = (bx - px) * nx + (by - py) * ny
+            if (sa <= 0f) { kept.add(ax); kept.add(ay) }
+            if ((sa <= 0f) != (sb <= 0f)) {
+                val t = sa / (sa - sb)
+                kept.add(ax + (bx - ax) * t)
+                kept.add(ay + (by - ay) * t)
+            }
+        }
+        return if (kept.size >= MinVertices) kept.toFloatArray() else null
+    }
+
+    /**
      * [pane] cut by an arc of signed radius [reach] bowing off the line through (`px`, `py`) at [angle].
      *
      * The circle is struck from a center `|reach|` away perpendicular to the cut, so it passes through the cut's own

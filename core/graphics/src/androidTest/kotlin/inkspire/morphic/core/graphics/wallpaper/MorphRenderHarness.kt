@@ -122,6 +122,33 @@ class MorphRenderHarness {
         }
     }
 
+    /**
+     * One Voronoi shuffle at its densest and most scattered — ten frames.
+     *
+     * What to look for: **cells should stretch and slide, and the seams stay a single even line** — a seam doubled
+     * or broken at a junction would mean two cells' shared edge stopped being computed alike; and no cell should
+     * pop into or out of existence, since every cell is re-cut around a seed that is always there.
+     */
+    @Test
+    fun renderVoronoiMorph() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val params = DesignParams(density = 1f, irregularity = 1f)
+        val morph = requireNotNull(
+            VoronoiGenerator.morph(
+                VoronoiGenerator.plan(Width, Height, params, palette.size, seed = 42L),
+                VoronoiGenerator.plan(Width, Height, params, palette.size, seed = 43L),
+            ),
+        )
+
+        for (step in 0..Steps) {
+            val t = step.toFloat() / Steps
+            val bitmap = createBitmap(Width, Height)
+            VoronoiGenerator.draw(Canvas(bitmap), morph.at(t), palette, Width, Height)
+            saveHarnessPng(resolver, "morph_voronoi_${(t * 100).toInt().toString().padStart(3, '0')}.png", bitmap)
+            bitmap.recycle()
+        }
+    }
+
     private companion object {
         /** "Dusk", the render harness's palette — warm sand and terracotta against deep teal. */
         val Dusk = listOf(
