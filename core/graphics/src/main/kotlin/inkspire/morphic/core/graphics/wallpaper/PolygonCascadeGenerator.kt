@@ -131,13 +131,70 @@ object PolygonCascadeGenerator : Generator {
         }
     }
 
+    /**
+     * A cascade planned but not painted: the knobs, and the three things the seed decides.
+     *
+     * @property wobble the *Wobble* deformation's phases — the seed's, whatever the knob's amplitude.
+     * @property run the segment the copies march along, before any frame.
+     * @property sense which way the cascade turns, `1` or `-1` — and anything between, mid-scrub, where it untwists.
+     */
+    internal class Plan(val params: DesignParams, val wobble: SeededHarmonics, val run: RunDraw, val sense: Float)
+
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val bitmap = createBitmap(width, height)
-        val canvas = Canvas(bitmap)
+        draw(Canvas(bitmap), plan(params, seed), palette, width, height)
+        return bitmap
+    }
+
+    /** The cascade [params] and [seed] describe — the wobble, then the run, then the turn's sense, as drawn always. */
+    internal fun plan(params: DesignParams, seed: Long): Plan {
+        val random = Random(seed)
+        val wobble = SeededHarmonics(WobbleWeights, WobbleHarmonics, random)
+        // Their two nudge pads, seeded — see [TweenRun], which Flow Lines shares.
+        val run = runDraw(random)
+        // Which way the turn goes is the seed's; how far is the knob's.
+        val sense = if (random.nextBoolean()) 1f else -1f
+        return Plan(params, wobble, run, sense)
+    }
+
+    /**
+     * A scrub between two cascades: the run swings about the frame's centre to the other's heading, the wobble's bends
+     * travel round the shape, and a turn changing sense untwists through none at all.
+     *
+     * **Nothing to pair**: copy `i` is the same step along the tween at either end.
+     */
+    override fun scrub(
+        width: Int,
+        height: Int,
+        palette: Palette,
+        params: DesignParams,
+        from: Long,
+        to: Long,
+    ): WallpaperMorph? {
+        val a = plan(params, from)
+        val b = plan(params, to)
+        return WallpaperMorph { canvas, t, w, h -> draw(canvas, between(a, b, t), palette, w, h) }
+    }
+
+    /** The cascade [t] of the way from [a] to [b]; the ends are the plans themselves, as every design's are. */
+    internal fun between(a: Plan, b: Plan, t: Float): Plan = when {
+        t <= 0f -> a
+        t >= 1f -> b
+        else -> Plan(
+            a.params,
+            a.wobble.turnedTo(b.wobble, t),
+            a.run.turnedTo(b.run, t),
+            a.sense + (b.sense - a.sense) * t,
+        )
+    }
+
+    /** Paints [plan] into [canvas] at `[width]` × `[height]`, in [palette] — the bake and every scrub frame alike. */
+    internal fun draw(canvas: Canvas, plan: Plan, palette: Palette, width: Int, height: Int) {
+        val params = plan.params
         canvas.drawColor(palette.colorAt(0)) // the ground is stop 0, and the copies are the ramp above it
         val copies = copyCount(params.density)
         val tones = RampTones.aboveGround(palette)
-        if (tones.isEmpty()) return bitmap // a single-stop palette is all ground, with nothing to draw on it
+        if (tones.isEmpty()) return // a single-stop palette is all ground, with nothing to draw on it
         // Spent **continuously between those tones** rather than at one rung per copy. Asking [RampTones] for a rung
         // per copy is the obvious thing and it washes the design out: a rung is a share of the ramp measured *from
         // the ground*, so thirteen of them put the first copy a thirteenth of the way up and it disappears into the
@@ -147,19 +204,16 @@ object PolygonCascadeGenerator : Generator {
         val ramp = Palette(tones.toList())
 
         val shortSide = min(width, height)
-        val random = Random(seed)
         val shape = shapeOf(params.variant)
         val ring = ring(shape)
-        val wobble = Wobble(params.irregularity.coerceIn(0f, 1f) * MaxWobble, random)
-
-        // Their two nudge pads, seeded — see [TweenRun], which Flow Lines shares.
-        val march = tweenRun(width, height, random)
+        val wobble = Wobble(params.irregularity.coerceIn(0f, 1f) * MaxWobble, plan.wobble)
+        val march = plan.run.at(width, height)
 
         val firstRadius = shortSide * (MinSize + (MaxSize - MinSize) * params.scale.coerceIn(0f, 1f))
         val lastRadius = firstRadius * (1f - MaxTaper * params.taper.coerceIn(0f, 1f))
         // Half a turn covers every one of these shapes' symmetry periods — a rectangle's is the longest, at 180° — so
-        // nothing is unreachable and the knob's top is not a repeat of its bottom. Which way is the seed's.
-        val turn = (if (random.nextBoolean()) 1f else -1f) * PI.toFloat() * params.rotation.coerceIn(0f, 1f)
+        // nothing is unreachable and the knob's top is not a repeat of its bottom.
+        val turn = plan.sense * PI.toFloat() * params.rotation.coerceIn(0f, 1f)
         val roundness = params.roundness.coerceIn(0f, 1f)
 
         val filled = finishOf(params.finish) == CascadeFinish.FILL
@@ -197,7 +251,6 @@ object PolygonCascadeGenerator : Generator {
             }
             canvas.drawPath(path, paint)
         }
-        return bitmap
     }
 
     /**
@@ -296,11 +349,10 @@ object PolygonCascadeGenerator : Generator {
      * vertex spacing rather than anything about the shape; a low harmonic bends a circle into a lumpy blob and a
      * triangle into a bowed one, which is the same gesture whatever the vertex count.
      *
-     * The phases are drawn whether or not [amplitude] is zero, so moving the knob changes how far the shape bends and
-     * never which way — the seeded stream does not shift underneath it.
+     * The phases are drawn in [plan] whether or not [amplitude] is zero, so moving the knob changes how far the shape
+     * bends and never which way — the seeded stream does not shift underneath it.
      */
-    private class Wobble(private val amplitude: Float, random: Random) {
-        private val harmonics = SeededHarmonics(WobbleWeights, WobbleHarmonics, random)
+    private class Wobble(private val amplitude: Float, private val harmonics: SeededHarmonics) {
 
         /** The factor the radius at [angle] is multiplied by — exactly `1` everywhere at amplitude zero. */
         fun at(angle: Float): Float = 1f + amplitude * harmonics.at(angle)

@@ -424,6 +424,37 @@ class MorphRenderHarness {
         }
     }
 
+    /**
+     * One Polygon Cascade shuffle, filled and shadowed, fully turned and wobbled, between two cascades turning
+     * opposite ways — ten frames.
+     *
+     * What to look for: **the run should swing about the frame's centre and never shrink toward it** — copies bunching
+     * into a rosette mid-scrub would mean the ends were interpolated rather than the heading; the cascade should
+     * untwist through a straight stack and twist the other way; and the wobble's bends should travel round the shape.
+     */
+    @Test
+    fun renderPolygonCascadeMorph() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val colorful = PaletteColorMode.resolve(Palette(Dusk), WallpaperColorMode.COLORFUL)
+        val params = DesignParams(
+            irregularity = 1f,
+            rotation = 1f,
+            depth = 1f,
+            finish = 1,
+            colorMode = WallpaperColorMode.COLORFUL,
+        )
+        val from = PolygonCascadeGenerator.plan(params, seed = 42L)
+        val to = (43L..200L).map { PolygonCascadeGenerator.plan(params, it) }.first { it.sense != from.sense }
+
+        for (step in 0..Steps) {
+            val t = step.toFloat() / Steps
+            val bitmap = createBitmap(Width, Height)
+            PolygonCascadeGenerator.draw(Canvas(bitmap), PolygonCascadeGenerator.between(from, to, t), colorful, Width, Height)
+            saveHarnessPng(resolver, "morph_cascade_${(t * 100).toInt().toString().padStart(3, '0')}.png", bitmap)
+            bitmap.recycle()
+        }
+    }
+
     private companion object {
         /** "Dusk", the render harness's palette — warm sand and terracotta against deep teal. */
         val Dusk = listOf(

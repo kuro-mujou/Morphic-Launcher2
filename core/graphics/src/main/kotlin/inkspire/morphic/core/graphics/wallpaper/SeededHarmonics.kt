@@ -18,16 +18,25 @@ import kotlin.random.Random
  * *which way*, and every render past that point in the stream would move too. It is invisible until someone drags the
  * knob and the picture reshuffles.
  *
+ * **A scrub turns each phase the short way into another seed's** ([turnedTo]): a phase is an angle, so the bend
+ * travels along the shape rather than fading out in place, and the weights — the knob-free part — hold still.
+ *
  * @property weights each harmonic's share of the sum, in order — descending, so the first bends and the rest detail.
  * @property harmonics each harmonic's frequency, as a multiple of the input.
+ * @property phases each harmonic's phase, in radians — the seed's.
  */
-internal class SeededHarmonics(
+internal class SeededHarmonics private constructor(
     private val weights: FloatArray,
     private val harmonics: FloatArray,
-    random: Random,
+    private val phases: FloatArray,
 ) {
 
-    private val phases = FloatArray(weights.size) { random.nextFloat() * TwoPi }
+    constructor(weights: FloatArray, harmonics: FloatArray, random: Random) :
+        this(weights, harmonics, FloatArray(weights.size) { random.nextFloat() * TwoPi })
+
+    /** These harmonics [t] of the way to [other]'s phases — each the short way round, the weights unchanged. */
+    fun turnedTo(other: SeededHarmonics, t: Float): SeededHarmonics =
+        SeededHarmonics(weights, harmonics, FloatArray(phases.size) { lerpAngle(phases[it], other.phases[it], t) })
 
     /** The sum at [x], roughly `-1..1` — the caller scales it by whatever its own amplitude knob asks for. */
     fun at(x: Float): Float {

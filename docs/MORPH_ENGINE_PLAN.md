@@ -1,7 +1,7 @@
 # Morph Engine
 
 **Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands, Waves, Wave
-Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone, Dot Grid, Mondrian, Modern Mosaic, Rounded Tiles, Ribbon Flow and Ribbons rolled out, and the field bucket re-measured and mostly dissolved
+Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone, Dot Grid, Mondrian, Modern Mosaic, Rounded Tiles, Ribbon Flow, Ribbons and Polygon Cascade rolled out, and the field bucket re-measured and mostly dissolved
 (2026-09-11). Drawn
 from three screen captures of Smart Launcher's wallpaper studio taken by the author, each of which overturned a
 conclusion drawn from the one before.
@@ -370,7 +370,7 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  seven primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
+  six primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
   shuffle of either is the same picture.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
     null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
@@ -742,6 +742,27 @@ claim to apply.
     frames change 7.1% of pixels per step falling evenly to 6.3%, with no step at either end, where the handoff swaps
     a curve read backward for the bake's own.
   - **Verified on emulator-5554**, over two shuffles. The drag changes 6–11% of pixels per step, evenly, the spring
+    settles in three frames and every frame after is pixel-identical to the bake, and a sub-threshold release returns
+    **0.000%** of pixels changed.
+  - **Polygon Cascade ✅ (2026-09-11) — a run turned by its heading, never by its ends.** The seed decides three
+    things: the *Wobble*'s harmonic phases, the run the copies march along (a bearing and a length), and which way the
+    cascade turns. All three are continuous underneath. The phases turn the short way, so the wobble's bends travel
+    round the shape. The sense lerps from one sign to the other, so a cascade changing direction untwists through a
+    straight stack and twists back.
+  - **The run is the trap.** Two runs pointing opposite ways have swapped endpoints, and interpolating those pulls
+    both to the frame's middle halfway, stacking every copy on one center: the rosette the class note says the
+    construction cannot survive. So a run is kept as what it is drawn from, `RunDraw`'s bearing and length share, and
+    turned as those: the bearing the short way, the length straight. It then swings about the frame's center and never
+    shortens below its minimum, which `a run turned to the opposite heading keeps its length and its centre` checks at
+    21 moments.
+  - **Both halves live in the files they belong to**, since Flow Lines shares them: `SeededHarmonics.turnedTo`, and
+    `RunDraw` beside `TweenRun` with `tweenRun` now just a `RunDraw` laid down at once. Its arithmetic and its draws
+    are unchanged, and `a run drawn at once is the run a plan lays down` pins that. The plan is the knobs, the
+    harmonics, the run and the sense, and it is drawn at any size.
+  - **The bake: 961 of 961 harness renders byte-identical.** Filled, shadowed, fully turned and wobbled, between two
+    cascades turning opposite ways, the harness frames change 17–23% of pixels per step: a shuffle re-aims the whole
+    cascade, and it does so evenly, with no step at either end.
+  - **Verified on emulator-5554**, over two shuffles. The drag changes 10–18% of pixels per step, evenly, the spring
     settles in three frames and every frame after is pixel-identical to the bake, and a sub-threshold release returns
     **0.000%** of pixels changed.
 

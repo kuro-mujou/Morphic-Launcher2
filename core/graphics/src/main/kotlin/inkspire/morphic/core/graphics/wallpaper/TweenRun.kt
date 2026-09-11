@@ -49,24 +49,47 @@ internal class TweenRun(
 }
 
 /**
- * A [TweenRun] across a `[width] × [height]` frame, centred on it, drawn from [random].
+ * What a [TweenRun] is drawn from, before any frame: the heading's bearing and how much of the frame the run takes —
+ * kept by a plan so it can be laid across a frame of any size, or turned into another seed's.
  *
- * The share of the frame the run takes is [MinRun]..[MaxRun] — enough that the copies cross the frame rather than
- * huddling, short enough that the first and last are both on it.
+ * **Turned as a bearing and a length, never as two endpoints** ([turnedTo]). Two runs pointing opposite ways have
+ * their endpoints swapped, and interpolating those pulls both to the frame's middle halfway — every copy stacked on one
+ * centre, the rosette the class note says the construction cannot survive. Turned, the run swings about the frame's
+ * centre and keeps its length the whole way.
+ *
+ * @property bearing the heading, in radians, in the frame's own stretched space — see [TweenRun].
+ * @property share where the run's length sits between [MinRun] and [MaxRun], `0..1`.
  */
-internal fun tweenRun(width: Int, height: Int, random: Random): TweenRun {
-    val bearing = random.nextFloat() * TwoPi
-    val across = cos(bearing) * width
-    val down = sin(bearing) * height
-    val span = hypot(across, down)
-    val headingX = across / span
-    val headingY = down / span
-    val run = (abs(headingX) * width + abs(headingY) * height) *
-        (MinRun + random.nextFloat() * (MaxRun - MinRun))
-    val firstX = width / 2f - headingX * run / 2f
-    val firstY = height / 2f - headingY * run / 2f
-    return TweenRun(firstX, firstY, firstX + headingX * run, firstY + headingY * run)
+internal class RunDraw(val bearing: Float, val share: Float) {
+
+    /**
+     * The run across a `[width] × [height]` frame, centred on it.
+     *
+     * The share of the frame the run takes is [MinRun]..[MaxRun] — enough that the copies cross the frame rather than
+     * huddling, short enough that the first and last are both on it.
+     */
+    fun at(width: Int, height: Int): TweenRun {
+        val across = cos(bearing) * width
+        val down = sin(bearing) * height
+        val span = hypot(across, down)
+        val headingX = across / span
+        val headingY = down / span
+        val run = (abs(headingX) * width + abs(headingY) * height) * (MinRun + share * (MaxRun - MinRun))
+        val firstX = width / 2f - headingX * run / 2f
+        val firstY = height / 2f - headingY * run / 2f
+        return TweenRun(firstX, firstY, firstX + headingX * run, firstY + headingY * run)
+    }
+
+    /** This run [t] of the way to [other] — the bearing the short way round, the length straight. */
+    fun turnedTo(other: RunDraw, t: Float): RunDraw =
+        RunDraw(lerpAngle(bearing, other.bearing, t), share + (other.share - share) * t)
 }
+
+/** A [RunDraw] from [random] — the bearing, then the length. */
+internal fun runDraw(random: Random): RunDraw = RunDraw(random.nextFloat() * TwoPi, random.nextFloat())
+
+/** A [TweenRun] across a `[width] × [height]` frame, centred on it, drawn from [random] — [runDraw] laid down at once. */
+internal fun tweenRun(width: Int, height: Int, random: Random): TweenRun = runDraw(random).at(width, height)
 
 private const val TwoPi = 2f * PI.toFloat()
 
