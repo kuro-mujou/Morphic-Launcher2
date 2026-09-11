@@ -1,7 +1,7 @@
 # Morph Engine
 
 **Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands, Waves, Wave
-Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone, Dot Grid and Mondrian rolled out, and the field bucket re-measured and mostly dissolved
+Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone, Dot Grid, Mondrian and Modern Mosaic rolled out, and the field bucket re-measured and mostly dissolved
 (2026-09-11). Drawn
 from three screen captures of Smart Launcher's wallpaper studio taken by the author, each of which overturned a
 conclusion drawn from the one before.
@@ -370,7 +370,7 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  eleven primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
+  ten primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
   shuffle of either is the same picture.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
     null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
@@ -651,6 +651,37 @@ claim to apply.
     to the bake, and a sub-threshold release returns **0.000%** of pixels changed.
   - **The tree stays in Mondrian until Modern Mosaic arrives.** That design is also cut by axis-aligned guillotine
     cuts, at fractions other than a half, and is the natural second consumer.
+  - **Modern Mosaic ✅ (2026-09-11) — Mondrian's tree with cuts that slide, and a skew that turns.** The seed decides
+    three things: the cuts (their direction where a tile is near square, their share, and which side takes the larger
+    one), a displacement field that pushes every corner off square, and each tile's tone. So the scrub needs all three.
+  - **`GuillotineTree` is shared now**, on its second consumer: Mondrian's tree moved to its own file with its merge
+    rule, and a piece carries an index into whatever its design keeps. The one generalization Mosaic needed is that a
+    paired cut **slides from one share to the other** instead of holding at a half. Mondrian's scrub frames are
+    byte-identical through the move. `GuillotineTreeTest` pins the rule on trees small enough to read: two cuts along
+    one axis slide, and two across each other never pair, one leaving by its emptier side while the other arrives
+    across what stays.
+  - **The skew is read again at every moment, where each corner then is**, from the two seeds' fields turned together
+    (`turnNoise`, its third consumer), and never lerped per corner. It is one field at every moment, so two tiles
+    meeting at a corner still move it together and the grout stays the even band this design is built on. The turn
+    keeps the middle as skewed as the ends. `a scrub starts on one mosaic's tiles and ends on the other's` checks every
+    corner at both ends at full skew, which is the check that the turn lands on each seed's own field.
+  - **The plan stays in pixels**, as Confetti's does, because whether a tile survives its grout is decided in
+    pixels. A tile narrower than its grout is not drawn and draws no tone, so which tiles those are is the tone
+    stream's order. Mid-scrub a tile's tone blends between its two ends; one arriving or leaving keeps its own the
+    whole way.
+  - **One set of functions draws every tile**, for the bake and each moment: corners through the field, the grout
+    inset, the rounding.
+  - **The bake: 961 of 961 harness renders byte-identical.** In the harness frames at full skew the per-step change
+    rises from 6.5% of pixels to 9.5% and back to 7.8%, with no spike at either end. The ground rises from 33% of the
+    frame to 37% in the middle, since the tiles of both mosaics are present at once, each with its own grout.
+  - **Verified on emulator-5554.** The drag changes 4–10% of pixels per step, evenly, the spring settles in three
+    frames and every frame after is pixel-identical to the bake, and a sub-threshold release returns **0.000%** of
+    pixels changed.
+  - **What it leaves open: a leaving tile is a needle before it goes.** Narrowing into an edge is what a leaving tile
+    does in both guillotine designs, but a Mondrian is full of thin blocks and this design's tiles are nearly square,
+    so here the passing needles read as foreign. Shrinking a leaving tile toward its center instead would not hold the
+    partition, and the partition is the mechanism. The colorful midpoint goes muddy, as it does for every flat-color
+    design so far.
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a

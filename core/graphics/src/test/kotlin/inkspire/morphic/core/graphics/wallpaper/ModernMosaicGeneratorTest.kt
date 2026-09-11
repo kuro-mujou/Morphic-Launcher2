@@ -1,6 +1,9 @@
 package inkspire.morphic.core.graphics.wallpaper
 
+import inkspire.morphic.core.model.wallpaper.DesignParams
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -113,4 +116,60 @@ class ModernMosaicGeneratorTest {
         val b = ModernMosaicGenerator.tiles(20, ModernMosaicGenerator.Ratio.GOLDEN, 0.5f, 2L, 0.45f).tiles
         assertTrue(a.indices.any { !a[it].contentEquals(b[it]) })
     }
+
+    /**
+     * **The tiles partition the frame at every moment of a scrub**, at the lopsided ratio where paired cuts have the
+     * furthest to slide. Unskewed so the check is the subdivision's alone: with skew a scrub's tiles are the cut
+     * rectangles pushed through one field, which is the bake's own construction.
+     */
+    @Test
+    fun `the tiles partition the frame at every moment of a scrub`() {
+        val params = DesignParams(density = 0.6f, irregularity = 0f, variant = ModernMosaicGenerator.Ratio.FIFTH.ordinal)
+        for (seed in 1L..5L) {
+            val morph = morph(params, seed)
+            for (step in 0..20) {
+                var total = 0.0
+                morph.at(step / 20f) { tile, _, _ -> total += area(tile) }
+                assertEquals("seed $seed at ${step / 20f}", 1080.0 / 2400.0, total, 1e-4)
+            }
+        }
+    }
+
+    /**
+     * **A scrub's ends are the two mosaics it is between**, corner for corner and at full skew — the tiles only
+     * arriving or already gone stand at no width there and are left out. The skew is read again at every moment rather
+     * than carried per corner, so this is the check that the turn lands on each seed's own field at its end.
+     */
+    @Test
+    fun `a scrub starts on one mosaic's tiles and ends on the other's`() {
+        val params = DesignParams(irregularity = 1f)
+        for (seed in 1L..5L) {
+            val from = ModernMosaicGenerator.plan(1080, 2400, params, toneCount = 5, seed = seed)
+            val to = ModernMosaicGenerator.plan(1080, 2400, params, toneCount = 5, seed = seed + 50)
+            val morph = requireNotNull(ModernMosaicGenerator.morph(from, to))
+            for ((t, plan) in listOf(0f to from, 1f to to)) {
+                morph.at(t) { tile, fromIndex, toIndex ->
+                    val index = if (t == 0f) fromIndex else toIndex
+                    if (area(tile) > 1e-9f) {
+                        val expected = plan.mosaic.tiles[index]
+                        for (i in tile.indices) assertEquals("seed $seed at $t, tile $index", expected[i], tile[i], 1e-6f)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `two mosaics for different tone counts are refused rather than paired`() {
+        val five = ModernMosaicGenerator.plan(1080, 2400, DesignParams(), toneCount = 5, seed = 1L)
+        assertNull(ModernMosaicGenerator.morph(five, ModernMosaicGenerator.plan(1080, 2400, DesignParams(), 3, 2L)))
+        assertNotNull(ModernMosaicGenerator.morph(five, ModernMosaicGenerator.plan(1080, 2400, DesignParams(), 5, 2L)))
+    }
+
+    private fun morph(params: DesignParams, seed: Long) = requireNotNull(
+        ModernMosaicGenerator.morph(
+            ModernMosaicGenerator.plan(1080, 2400, params, toneCount = 5, seed = seed),
+            ModernMosaicGenerator.plan(1080, 2400, params, toneCount = 5, seed = seed + 50),
+        ),
+    )
 }

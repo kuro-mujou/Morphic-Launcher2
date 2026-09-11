@@ -322,6 +322,35 @@ class MorphRenderHarness {
         }
     }
 
+    /**
+     * One Modern Mosaic shuffle at full skew, colorful — ten frames of tiles sliding, narrowing and drifting.
+     *
+     * What to look for: **the grout should stay one even band the whole way** — two tiles meeting at a corner move it
+     * together, so a grout line pinching or widening mid-scrub would mean the skew was no longer one field; tiles
+     * should slide and narrow away rather than pop; and the middle should be as skewed as the ends, not squarer.
+     */
+    @Test
+    fun renderModernMosaicMorph() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val colorful = PaletteColorMode.resolve(Palette(Dusk), WallpaperColorMode.COLORFUL)
+        val params = DesignParams(irregularity = 1f, colorMode = WallpaperColorMode.COLORFUL)
+        val tones = RampTones.countFor(colorful.size)
+        val morph = requireNotNull(
+            ModernMosaicGenerator.morph(
+                ModernMosaicGenerator.plan(Width, Height, params, tones, seed = 42L),
+                ModernMosaicGenerator.plan(Width, Height, params, tones, seed = 43L),
+            ),
+        )
+
+        for (step in 0..Steps) {
+            val t = step.toFloat() / Steps
+            val bitmap = createBitmap(Width, Height)
+            morph.draw(Canvas(bitmap), t, colorful, Width, Height)
+            saveHarnessPng(resolver, "morph_mosaic_${(t * 100).toInt().toString().padStart(3, '0')}.png", bitmap)
+            bitmap.recycle()
+        }
+    }
+
     private companion object {
         /** "Dusk", the render harness's palette — warm sand and terracotta against deep teal. */
         val Dusk = listOf(

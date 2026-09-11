@@ -4,6 +4,8 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import androidx.core.graphics.createBitmap
+import inkspire.morphic.core.graphics.wallpaper.GuillotineTree.Node
+import inkspire.morphic.core.graphics.wallpaper.GuillotineTree.Rect
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.random.Random
@@ -28,9 +30,9 @@ import kotlin.random.Random
  * is a silently-wrong tiling. [DesignParams.density] sets how many passes, so how fine the blocks get. Deterministic in
  * [seed].
  *
- * **It plans and then paints, and the plan keeps the cuts.** [subdivide] records which way each block was halved
- * rather than keeping only the pieces, because a scrub between two Mondrians is a matter of *cuts* sliding — see
- * [Morph]. See docs/MORPH_ENGINE_PLAN.md.
+ * **It plans and then paints, and the plan keeps the cuts.** [subdivide] records each halving as a [GuillotineTree]
+ * rather than keeping only the pieces, because a scrub between two Mondrians is a matter of *cuts* sliding. See
+ * docs/MORPH_ENGINE_PLAN.md.
  */
 object MondrianGenerator : Generator {
 
@@ -39,38 +41,15 @@ object MondrianGenerator : Generator {
 
     override val style = DesignStyle(amount = Amount)
 
-    /** A block in the unit square — left/top/right/bottom, `0..1`. */
-    internal data class Rect(val left: Float, val top: Float, val right: Float, val bottom: Float) {
-        val width: Float get() = right - left
-        val height: Float get() = bottom - top
-    }
-
-    /**
-     * One region of a Mondrian: the cut that halves it, or the block it is.
-     *
-     * **Filled in while the frame is being cut, and read-only after**, like `GlassTree`'s branches: the subdivision
-     * walks every block a pass at a time and decides a block's cut long after it made the block.
-     *
-     * @property vertical which way the cut runs — `true` a vertical rule, parting left from right; null on a block.
-     * @property first the left or top half, null on a block.
-     * @property second the right or bottom half.
-     * @property tone a block's paint — [Ground], or an index into the palette's [accents].
-     */
-    internal class Node(val rect: Rect) {
-        var vertical: Boolean? = null
-        var first: Node? = null
-        var second: Node? = null
-        var tone = Ground
-    }
-
     /**
      * A Mondrian planned but not painted — at no particular size and in no particular palette.
      *
-     * @property root the cuts, [subdivide]'s tree.
-     * @property blocks the tree's blocks in painting order, each carrying its tone.
-     * @property accents how many accent tones the tones index into — [accents] of the palette it was planned for.
+     * @property root the cuts, [subdivide]'s tree, whose pieces are indexed in painting order.
+     * @property blocks the tree's pieces in painting order.
+     * @property tones each block's paint, by its index — [Ground], or an index into the palette's [accents].
+     * @property accents how many accent tones [tones] index into — [accents] of the palette it was planned for.
      */
-    internal class Plan(val root: Node, val blocks: List<Node>, val accents: Int)
+    internal class Plan(val root: Node, val blocks: List<Node>, val tones: IntArray, val accents: Int)
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val bitmap = createBitmap(width, height)
@@ -87,11 +66,12 @@ object MondrianGenerator : Generator {
     internal fun plan(params: DesignParams, accents: Int, seed: Long): Plan {
         val random = Random(seed)
         val root = subdivide(passes(params.density), random)
-        val blocks = blocks(root)
+        val blocks = GuillotineTree.pieces(root)
+        blocks.forEachIndexed { i, block -> block.index = i }
         // Toned after the cutting and in painting order, from the same stream — the order a stored recipe's colors
         // were always drawn in.
-        for (block in blocks) block.tone = tone(random, accents)
-        return Plan(root, blocks, accents)
+        val tones = IntArray(blocks.size) { tone(random, accents) }
+        return Plan(root, blocks, tones, accents)
     }
 
     /**
@@ -100,7 +80,7 @@ object MondrianGenerator : Generator {
      */
     internal fun draw(canvas: Canvas, plan: Plan, palette: Palette, width: Int, height: Int) {
         val accents = accents(palette)
-        val colors = plan.blocks.map { colorOf(it.tone, palette, accents) }
+        val colors = plan.tones.map { colorOf(it, palette, accents) }
         paint(canvas, plan.blocks.map { it.rect }, colors, palette, width, height)
     }
 
@@ -136,8 +116,8 @@ object MondrianGenerator : Generator {
      * vertically or halves it horizontally, stopping a block once it is below [MinCell] a side.
      *
      * The result **partitions the unit square**: the pieces cover it with no gap and no overlap, which is what lets the
-     * fill just paint each one. A block halved in place keeps its halves where it stood in the pass's list, so
-     * [blocks]' walk of the tree is the order the pieces always came out in.
+     * fill just paint each one. A block halved in place keeps its halves where it stood in the pass's list, so the
+     * tree's walk of its pieces is the order they always came out in.
      */
     internal fun subdivide(passes: Int, random: Random): Node {
         val root = Node(Rect(0f, 0f, 1f, 1f))
@@ -158,50 +138,20 @@ object MondrianGenerator : Generator {
                 }
                 if (vertical == null) {
                     next.add(block)
-                    continue
+                } else {
+                    val halves = block.cut(vertical, Half)
+                    next.add(halves.first)
+                    next.add(halves.second)
                 }
-                val halves = halved(rect, vertical, Half)
-                block.vertical = vertical
-                block.first = Node(halves.first).also(next::add)
-                block.second = Node(halves.second).also(next::add)
             }
             blocks = next
         }
         return root
     }
 
-    /** [root]'s blocks, first halves before second — the order they are painted in. */
-    internal fun blocks(root: Node): List<Node> {
-        val out = ArrayList<Node>()
-        fun walk(node: Node) {
-            val first = node.first
-            if (first == null) {
-                out.add(node)
-            } else {
-                walk(first)
-                walk(node.second!!)
-            }
-        }
-        walk(root)
-        return out
-    }
-
     /**
-     * [rect] cut [at] of the way across — along its width where [vertical], its height otherwise.
-     *
-     * **The one place a cut becomes two rectangles**, for the subdivision and for every moment of a scrub, so a cut
-     * that holds still through a scrub lands on exactly the pixels the bake put it on.
-     */
-    private fun halved(rect: Rect, vertical: Boolean, at: Float): Pair<Rect, Rect> = if (vertical) {
-        val x = rect.left + rect.width * at
-        rect.copy(right = x) to rect.copy(left = x)
-    } else {
-        val y = rect.top + rect.height * at
-        rect.copy(bottom = y) to rect.copy(top = y)
-    }
-
-    /**
-     * A scrub between two Mondrians: cuts slide along their own axis, and nothing ever turns.
+     * A scrub between two Mondrians: the rulings slide along their own axes, and none ever turns — [GuillotineTree]'s
+     * merge, every cut of which here stands at a half until it leaves.
      *
      * **Any two Mondrians of one palette merge** — two trees of halvings always do — so the only refusal is a plan
      * made for a different number of accents, whose tones would index into a different set.
@@ -221,92 +171,10 @@ object MondrianGenerator : Generator {
 
     /** Two Mondrians merged to interpolate — or **null where their tones do not index into the same accents**. */
     internal fun morph(from: Plan, to: Plan): Morph? =
-        if (from.accents == to.accents) Morph(from, to, merged(from.root, to.root)) else null
-
-    /**
-     * Two trees as one: each node carries its cut's axis and where the cut stands, as a share of its region, at either
-     * end of the scrub.
-     *
-     * @property vertical the cut's axis, null on a block.
-     * @property fromAt where the cut stands at `t = 0` — `0.5` for a halving, `0` or `1` for a cut not made yet.
-     * @property toAt the same at `t = 1`, `0` or `1` for a cut that has gone.
-     * @property fromTone a block's tone at `t = 0` — for a block only arriving, the tone it arrives in.
-     * @property toTone the same at `t = 1` — for a block leaving, the tone it leaves in.
-     */
-    internal class Blend(
-        val vertical: Boolean?,
-        val fromAt: Float,
-        val toAt: Float,
-        val first: Blend?,
-        val second: Blend?,
-        val fromTone: Int,
-        val toTone: Int,
-    )
-
-    /**
-     * [from] and [to] as one [Blend].
-     *
-     * **A cut is paired only with one along the same axis**, where it holds still. Anywhere else — a cut only one
-     * tree makes, or two made across each other — the cut is one-sided: it slides from the middle of its region to
-     * the edge, taking the side with fewer blocks away with it, and the other side is merged against the whole of the
-     * other tree's region. Pairing two cuts across each other would have to turn one into the other, and a Mondrian
-     * whose rulings tilt mid-scrub is not a Mondrian. Because a cut stands at a share of its own region, a side on its
-     * way out carries its blocks down with it, in proportion, and every frame is still a partition of rectangles.
-     */
-    private fun merged(from: Node?, to: Node?): Blend {
-        if (from == null) return frozen(to!!)
-        if (to == null) return frozen(from)
-        val a = from.vertical
-        val b = to.vertical
-        return when {
-            a != null && a == b -> Blend(
-                a, Half, Half,
-                merged(from.first, to.first), merged(from.second, to.second),
-                Ground, Ground,
-            )
-            a != null -> leaving(from, a, to, forward = true)
-            b != null -> leaving(to, b, from, forward = false)
-            else -> Blend(null, 0f, 0f, null, null, from.tone, to.tone)
-        }
-    }
-
-    /**
-     * [deep]'s cut, which the other side has no partner for, sliding out of its region — at the start of the scrub if
-     * [forward], at the end otherwise.
-     *
-     * **The side with fewer blocks is the one that goes**, so that as little as possible is taken away or made out of
-     * nothing; the second half goes where the two are equal. The side that stays is merged against [other], which
-     * sends it down this same path again until it finds cuts to pair.
-     */
-    private fun leaving(deep: Node, vertical: Boolean, other: Node, forward: Boolean): Blend {
-        val first = deep.first!!
-        val second = deep.second!!
-        val firstGoes = blocks(first).size < blocks(second).size
-        // The share of the region the cut stands at once the leaving side is gone: nothing of the first half, or all
-        // of the region given to the first.
-        val gone = if (firstGoes) 0f else 1f
-        val kept = if (firstGoes) second else first
-        val stay = if (forward) merged(kept, other) else merged(other, kept)
-        val leave = frozen(if (firstGoes) first else second)
-        return Blend(
-            vertical,
-            if (forward) Half else gone,
-            if (forward) gone else Half,
-            if (firstGoes) leave else stay,
-            if (firstGoes) stay else leave,
-            Ground,
-            Ground,
-        )
-    }
-
-    /** A subtree with no counterpart: its cuts hold still, and the cut above it is what takes it away. */
-    private fun frozen(node: Node): Blend {
-        val vertical = node.vertical ?: return Blend(null, 0f, 0f, null, null, node.tone, node.tone)
-        return Blend(vertical, Half, Half, frozen(node.first!!), frozen(node.second!!), Ground, Ground)
-    }
+        if (from.accents == to.accents) Morph(from, to, GuillotineTree.merge(from.root, to.root)) else null
 
     /** Two Mondrians and every moment between them. */
-    internal class Morph(private val from: Plan, private val to: Plan, private val tree: Blend) {
+    internal class Morph(private val from: Plan, private val to: Plan, private val tree: GuillotineTree.Blend) {
 
         /** Paints the moment [t]; the ends are the plans themselves, each drawn as its own bake. */
         fun draw(canvas: Canvas, t: Float, palette: Palette, width: Int, height: Int) {
@@ -317,29 +185,21 @@ object MondrianGenerator : Generator {
                     val accents = accents(palette)
                     val blocks = ArrayList<Rect>()
                     val colors = ArrayList<Int>()
-                    at(t) { rect, fromTone, toTone ->
+                    at(t) { rect, fromIndex, toIndex ->
+                        // A block only arriving or only leaving is its own tone the whole way.
+                        val start = if (fromIndex >= 0) from.tones[fromIndex] else to.tones[toIndex]
+                        val end = if (toIndex >= 0) to.tones[toIndex] else start
                         blocks.add(rect)
-                        colors.add(mix(colorOf(fromTone, palette, accents), colorOf(toTone, palette, accents), t))
+                        colors.add(mix(colorOf(start, palette, accents), colorOf(end, palette, accents), t))
                     }
                     paint(canvas, blocks, colors, palette, width, height)
                 }
             }
         }
 
-        /** Every block of the moment [t], in painting order, with the two tones it lies between. */
-        fun at(t: Float, onBlock: (rect: Rect, fromTone: Int, toTone: Int) -> Unit) =
-            cut(tree, Rect(0f, 0f, 1f, 1f), t, onBlock)
-
-        private fun cut(node: Blend, rect: Rect, t: Float, onBlock: (Rect, Int, Int) -> Unit) {
-            val vertical = node.vertical
-            if (vertical == null) {
-                onBlock(rect, node.fromTone, node.toTone)
-                return
-            }
-            val halves = halved(rect, vertical, node.fromAt + (node.toAt - node.fromAt) * t)
-            cut(node.first!!, halves.first, t, onBlock)
-            cut(node.second!!, halves.second, t, onBlock)
-        }
+        /** Every block of the moment [t], in painting order, with its index in each plan — `-1` where it is not in one. */
+        fun at(t: Float, onBlock: (rect: Rect, fromIndex: Int, toIndex: Int) -> Unit) =
+            GuillotineTree.pieces(tree, Rect(0f, 0f, 1f, 1f), t, onBlock)
     }
 
     /**

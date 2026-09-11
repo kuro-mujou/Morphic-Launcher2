@@ -5,6 +5,8 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import androidx.core.graphics.createBitmap
+import inkspire.morphic.core.graphics.wallpaper.GuillotineTree.Node
+import inkspire.morphic.core.graphics.wallpaper.GuillotineTree.Rect
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.hypot
@@ -52,6 +54,9 @@ import kotlin.random.Random
  * [tiles] is pure and tested: the tiles must still partition the frame, and *that* is a claim a render cannot check
  * here — a gap or an overlap in the subdivision shows up as a grout line slightly the wrong width, which is precisely
  * the kind of wrong nobody can point at.
+ *
+ * **It plans and then paints, and the plan keeps the cuts** as a [GuillotineTree], Mondrian's, so a scrub slides them.
+ * See [scrub] and docs/MORPH_ENGINE_PLAN.md.
  */
 object ModernMosaicGenerator : Generator {
 
@@ -99,42 +104,182 @@ object ModernMosaicGenerator : Generator {
     }
 
     /**
-     * A finished mosaic.
+     * A cut mosaic, before any grout or palette.
      *
-     * @property tiles each tile's four corners, interleaved `x, y`, in a frame [aspect] wide and one tall. Rectangles
-     *   until the skew moves them, quadrilaterals after.
+     * @property root the cuts, as a [GuillotineTree] whose pieces are indexed in the order they were cut.
+     * @property tiles each tile's four corners, interleaved `x, y`, in a frame [aspect] wide and one tall, in the order
+     *   the tiles were cut. Rectangles until the skew moves them, quadrilaterals after.
      * @property aspect how wide the cut frame was, in units of its own height.
      * @property cell the side of a notional square tile — `sqrt(area / count)`. The grout and the skew are both
      *   measured in these, so they mean the same thing at any count and any frame.
+     * @property field the skew's displacement field — the seed's, and read again at every moment of a scrub.
+     * @property reach how far [field] may push a corner, in the cut frame's units.
      */
-    internal class Mosaic(val tiles: List<FloatArray>, val aspect: Float, val cell: Float)
+    internal class Mosaic(
+        val root: Node,
+        val tiles: List<FloatArray>,
+        val aspect: Float,
+        val cell: Float,
+        val field: PerlinNoise2d,
+        val reach: Float,
+    )
+
+    /**
+     * A mosaic planned but not painted, in a `[width]` × `[height]` frame and no particular palette.
+     *
+     * **In pixels, like Confetti's plan**, because whether a tile survives its grout is decided in them — a tile
+     * narrower than its grout is not drawn and draws no tone, and which tiles those are is the tone stream's order.
+     *
+     * @property insets every tile pulled back from its edges by half the grout, in pixels — null for one too small to
+     *   survive it.
+     * @property tones every tile's tone, by its cut order, into the ramp above the ground — `-1` for one not drawn.
+     * @property toneCount how many tones [tones] index into.
+     */
+    @Suppress("LongParameterList") // A mosaic, what the grout and the palette made of it, and the frame it fits.
+    internal class Plan(
+        val mosaic: Mosaic,
+        val insets: List<FloatArray?>,
+        val tones: IntArray,
+        val toneCount: Int,
+        val grout: Float,
+        val soften: Float,
+        val width: Int,
+        val height: Int,
+    )
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
+        val bitmap = createBitmap(width, height)
+        val plan = plan(width, height, params, RampTones.countFor(palette.size), seed)
+        draw(Canvas(bitmap), plan, palette, width, height)
+        return bitmap
+    }
+
+    /** The mosaic [params] and [seed] describe in a `[width]` × `[height]` frame, for a palette of [toneCount] tones. */
+    internal fun plan(width: Int, height: Int, params: DesignParams, toneCount: Int, seed: Long): Plan {
         // Subdivided in an aspect-true frame, not the unit square: a cut is taken across a tile's *longer* side, and
         // in the unit square "longer" is a lie on a phone — every tile would read as tall and every cut horizontal.
         val aspect = width.toFloat() / height
         val ratio = Ratio.entries[params.variant.coerceIn(0, Ratio.entries.lastIndex)]
         val mosaic = tiles(Amount.at(params.density), ratio, params.irregularity, seed, aspect)
-
         val scale = height.toFloat()
         val grout = params.scale.coerceIn(0f, 1f) * MaxGrout * mosaic.cell * scale
-        val soften = params.roundness.coerceIn(0f, 1f)
-        val tones = RampTones.aboveGround(palette)
-
-        val bitmap = createBitmap(width, height)
-        val canvas = Canvas(bitmap)
-        canvas.drawColor(palette.colorAt(0))
-        if (tones.isEmpty()) return bitmap // an all-ground palette has nothing to lay on it
-
+        val insets = mosaic.tiles.map { inset(it, scale, grout) }
+        // An all-ground palette has nothing to lay on it, and draws nothing from the stream.
         val random = Random(seed xor ToneSalt)
+        val tones = IntArray(insets.size) { if (toneCount == 0 || insets[it] == null) -1 else random.nextInt(toneCount) }
+        return Plan(mosaic, insets, tones, toneCount, grout, params.roundness.coerceIn(0f, 1f), width, height)
+    }
+
+    /** [tile] in pixels at [scale], pulled back from its edges by half the [grout] — null where nothing is left. */
+    private fun inset(tile: FloatArray, scale: Float, grout: Float): FloatArray? =
+        // Half the grout per side, so the band *between* two tiles is one grout wide.
+        GlassCut.inset(scaled(tile, scale), grout / 2f)
+
+    /**
+     * Paints [plan] into [canvas] at `[width]` × `[height]`, in [palette] — the bake. A scrub's moment is painted by
+     * [Morph] through the same [inset] and [rounded].
+     */
+    internal fun draw(canvas: Canvas, plan: Plan, palette: Palette, width: Int, height: Int) {
+        canvas.drawColor(palette.colorAt(0))
+        val tones = RampTones.aboveGround(palette)
+        if (tones.isEmpty()) return // an all-ground palette has nothing to lay on it
         val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-        for (tile in mosaic.tiles) {
-            // Half the grout per side, so the band *between* two tiles is one grout wide.
-            val inset = GlassCut.inset(scaled(tile, scale), grout / 2f) ?: continue
-            fill.color = tones[random.nextInt(tones.size)]
-            canvas.drawPath(rounded(inset, soften), fill)
+        framed(canvas, plan, width, height) {
+            for (i in plan.insets.indices) {
+                val inset = plan.insets[i] ?: continue
+                fill.color = tones[plan.tones[i]]
+                canvas.drawPath(rounded(inset, plan.soften), fill)
+            }
         }
-        return bitmap
+    }
+
+    /** [paint] run on [canvas] scaled from [plan]'s frame to `[width]` × `[height]`, where the two differ. */
+    private fun framed(canvas: Canvas, plan: Plan, width: Int, height: Int, paint: () -> Unit) {
+        val resized = width != plan.width || height != plan.height
+        if (resized) {
+            canvas.save()
+            canvas.scale(width.toFloat() / plan.width, height.toFloat() / plan.height)
+        }
+        paint()
+        if (resized) canvas.restore()
+    }
+
+    /**
+     * A scrub between two mosaics: cuts slide and tiles grow or narrow away ([GuillotineTree]), corners drift as one
+     * seed's skew turns into the other's, and tiles re-tone.
+     *
+     * **The skew is read again at every moment, at wherever the corner then is**, from the two seeds' fields turned
+     * together ([turnNoise]) — never lerped per corner. It is one field at every moment, so two tiles meeting at a
+     * corner still move it together and the grout stays the even band that is this design's whole character.
+     */
+    override fun scrub(
+        width: Int,
+        height: Int,
+        palette: Palette,
+        params: DesignParams,
+        from: Long,
+        to: Long,
+    ): WallpaperMorph? {
+        val toneCount = RampTones.countFor(palette.size)
+        val morph = morph(plan(width, height, params, toneCount, from), plan(width, height, params, toneCount, to))
+            ?: return null
+        return WallpaperMorph { canvas, t, w, h -> morph.draw(canvas, t, palette, w, h) }
+    }
+
+    /**
+     * Two mosaics merged to interpolate — or **null where they are not cut in the same frame, for the same tones,
+     * under the same grout and skew**, none of which a shuffle changes.
+     */
+    internal fun morph(from: Plan, to: Plan): Morph? {
+        val same = from.width == to.width && from.height == to.height && from.toneCount == to.toneCount &&
+            from.grout == to.grout && from.soften == to.soften && from.mosaic.reach == to.mosaic.reach
+        return if (same) Morph(from, to, GuillotineTree.merge(from.mosaic.root, to.mosaic.root)) else null
+    }
+
+    /** Two mosaics and every moment between them. */
+    internal class Morph(private val from: Plan, private val to: Plan, private val tree: GuillotineTree.Blend) {
+
+        /** Paints the moment [t]; the ends are the plans themselves, each drawn as its own bake. */
+        fun draw(canvas: Canvas, t: Float, palette: Palette, width: Int, height: Int) {
+            if (t <= 0f) return ModernMosaicGenerator.draw(canvas, from, palette, width, height)
+            if (t >= 1f) return ModernMosaicGenerator.draw(canvas, to, palette, width, height)
+            canvas.drawColor(palette.colorAt(0))
+            val tones = RampTones.aboveGround(palette)
+            if (tones.isEmpty()) return
+            val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+            framed(canvas, from, width, height) {
+                at(t) { tile, fromIndex, toIndex ->
+                    val inset = inset(tile, from.height.toFloat(), from.grout) ?: return@at
+                    fill.color = toneColor(fromIndex, toIndex, t, tones)
+                    canvas.drawPath(rounded(inset, from.soften), fill)
+                }
+            }
+        }
+
+        /**
+         * Every tile of the moment [t] as its four corners in the cut frame, with its index in each plan — `-1` where
+         * it is not in one.
+         */
+        fun at(t: Float, onTile: (corners: FloatArray, fromIndex: Int, toIndex: Int) -> Unit) {
+            val a = from.mosaic
+            val b = to.mosaic
+            val turned = { u: Float, v: Float -> turnNoise(a.field.at(u, v), b.field.at(u, v), t) }
+            GuillotineTree.pieces(tree, Rect(0f, 0f, a.aspect, 1f), t) { rect, fromIndex, toIndex ->
+                onTile(corners(rect, turned, a.reach, a.aspect), fromIndex, toIndex)
+            }
+        }
+
+        /**
+         * The color of a tile between its tone in each plan — its own tone the whole way where it is only arriving or
+         * only leaving, and the first tone for a tile too small to have been drawn at either end.
+         */
+        private fun toneColor(fromIndex: Int, toIndex: Int, t: Float, tones: IntArray): Int {
+            val start = if (fromIndex >= 0) from.tones[fromIndex] else -1
+            val end = if (toIndex >= 0) to.tones[toIndex] else -1
+            val a = tones[(if (start >= 0) start else end).coerceAtLeast(0)]
+            val b = tones[(if (end >= 0) end else start).coerceAtLeast(0)]
+            return if (a == b) a else LinearGradientGenerator.lerpArgb(a, b, t)
+        }
     }
 
     /**
@@ -145,34 +290,38 @@ object ModernMosaicGenerator : Generator {
      * and it is the opposite of [VitrallGenerator]'s choice for the opposite reason: a window wants a few sweeping
      * shards and this wants a tiling that reads as considered. Variety comes from the cut's direction and from which
      * side of it takes the larger share, both of them the seed's.
+     *
+     * **The cut order is kept as each tile's index**, since the tiles are toned in it: a cut replaces its tile with
+     * the first side and appends the second, which is not the order a walk of the tree reaches them in.
      */
     internal fun tiles(count: Int, ratio: Ratio, skew: Float, seed: Long, aspect: Float = 1f): Mosaic {
         val random = Random(seed)
         val frame = aspect.coerceAtLeast(Tiny)
         val wanted = count.coerceAtLeast(1)
-        // Rectangles as left, top, right, bottom while they are being cut — corners come later, once nothing else
-        // will move them.
-        val rects = ArrayList<FloatArray>(wanted)
-        rects.add(floatArrayOf(0f, 0f, frame, 1f))
-        while (rects.size < wanted) {
-            val at = widest(rects)
-            val cut = split(rects[at], ratio, random) ?: break
-            rects[at] = cut.first
-            rects.add(cut.second)
+        val root = Node(Rect(0f, 0f, frame, 1f))
+        val pieces = ArrayList<Node>(wanted)
+        pieces.add(root)
+        while (pieces.size < wanted) {
+            val at = widest(pieces)
+            val cut = cutOf(pieces[at].rect, ratio, random) ?: break
+            val made = pieces[at].cut(cut.vertical, cut.at)
+            pieces[at] = made.first
+            pieces.add(made.second)
         }
+        pieces.forEachIndexed { i, piece -> piece.index = i }
 
         val cell = sqrt(frame / wanted)
         val field = PerlinNoise2d(seed xor SkewSalt)
         val reach = skew.coerceIn(0f, 1f) * MaxSkew * cell
-        return Mosaic(rects.map { corners(it, field, reach, frame) }, frame, cell)
+        return Mosaic(root, pieces.map { corners(it.rect, field::at, reach, frame) }, frame, cell, field, reach)
     }
 
-    /** Which of [rects] to cut next — the one with the most area, so the tiles stay in a band of sizes. */
-    private fun widest(rects: List<FloatArray>): Int {
+    /** Which of [pieces] to cut next — the one with the most area, so the tiles stay in a band of sizes. */
+    private fun widest(pieces: List<Node>): Int {
         var best = 0
         var most = -1f
-        rects.forEachIndexed { i, r ->
-            val area = (r[2] - r[0]) * (r[3] - r[1])
+        pieces.forEachIndexed { i, piece ->
+            val area = piece.rect.width * piece.rect.height
             if (area > most) {
                 most = area
                 best = i
@@ -181,22 +330,21 @@ object ModernMosaicGenerator : Generator {
         return best
     }
 
+    /** A cut about to be made: which way it runs, and the share of its tile it stands at. */
+    private class Cut(val vertical: Boolean, val at: Float)
+
     /**
-     * [rect] cut in two across its longer side, at a fraction in `ratio.least .. 1 - ratio.least`, or null once it is
-     * too small to cut usefully.
+     * The cut across [rect]'s longer side, at a fraction in `ratio.least .. 1 - ratio.least`, or null once it is too
+     * small to cut usefully.
      *
      * Cutting the **longer** side is what keeps tiles from drifting into slivers as the count climbs: a tile that is
      * twice as wide as it is tall gets cut vertically, which brings it back toward square. Where the sides are within
      * [SquareBand] of each other there is no longer side worth the name, and the seed picks — which is where the
      * variety in the layout comes from at low counts, since the cut fractions themselves are nearly fixed.
      */
-    private fun split(rect: FloatArray, ratio: Ratio, random: Random): Pair<FloatArray, FloatArray>? {
-        val left = rect[0]
-        val top = rect[1]
-        val right = rect[2]
-        val bottom = rect[3]
-        val width = right - left
-        val height = bottom - top
+    private fun cutOf(rect: Rect, ratio: Ratio, random: Random): Cut? {
+        val width = rect.width
+        val height = rect.height
         if (min(width, height) < MinSide) return null
         val vertical = when {
             width > height * SquareBand -> true
@@ -206,36 +354,29 @@ object ModernMosaicGenerator : Generator {
         val least = ratio.least
         val share = least + random.nextFloat() * (1f - least - least)
         // Which side of the cut takes the larger share is the seed's — otherwise every mosaic leans the same way.
-        val at = if (random.nextBoolean()) share else 1f - share
-        return if (vertical) {
-            val x = left + width * at
-            floatArrayOf(left, top, x, bottom) to floatArrayOf(x, top, right, bottom)
-        } else {
-            val y = top + height * at
-            floatArrayOf(left, top, right, y) to floatArrayOf(left, y, right, bottom)
-        }
+        return Cut(vertical, if (random.nextBoolean()) share else 1f - share)
     }
 
     /**
-     * [rect]'s four corners, each pushed through the same displacement [field] by up to [reach].
+     * [rect]'s four corners, each pushed through the same displacement field — read by [noise] — by up to [reach].
      *
      * The field is read in frame-relative coordinates so its swells are the same size on the picture however fine the
      * mosaic is, and it is **pinned at the frame's border** — a corner on an outer edge keeps the component that would
      * carry it out of the frame, so the mosaic still fills its frame instead of pulling away from it in a ragged line.
      */
-    private fun corners(rect: FloatArray, field: PerlinNoise2d, reach: Float, frame: Float): FloatArray {
-        val left = rect[0]
-        val top = rect[1]
-        val right = rect[2]
-        val bottom = rect[3]
+    private fun corners(rect: Rect, noise: (Float, Float) -> Float, reach: Float, frame: Float): FloatArray {
+        val left = rect.left
+        val top = rect.top
+        val right = rect.right
+        val bottom = rect.bottom
         val out = FloatArray(Corners * 2)
         val xs = floatArrayOf(left, right, right, left)
         val ys = floatArrayOf(top, top, bottom, bottom)
         for (i in 0 until Corners) {
             val x = xs[i]
             val y = ys[i]
-            val dx = field.at(x * SkewFrequency, y * SkewFrequency) * reach
-            val dy = field.at(x * SkewFrequency + SkewPhase, y * SkewFrequency - SkewPhase) * reach
+            val dx = noise(x * SkewFrequency, y * SkewFrequency) * reach
+            val dy = noise(x * SkewFrequency + SkewPhase, y * SkewFrequency - SkewPhase) * reach
             val edgeX = x <= Tiny || x >= frame - Tiny
             val edgeY = y <= Tiny || y >= 1f - Tiny
             out[i * 2] = x + if (edgeX) 0f else dx

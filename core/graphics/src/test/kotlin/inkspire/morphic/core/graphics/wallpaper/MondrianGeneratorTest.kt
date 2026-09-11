@@ -1,6 +1,6 @@
 package inkspire.morphic.core.graphics.wallpaper
 
-import inkspire.morphic.core.graphics.wallpaper.MondrianGenerator.Rect
+import inkspire.morphic.core.graphics.wallpaper.GuillotineTree.Rect
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import org.junit.Assert.assertEquals
@@ -100,10 +100,11 @@ class MondrianGeneratorTest {
             val morph = requireNotNull(MondrianGenerator.morph(from, to))
             for ((t, plan) in listOf(0f to from, 1f to to)) {
                 val seen = ArrayList<Pair<Rect, Int>>()
-                morph.at(t) { rect, fromTone, toTone ->
-                    if (rect.width > 0f && rect.height > 0f) seen.add(rect to if (t == 0f) fromTone else toTone)
+                morph.at(t) { rect, fromIndex, toIndex ->
+                    val index = if (t == 0f) fromIndex else toIndex
+                    if (rect.width > 0f && rect.height > 0f) seen.add(rect to plan.tones[index])
                 }
-                assertEquals("seed $seed at $t", plan.blocks.map { it.rect to it.tone }, seen)
+                assertEquals("seed $seed at $t", plan.blocks.map { it.rect to plan.tones[it.index] }, seen)
             }
         }
     }
@@ -116,7 +117,7 @@ class MondrianGeneratorTest {
     }
 
     private fun blocks(passes: Int, seed: Long) =
-        MondrianGenerator.blocks(MondrianGenerator.subdivide(passes, Random(seed))).map { it.rect }
+        GuillotineTree.pieces(MondrianGenerator.subdivide(passes, Random(seed))).map { it.rect }
 
     private fun morph(from: Long, to: Long) = requireNotNull(
         MondrianGenerator.morph(
