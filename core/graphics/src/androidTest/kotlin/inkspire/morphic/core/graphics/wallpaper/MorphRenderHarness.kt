@@ -479,6 +479,29 @@ class MorphRenderHarness {
         }
     }
 
+    /**
+     * One Triangular Facets shuffle at full relief and a hair of leading, colorful — ten frames.
+     *
+     * What to look for: **the facets should drift and relight continuously**, the color regions should slide into one
+     * another rather than fade in place, and the cells that change diagonal should each change once, a few at a time.
+     */
+    @Test
+    fun renderTriangularFacetsMorph() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val colorful = PaletteColorMode.resolve(Palette(Dusk), WallpaperColorMode.COLORFUL)
+        val params = DesignParams(depth = 1f, scale = 0.6f, colorMode = WallpaperColorMode.COLORFUL)
+        val from = TriangularFacetsGenerator.plan(Width, Height, params, colorful, seed = 42L)
+        val to = TriangularFacetsGenerator.plan(Width, Height, params, colorful, seed = 43L)
+
+        for (step in 0..Steps) {
+            val t = step.toFloat() / Steps
+            val bitmap = createBitmap(Width, Height)
+            TriangularFacetsGenerator.draw(Canvas(bitmap), TriangularFacetsGenerator.between(from, to, t), colorful, Width, Height)
+            saveHarnessPng(resolver, "morph_facets_${(t * 100).toInt().toString().padStart(3, '0')}.png", bitmap)
+            bitmap.recycle()
+        }
+    }
+
     private companion object {
         /** "Dusk", the render harness's palette — warm sand and terracotta against deep teal. */
         val Dusk = listOf(

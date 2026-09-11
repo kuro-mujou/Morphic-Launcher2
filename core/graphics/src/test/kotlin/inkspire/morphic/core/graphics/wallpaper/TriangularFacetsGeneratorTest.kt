@@ -1,9 +1,11 @@
 package inkspire.morphic.core.graphics.wallpaper
 
+import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
 
 /**
  * The lattice, the triangulation, the colour field's reach and the relief — the parts a bitmap cannot check.
@@ -159,5 +161,45 @@ class TriangularFacetsGeneratorTest {
         assertEquals(0f, TriangularFacetsGenerator.leading(0f), 0f)
         assertEquals(0.12f, TriangularFacetsGenerator.leading(1f), 1e-6f)
         assertTrue("the default must not open on stained glass", TriangularFacetsGenerator.leading(0.5f) < 0.02f)
+    }
+
+    /**
+     * **At the default Distortion the facets tile the frame at every moment of a scrub** — the points drift within
+     * their cells and the border points only along their edges, so every moment's triangles cover the unit square
+     * exactly once. A point pulled off its edge, or a cell whose diagonal flipped into a fold, would leave the sum off.
+     */
+    @Test
+    fun `at the default distortion the facets tile the frame at every moment of a scrub`() {
+        val (a, b) = shuffle(DesignParams(density = 0.6f))
+        for (step in 0..20) {
+            assertEquals("at ${step / 20f}", 0.0, overlap(TriangularFacetsGenerator.between(a, b, step / 20f)), 1e-5)
+        }
+    }
+
+    private fun shuffle(params: DesignParams): Pair<TriangularFacetsGenerator.Plan, TriangularFacetsGenerator.Plan> {
+        val palette = Palette(listOf(0xFFF2E2C4.toInt(), 0xFFC9603E.toInt(), 0xFF2C6E6B.toInt(), 0xFF121E2B.toInt()))
+        return TriangularFacetsGenerator.plan(1080, 2400, params, palette, seed = 1L) to
+            TriangularFacetsGenerator.plan(1080, 2400, params, palette, seed = 101L)
+    }
+
+    /** How much of the unit square [plan]'s triangles cover more than once — `0` for a sheet that tiles exactly. */
+    private fun overlap(plan: TriangularFacetsGenerator.Plan): Double {
+        val triangles = TriangularFacetsGenerator.triangles(plan.points, plan.cells)
+        val p = plan.points
+        var area = 0.0
+        for (i in triangles.indices step 3) {
+            val (i0, i1, i2) = Triple(triangles[i] * 2, triangles[i + 1] * 2, triangles[i + 2] * 2)
+            area += abs((p[i1] - p[i0]) * (p[i2 + 1] - p[i0 + 1]) - (p[i2] - p[i0]) * (p[i1 + 1] - p[i0 + 1])) / 2.0
+        }
+        return area - 1.0
+    }
+
+    @Test
+    fun `a scrub starts on one sheet and ends on the other`() {
+        val palette = Palette(listOf(0xFFF2E2C4.toInt(), 0xFFC9603E.toInt(), 0xFF121E2B.toInt()))
+        val a = TriangularFacetsGenerator.plan(1080, 2400, DesignParams(), palette, seed = 1L)
+        val b = TriangularFacetsGenerator.plan(1080, 2400, DesignParams(), palette, seed = 2L)
+        assertTrue(TriangularFacetsGenerator.between(a, b, 0f) === a)
+        assertTrue(TriangularFacetsGenerator.between(a, b, 1f) === b)
     }
 }

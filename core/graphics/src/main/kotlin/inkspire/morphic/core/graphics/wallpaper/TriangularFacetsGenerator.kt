@@ -92,14 +92,92 @@ object TriangularFacetsGenerator : Generator {
      */
     internal data class Cells(val cols: Int, val rows: Int)
 
+    /**
+     * A facet sheet planned but not painted — at no particular size, its colors already resolved.
+     *
+     * **Colors rather than stops**, as the mesh gradient's plan carries them: the field is a bilinear blend in RGB, so
+     * a node's color is what it is, and a scrub blends node to node in the same space the field already does.
+     *
+     * @property points the lattice's points in the unit square — [grid].
+     * @property heights each point's height, in cell units — [relief].
+     * @property field each color-field node's color — [field].
+     * @property accents each facet's speckle accent, in triangle order — drawn whatever the variant, see [draw].
+     */
+    internal class Plan(
+        val params: DesignParams,
+        val cells: Cells,
+        val points: FloatArray,
+        val heights: FloatArray,
+        val field: IntArray,
+        val accents: IntArray,
+    )
+
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
+        val bitmap = createBitmap(width, height)
+        draw(Canvas(bitmap), plan(width, height, params, palette, seed), palette, width, height)
+        return bitmap
+    }
+
+    /** The sheet [params] and [seed] describe, in a frame shaped like `[width]` × `[height]`, in [palette]. */
+    internal fun plan(width: Int, height: Int, params: DesignParams, palette: Palette, seed: Long): Plan {
         val cells = cells(width, height, params.density)
-        val points = grid(cells, jitter(params.irregularity), seed)
-        val heights = relief(cells, params.depth, seed)
+        val stops = fieldStops(palette.size)
+        // Every facet draws from the stream whatever the variant, so the Colors chooser re-colors the same facets
+        // instead of reshuffling all of them — the discipline every seeded knob here keeps.
+        val speckleRandom = Random(seed xor SpeckleSalt)
+        return Plan(
+            params = params,
+            cells = cells,
+            points = grid(cells, jitter(params.irregularity), seed),
+            heights = relief(cells, params.depth, seed),
+            field = field(cells, palette, seed),
+            accents = IntArray(cells.cols * cells.rows * 2) { palette.colorAt(stops[speckleRandom.nextInt(stops.size)]) },
+        )
+    }
+
+    /**
+     * A scrub between two sheets: the points drift within their cells, the relief turns from one seed's to the
+     * other's ([turnNoise]), and the color field and the speckle blend.
+     *
+     * **A cell changes diagonal when its two diagonals pass through equal length**, since every moment is split by
+     * [triangles]' own rule. Its two facets then change shade in one frame — one cell at a time, at its own moment, the
+     * way Dot Grid's tiles switch band — and every frame is a sheet this design could have baked.
+     */
+    override fun scrub(
+        width: Int,
+        height: Int,
+        palette: Palette,
+        params: DesignParams,
+        from: Long,
+        to: Long,
+    ): WallpaperMorph? {
+        val a = plan(width, height, params, palette, from)
+        val b = plan(width, height, params, palette, to)
+        return WallpaperMorph { canvas, t, w, h -> draw(canvas, between(a, b, t), palette, w, h) }
+    }
+
+    /** The sheet [t] of the way from [a] to [b]; the ends are the plans themselves, as every design's are. */
+    internal fun between(a: Plan, b: Plan, t: Float): Plan = when {
+        t <= 0f -> a
+        t >= 1f -> b
+        else -> Plan(
+            params = a.params,
+            cells = a.cells,
+            points = FloatArray(a.points.size) { a.points[it] + (b.points[it] - a.points[it]) * t },
+            heights = FloatArray(a.heights.size) { turnNoise(a.heights[it], b.heights[it], t) },
+            field = IntArray(a.field.size) { LinearGradientGenerator.lerpArgb(a.field[it], b.field[it], t) },
+            accents = IntArray(a.accents.size) { LinearGradientGenerator.lerpArgb(a.accents[it], b.accents[it], t) },
+        )
+    }
+
+    /** Paints [plan] into [canvas] at `[width]` × `[height]`, grounded in [palette] — the bake and every scrub frame. */
+    internal fun draw(canvas: Canvas, plan: Plan, palette: Palette, width: Int, height: Int) {
+        val params = plan.params
+        val cells = plan.cells
+        val points = plan.points
+        val heights = plan.heights
         val triangles = triangles(points, cells)
 
-        val bitmap = createBitmap(width, height)
-        val canvas = Canvas(bitmap)
         // The ground: what the leading is made of, and what a facet uncovers as it shrinks. Painted whether or not
         // any of it will show, so a fully-tiled render and a leaded one differ only in the leading.
         canvas.drawColor(palette.colorAt(0))
@@ -109,10 +187,8 @@ object TriangularFacetsGenerator : Generator {
         val seam = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 1f }
 
         val nodes = fieldNodes(cells)
-        val field = field(cells, palette, seed)
-        val stops = fieldStops(palette.size)
+        val field = plan.field
         val speckle = Colors.entries[params.variant.coerceIn(0, Colors.entries.lastIndex)].speckle
-        val speckleRandom = Random(seed xor SpeckleSalt)
         val inset = leading(params.scale) * min(width.toFloat() / cells.cols, height.toFloat() / cells.rows)
 
         val path = Path()
@@ -121,14 +197,13 @@ object TriangularFacetsGenerator : Generator {
             val a = triangles[t]
             val b = triangles[t + 1]
             val c = triangles[t + 2]
+            val facet = t / IndicesPerTriangle
             t += IndicesPerTriangle
 
             val centroidU = (points[a * 2] + points[b * 2] + points[c * 2]) / 3f
             val centroidV = (points[a * 2 + 1] + points[b * 2 + 1] + points[c * 2 + 1]) / 3f
             val base = ColorLattice.sample(field, nodes.cols, nodes.rows, centroidU, centroidV)
-            // Every facet draws from the stream whatever the variant, so the Colors chooser re-colors the same
-            // facets instead of reshuffling all of them — the discipline every seeded knob here keeps.
-            val accent = palette.colorAt(stops[speckleRandom.nextInt(stops.size)])
+            val accent = plan.accents[facet]
             val lit = shade(speckled(base, accent, speckle), lighting(points, heights, cells, a, b, c))
 
             path.rewind()
@@ -148,7 +223,6 @@ object TriangularFacetsGenerator : Generator {
                 canvas.drawPath(path, seam)
             }
         }
-        return bitmap
     }
 
     /**

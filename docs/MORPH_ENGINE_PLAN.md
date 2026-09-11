@@ -1,7 +1,7 @@
 # Morph Engine
 
 **Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands, Waves, Wave
-Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone, Dot Grid, Mondrian, Modern Mosaic, Rounded Tiles, Ribbon Flow, Ribbons, Polygon Cascade and Flow Lines rolled out, and the field bucket re-measured and mostly dissolved
+Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone, Dot Grid, Mondrian, Modern Mosaic, Rounded Tiles, Ribbon Flow, Ribbons, Polygon Cascade, Flow Lines and Triangular Facets rolled out, and the field bucket re-measured and mostly dissolved
 (2026-09-11). Drawn
 from three screen captures of Smart Launcher's wallpaper studio taken by the author, each of which overturned a
 conclusion drawn from the one before.
@@ -370,7 +370,7 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  five primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
+  four primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
   shuffle of either is the same picture.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
     null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
@@ -783,6 +783,30 @@ claim to apply.
     half do. The cascade does the same, less visibly, since its default turn is smaller and its copies are shapes
     rather than an envelope. No continuous path between the two senses avoids it; the alternatives are switching at
     the midpoint, a pop, or holding one end's sense, which ends the scrub on a picture that is not the bake.
+  - **Triangular Facets ✅ (2026-09-11) — four seeded parts, each with its own interpolation.** The seed decides the
+    lattice's jitter, the relief's noise, the color field's node stops, and every facet's speckle accent. The points
+    lerp: the lattice is fixed, so a point's partner is itself, and border points still slide only along their edges.
+    The relief turns (`turnNoise`, its fifth consumer), so the lighting keeps its contrast through the middle. The
+    field and the accents blend in RGB, which is already how the field mixes its regions; the plan carries resolved
+    colors for that reason, as the mesh gradient's does.
+  - **A cell changes diagonal when its two diagonals pass through equal length**, because every moment is split by the
+    design's own shorter-diagonal rule. Its two facets change shade in one frame, one cell at a time at its own moment,
+    the way Dot Grid's tiles switch band, and every frame is a sheet the design could have baked.
+  - **Found on the way: the bake itself folds at high *Distortion*.** The class note says folding begins "past about"
+    `MaxJitter`; measured over twenty seeds, triangles already invert over their neighbors from *Distortion* `0.75`, and
+    at full *Distortion* in 17 to 20 of 20 seeds at the finer densities (up to 0.8% of the frame covered twice). None
+    fold at the default. The scrub does not cure or cause it: over the same twenty shuffles its worst fold stayed below
+    the worst baked sheet's, though a single moment can fold more than its own two ends. A test asserting it never
+    does was written and failed, which is how that was found. The guarantee that holds is the default's: `at the default
+    distortion the facets tile the frame at every moment of a scrub`. Fixing the fold changes the bake, so it is split
+    off as its own task rather than done here.
+  - **The bake: 961 of 961 harness renders byte-identical.** At full relief with a hair of leading, the harness frames
+    change 10–14% of pixels per step, with no step at either end.
+  - **Verified on emulator-5554**, over two shuffles. The drag changes about 8% of pixels per step, evenly. The first
+    spring frame after release changes half the frame or more, since every facet is mid-blend and the spring covers
+    most of the remaining travel at once. It settles in three frames, every frame after is pixel-identical to the bake,
+    and a sub-threshold release returns **0.000%** of pixels changed. The colorful midpoint goes browner, as every
+    flat-color design's does.
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a
