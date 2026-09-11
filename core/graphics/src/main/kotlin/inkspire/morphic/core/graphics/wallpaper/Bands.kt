@@ -6,10 +6,9 @@ import kotlin.random.Random
  * Splits `0..1` into variable-width bands — the shared derivation behind the banded staples ([DiagonalBandsGenerator]'s
  * stripes, [GradientColumnsGenerator]'s columns).
  *
- * **One place for the width arithmetic, because it is silently wrong when it is wrong.** Both designs project a pixel to
- * one axis and quantize it into bands whose widths the irregularity knob jitters; a set of widths that sums to anything
- * but 1, or a boundary search off by one, drops or doubles a band without a crash. Extracted here on the second consumer
- * so the two cannot drift, and tested without a bitmap.
+ * **One place for the width arithmetic, because it is silently wrong when it is wrong.** Both designs lay bands across
+ * one axis whose widths the irregularity knob jitters; a set of widths that sums to anything but 1 drops or doubles a
+ * band without a crash. Extracted here on the second consumer so the two cannot drift, and tested without a bitmap.
  */
 object Bands {
 
@@ -32,13 +31,6 @@ object Bands {
             edges[i] = cumulative / total
         }
         return edges
-    }
-
-    /** Which band the position [t] (`0..1`) falls in — the number of [boundaries] at or below it, so `0 until count`. */
-    fun bandAt(t: Float, boundaries: FloatArray): Int {
-        var band = 0
-        while (band < boundaries.size && t >= boundaries[band]) band++
-        return band
     }
 
     /** How far a band's width may drift from even at full irregularity, as a fraction of the even width. */

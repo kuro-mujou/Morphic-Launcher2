@@ -1,7 +1,7 @@
 # Morph Engine
 
-**Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands, Waves and Wave
-Dividers rolled out, and the field bucket re-measured and mostly dissolved (2026-09-11). Drawn from three screen captures of Smart Launcher's wallpaper
+**Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands, Waves, Wave
+Dividers and Gradient Columns rolled out, and the field bucket re-measured and mostly dissolved (2026-09-11). Drawn from three screen captures of Smart Launcher's wallpaper
 studio taken by the author, each of which overturned a conclusion drawn from the one before.
 
 **Covers:** the render seam both studios draw through — why `Generator.render() → Bitmap` is the wrong shape for a live
@@ -365,7 +365,7 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  sixteen primitive extractions, two shape designs to redraw as primitives (their bakes change, as Voronoi's did),
+  sixteen primitive extractions, one shape design to redraw as primitives (its bake changes, as Voronoi's did),
   Plasma as a field with a frequency-dependent floor, and four edge-cut designs waiting on open question 6. Linear
   Gradient is not owed a scrub at all: it ignores the seed, so a shuffle of it is the same picture.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
@@ -494,6 +494,20 @@ claim to apply.
   - **The bake changes by its edges alone**: the 40 Wave Dividers renders changed and the other **921 of 961** are
     byte-identical. The default differs on 0.38% of pixels past 24 levels; full depth on 2.9%, because a stack folded
     that far is mostly near-vertical flank, every pixel of which is an edge. **The render went from 363 ms to 8.5 ms.**
+  - **Gradient Columns ✅ (2026-09-11) — Diagonal Bands' slabs with two shades laid over them.** Each column is a flat
+    slab of its stop; both shades are black laid on top, which over an opaque color scales it by one minus the black's
+    opacity — so the two layers multiply exactly as the per-pixel `edgeShade × rakeShade` did. The seam shadow is a
+    gradient across the last 35% of each column; the rake is one gradient down the whole frame whose 17 stops sample its
+    smoothstep, since a shader only ramps linearly between stops — `the rake's stops follow its smoothstep to within a
+    level` holds that bound at full relief, where too few stops would read as banding nobody could name.
+  - **`FrameAxis.slab` is shared now**, on its second consumer: Diagonal Bands' quad moved onto the axis with its test,
+    with `xAt`/`yAt` beside it so the seam shadows' gradient anchors sit where the axis reads the boundaries too. The
+    arithmetic is operation for operation what Diagonal Bands did, and its 40 renders stayed byte-identical.
+    `Bands.bandAt` went with the pixel loops — nothing classifies a pixel into a band any more.
+  - **The bake changes by its edges alone**: the 13 Gradient Columns renders changed and the other **948 of 961** are
+    byte-identical, Diagonal Bands' included. The worst differs on 0.093% of pixels past 24 levels, along the seams,
+    with one-level steps where an 8-bit shadow alpha rounds differently from the old direct scale. **The render went
+    from 214 ms to 15 ms.**
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a

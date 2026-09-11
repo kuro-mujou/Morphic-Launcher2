@@ -1,8 +1,12 @@
 package inkspire.morphic.core.graphics.wallpaper
 
+import inkspire.morphic.core.model.wallpaper.DesignParams
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
 
 /**
  * The column count range and the two shades the *Relief* knob drives. The variable-width banding is tested in
@@ -74,5 +78,49 @@ class GradientColumnsGeneratorTest {
 
         assertTrue("the frame went to near-black at $darkest", darkest > 0.12f)
         assertTrue("full relief should be plainly deeper than the default at $darkest", darkest < 0.4f)
+    }
+
+    /**
+     * **The rake's gradient stays within a level of the smoothstep it samples**, at full relief — the claim its stop
+     * count rests on. A shader ramps linearly between stops, so too few of them turn the eased fall into a visible
+     * polyline of flats and kinks, and nothing reports it: the columns just look a little banded along their length.
+     */
+    @Test
+    fun `the rake's stops follow its smoothstep to within a level`() {
+        val relief = 2f
+        val stops = GradientColumnsGenerator.rakeStops()
+        for (i in 0 until stops.size - 1) {
+            val a = GradientColumnsGenerator.rakeShade(stops[i], relief)
+            val b = GradientColumnsGenerator.rakeShade(stops[i + 1], relief)
+            for (k in 1 until 10) {
+                val f = k / 10f
+                val s = stops[i] + (stops[i + 1] - stops[i]) * f
+                val drawn = a + (b - a) * f
+                val exact = GradientColumnsGenerator.rakeShade(s, relief)
+                assertTrue("off by ${abs(drawn - exact) * 255} levels at $s", abs(drawn - exact) * 255f < 1f)
+            }
+        }
+    }
+
+    /** The seams slide and never cross, at every moment of a scrub — so no column turns inside out mid-swipe. */
+    @Test
+    fun `the seams stay in order at every moment of a scrub`() {
+        val params = DesignParams(density = 1f, irregularity = 1f)
+        val from = GradientColumnsGenerator.plan(params, seed = 1L)
+        val to = GradientColumnsGenerator.plan(params, seed = 2L)
+        val morph = requireNotNull(GradientColumnsGenerator.morph(from, to))
+        assertSame(from, morph.at(0f))
+        assertSame(to, morph.at(1f))
+        for (step in 0..20) {
+            val seams = morph.at(step / 20f).boundaries.toList()
+            assertEquals("at ${step * 5}%", seams.sorted(), seams)
+        }
+    }
+
+    @Test
+    fun `two sets of different column counts are refused rather than paired`() {
+        val few = GradientColumnsGenerator.plan(DesignParams(density = 0f), seed = 1L)
+        val many = GradientColumnsGenerator.plan(DesignParams(density = 1f), seed = 1L)
+        assertNull(GradientColumnsGenerator.morph(few, many))
     }
 }

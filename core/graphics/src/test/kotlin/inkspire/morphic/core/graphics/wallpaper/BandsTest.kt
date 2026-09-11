@@ -35,14 +35,4 @@ class BandsTest {
     fun `a single band has no internal boundaries`() {
         assertEquals(0, Bands.boundaries(count = 1, irregularity = 1f, seed = 5L).size)
     }
-
-    @Test
-    fun `a position picks the band its boundaries bracket`() {
-        val edges = floatArrayOf(0.25f, 0.5f, 0.75f)
-        assertEquals(0, Bands.bandAt(0.1f, edges))
-        assertEquals(1, Bands.bandAt(0.3f, edges))
-        assertEquals(3, Bands.bandAt(0.99f, edges))
-        // Exactly on a boundary falls to the upper band (>=), so bands do not overlap.
-        assertEquals(1, Bands.bandAt(0.25f, edges))
-    }
 }

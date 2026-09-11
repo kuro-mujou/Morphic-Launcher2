@@ -3,8 +3,8 @@ package inkspire.morphic.core.graphics.wallpaper
 import kotlin.math.roundToInt
 
 /**
- * Scales an ARGB color's brightness — the shared darken behind the designs that fake depth with light
- * ([GradientColumnsGenerator]'s seam shadow, [RibbedGlassGenerator]'s rib lens).
+ * Scales an ARGB color's brightness — the shared darken behind the designs that fake depth with light a pixel at a time
+ * ([LouversGenerator]'s seam, [RibbedGlassGenerator]'s rib lens, [ContourGenerator]'s cast shadow).
  *
  * **One place for the channel math, extracted on the second consumer.** Multiplying the RGB channels of a packed color
  * while carrying alpha through is exactly the arithmetic that tints a whole wallpaper when a channel is transposed or the

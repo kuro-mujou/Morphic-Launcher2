@@ -1,9 +1,14 @@
 package inkspire.morphic.core.graphics.wallpaper
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Shader
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
+import kotlin.math.roundToInt
 
 /**
  * Vertical columns stepping once through the palette, each shaded on one edge for depth — *Gradient Columns*.
@@ -47,6 +52,9 @@ import inkspire.morphic.core.model.wallpaper.Palette
  *
  * [columnCount], [edgeShade] and [rakeShade] are this design's own pure mappings; the banding is tested in [Bands] and
  * the ramp in [LinearGradientGenerator], and how the two shades read together is judged in the render harness.
+ *
+ * **The columns are drawn as shapes, not classified a pixel at a time**, so the bake and a scrub issue the same canvas
+ * calls ([plan] and [draw]) and a shuffle can be scrubbed — see docs/MORPH_ENGINE_PLAN.md's field survey for why.
  */
 object GradientColumnsGenerator : Generator {
 
@@ -60,39 +68,131 @@ object GradientColumnsGenerator : Generator {
         rotation = "Direction",
     )
 
-    override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
-        val count = columnCount(params.density)
-        val boundaries = Bands.boundaries(count, params.irregularity, seed)
-        // One color per column, precomputed: the palette ramp stepped across the columns, low stop left to high right.
-        val columnColors = IntArray(count) { i ->
-            LinearGradientGenerator.colorAt(i.toFloat() / (count - 1).coerceAtLeast(1), palette)
-        }
+    /**
+     * A set of columns planned but not painted — at no particular size and in no particular palette.
+     *
+     * **The seed moves only [boundaries]**, and only under *Variation*: the colors step across the columns by index
+     * and the light is a knob, so a shuffle re-cuts the panel widths and changes nothing else.
+     *
+     * @property degrees which way the columns step, from the horizontal — [DesignParams.rotation] over a half turn.
+     * @property relief [DesignParams.depth] over [ShippedRelief] — what [edgeShade] and [rakeShade] are handed.
+     * @property boundaries the edges between columns, as shares of the axis, sorted — [Bands.boundaries].
+     */
+    internal class Plan(val degrees: Float, val relief: Float, val boundaries: FloatArray)
 
-        val degrees = params.rotation.coerceIn(0f, 1f) * HalfTurn
+    override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
+        val bitmap = createBitmap(width, height)
+        draw(Canvas(bitmap), plan(params, seed), palette, width, height)
+        return bitmap
+    }
+
+    /** The columns [params] and [seed] describe. */
+    internal fun plan(params: DesignParams, seed: Long): Plan = Plan(
+        degrees = params.rotation.coerceIn(0f, 1f) * HalfTurn,
+        relief = params.depth.coerceIn(0f, 1f) / ShippedRelief,
+        boundaries = Bands.boundaries(columnCount(params.density), params.irregularity, seed),
+    )
+
+    /**
+     * Paints [plan] into [canvas] at `[width]` × `[height]`, in [palette] — the bake into a software bitmap and a
+     * scrub into a hardware canvas alike.
+     *
+     * **Each column is a flat slab of its stop, and both shades are black laid over it** — which over an opaque color
+     * scales it by one minus the black's opacity, so two layers multiply exactly as [edgeShade] times [rakeShade]
+     * always did. The seam shadow is a gradient across the last [ShadowFraction] of each column; the rake is one
+     * gradient down the whole frame, its stops sampling [rakeShade]'s smoothstep, since a shader only ramps linearly
+     * between stops.
+     *
+     * **Each column runs from its own start to past the frame, and the next one covers the rest**, so every seam is
+     * antialiased once. The column's seam shadow is laid before the next column goes down, so that column's edge
+     * covers it exactly where it covers the column. **Half a pixel in**, because the axis reads pixel `x` at `x` and a
+     * canvas puts that pixel's center at `x + 0.5`.
+     */
+    internal fun draw(canvas: Canvas, plan: Plan, palette: Palette, width: Int, height: Int) {
         // The two axes of the design: one steps the columns, the other runs down them. A second [frameAxis] a quarter
         // turn on rather than a perpendicular of this one's own, so the rake turns with the design for free.
-        val across = frameAxis(degrees, width, height)
-        val down = frameAxis(degrees + QuarterTurn, width, height)
-        val relief = params.depth.coerceIn(0f, 1f) / ShippedRelief
+        val across = frameAxis(plan.degrees, width, height)
+        val down = frameAxis(plan.degrees + QuarterTurn, width, height)
+        val count = plan.boundaries.size + 1
+        val reach = (width + height).toFloat()
+        val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        val shadow = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+        val seam = blackAt(ShadowDepth * plan.relief)
 
-        val pixels = IntArray(width * height)
-        for (y in 0 until height) {
-            for (x in 0 until width) {
-                val fx = x.toFloat()
-                val fy = y.toFloat()
-                val position = across.at(fx, fy)
-                val band = Bands.bandAt(position, boundaries)
-                val low = if (band == 0) 0f else boundaries[band - 1]
-                val high = if (band < boundaries.size) boundaries[band] else 1f
-                val localT = if (high > low) (position - low) / (high - low) else 0f
-                val shade = edgeShade(localT, relief) * rakeShade(down.at(fx, fy), relief)
-                pixels[y * width + x] = Shades.scale(columnColors[band], shade)
+        canvas.save()
+        canvas.translate(PixelCenter, PixelCenter)
+        for (column in 0 until count) {
+            val low = if (column == 0) 0f else plan.boundaries[column - 1]
+            val high = if (column < plan.boundaries.size) plan.boundaries[column] else 1f
+            // The palette ramp stepped across the columns, low stop to high.
+            fill.color = LinearGradientGenerator.colorAt(column.toFloat() / (count - 1).coerceAtLeast(1), palette)
+            canvas.drawPath(across.slabPath(if (column == 0) -Beyond else low, Beyond, reach), fill)
+            if (plan.relief > 0f && high > low) {
+                val from = high - ShadowFraction * (high - low)
+                shadow.shader = LinearGradient(
+                    across.xAt(from), across.yAt(from), across.xAt(high), across.yAt(high),
+                    Transparent, seam, Shader.TileMode.CLAMP,
+                )
+                canvas.drawPath(across.slabPath(from, if (column == count - 1) Beyond else high, reach), shadow)
             }
         }
+        if (plan.relief > 0f) {
+            val stops = rakeStops()
+            shadow.shader = LinearGradient(
+                down.xAt(0f), down.yAt(0f), down.xAt(1f), down.yAt(1f),
+                IntArray(RakeStops) { blackAt(1f - rakeShade(stops[it], plan.relief)) },
+                stops,
+                Shader.TileMode.CLAMP,
+            )
+            canvas.drawRect(-1f, -1f, width + 1f, height + 1f, shadow)
+        }
+        canvas.restore()
+    }
 
-        val bitmap = createBitmap(width, height)
-        bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
-        return bitmap
+    /** Where along a column the rake's gradient is pinned to [rakeShade] — [RakeStops] of them, evenly, `0..1`. */
+    internal fun rakeStops(): FloatArray = FloatArray(RakeStops) { it.toFloat() / (RakeStops - 1) }
+
+    /** Black at [opacity] — laid over a color, it scales that color by `1 - opacity`. */
+    private fun blackAt(opacity: Float): Int = (opacity * ChannelMax).roundToInt().coerceIn(0, ChannelMax) shl AlphaShift
+
+    /**
+     * A scrub between two sets of columns: the seams slide, and nothing else moves.
+     *
+     * **Like Diagonal Bands', and as subtle as a shuffle of this design is.** The seed only cuts the widths, so at
+     * *Variation* `0` two seeds are one picture and the scrub is a still one; two sorted edge lists interpolated edge
+     * for edge stay sorted, so no column turns inside out.
+     */
+    override fun scrub(
+        width: Int,
+        height: Int,
+        palette: Palette,
+        params: DesignParams,
+        from: Long,
+        to: Long,
+    ): WallpaperMorph? {
+        val morph = morph(plan(params, from), plan(params, to)) ?: return null
+        return WallpaperMorph { canvas, t, w, h -> draw(canvas, morph.at(t), palette, w, h) }
+    }
+
+    /** Two sets prepared to interpolate, seam for seam — or **null where they hold different numbers of columns**. */
+    internal fun morph(from: Plan, to: Plan): Morph? =
+        if (from.boundaries.size == to.boundaries.size) Morph(from, to) else null
+
+    /** Two sets of columns and every moment between them. */
+    internal class Morph(private val from: Plan, private val to: Plan) {
+
+        /** The columns [t] of the way across; the ends are the plans themselves. */
+        fun at(t: Float): Plan = when {
+            t <= 0f -> from
+            t >= 1f -> to
+            else -> Plan(
+                degrees = from.degrees + (to.degrees - from.degrees) * t,
+                relief = from.relief + (to.relief - from.relief) * t,
+                boundaries = FloatArray(from.boundaries.size) {
+                    from.boundaries[it] + (to.boundaries[it] - from.boundaries[it]) * t
+                },
+            )
+        }
     }
 
     /** The sweep [DesignParams.rotation] takes the columns through — see the class note for why it is not a full one. */
@@ -100,6 +200,25 @@ object GradientColumnsGenerator : Generator {
 
     /** From the axis the columns step along to the axis they run down. */
     private const val QuarterTurn = 90f
+
+    /** Where a pixel's center sits within it, in canvas units — see [draw]. */
+    private const val PixelCenter = 0.5f
+
+    /** How far past the axis' ends a first or last column's fill reaches, as a share of it — beyond the frame. */
+    private const val Beyond = 2f
+
+    /**
+     * How many stops the rake's gradient samples its smoothstep at. A shader ramps linearly between stops, and at
+     * this many the most that departs from the curve is well under a level of 255 even at full relief.
+     */
+    private const val RakeStops = 17
+
+    /** A clear color — the start of every seam shadow. */
+    private const val Transparent = 0
+
+    /** Where alpha sits in a packed color, and the most it can be. */
+    private const val AlphaShift = 24
+    private const val ChannelMax = 255
 
     /** How many columns [density] asks for — a few broad panels up to a fine gradient. */
     internal fun columnCount(density: Float): Int = Amount.at(density)

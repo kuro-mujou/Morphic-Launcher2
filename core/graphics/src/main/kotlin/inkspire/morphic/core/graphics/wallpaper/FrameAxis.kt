@@ -1,7 +1,9 @@
 package inkspire.morphic.core.graphics.wallpaper
 
+import android.graphics.Path
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.sin
 
@@ -56,6 +58,47 @@ internal class FrameAxis(
      */
     fun at(x: Float, y: Float): Float =
         if (span <= 0f) Center else ((dx * x + dy * y - lowest) / span).coerceIn(0f, 1f)
+
+    /**
+     * The point on this axis that [at] reads as [share] — any share, so a caller can reach past either end — in
+     * pixels. For a shader's anchor points, which have to sit where the axis says a boundary is.
+     */
+    fun xAt(share: Float): Float = startX + (endX - startX) * share
+
+    /** The other coordinate of [xAt]. */
+    fun yAt(share: Float): Float = startY + (endY - startY) * share
+
+    /**
+     * The quad covering this axis from share [from] to share [to], reaching [reach] pixels either side of it —
+     * interleaved `x, y`, corners `0` and `3` on the [from] edge and `1` and `2` on the [to] edge; empty on an axis
+     * with no length.
+     *
+     * **What a band across the frame is, drawn**: [DiagonalBandsGenerator]'s slab and [GradientColumnsGenerator]'s
+     * columns. Built from the axis' own ends, so a drawn edge lies exactly where [at] reads the boundary — a quad
+     * worked out from the degrees again could land a quarter turn or a pixel off and still look like bands.
+     */
+    fun slab(from: Float, to: Float, reach: Float): FloatArray {
+        val ax = endX - startX
+        val ay = endY - startY
+        val length = hypot(ax, ay)
+        if (length <= 0f) return FloatArray(0)
+        val px = -ay / length * reach
+        val py = ax / length * reach
+        val fx = xAt(from)
+        val fy = yAt(from)
+        val tx = xAt(to)
+        val ty = yAt(to)
+        return floatArrayOf(fx + px, fy + py, tx + px, ty + py, tx - px, ty - py, fx - px, fy - py)
+    }
+
+    /** [slab] as a closed path, for filling. */
+    fun slabPath(from: Float, to: Float, reach: Float): Path = Path().apply {
+        val quad = slab(from, to, reach)
+        if (quad.isEmpty()) return@apply
+        moveTo(quad[0], quad[1])
+        for (i in 2 until quad.size step 2) lineTo(quad[i], quad[i + 1])
+        close()
+    }
 }
 
 /**

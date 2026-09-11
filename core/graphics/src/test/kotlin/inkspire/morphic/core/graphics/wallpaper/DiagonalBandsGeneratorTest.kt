@@ -89,26 +89,6 @@ class DiagonalBandsGeneratorTest {
         assertTrue(DiagonalBandsGenerator.coverage(0.5f) > DiagonalBandsGenerator.coverage(0f))
     }
 
-    /**
-     * **A drawn band edge lies exactly where the axis reads its boundary**, at every angle — the shared derivation
-     * between the shapes [DiagonalBandsGenerator.draw] fills and the projection the knobs are fractions of. Built from
-     * the angle a second time, a band could come out a quarter turn or a pixel-center off and still look like bands.
-     */
-    @Test
-    fun `a band's drawn edges lie where the axis reads its boundaries`() {
-        for (angle in DiagonalBandsGenerator.Angle.entries) {
-            val axis = DiagonalBandsGenerator.axisOf(angle, width = 1080, height = 2400)
-            val quad = DiagonalBandsGenerator.slab(axis, from = 0.3f, to = 0.7f, reach = 3480f)
-            // Corners 0 and 3 are the near edge, 1 and 2 the far one — each an edge run across the whole frame.
-            for (corner in listOf(0, 3)) {
-                assertEquals(angle.label, 0.3f, axis.at(quad[corner * 2], quad[corner * 2 + 1]), 1e-4f)
-            }
-            for (corner in listOf(1, 2)) {
-                assertEquals(angle.label, 0.7f, axis.at(quad[corner * 2], quad[corner * 2 + 1]), 1e-4f)
-            }
-        }
-    }
-
     /** The band edges slide and never cross, at every moment of a scrub — so no band turns inside out mid-swipe. */
     @Test
     fun `the band edges stay in order at every moment of a scrub`() {

@@ -74,4 +74,25 @@ class FrameAxisTest {
         // A one-pixel strip has nothing to divide by; the middle is the honest answer rather than a crash or a NaN.
         assertEquals(0.5f, frameAxis(0f, width = 1, height = 2400).at(0f, 0f), 1e-6f)
     }
+
+    /**
+     * **A drawn band edge lies exactly where the axis reads its boundary**, at every angle — the shared derivation
+     * between the shapes the banded designs fill and the projection their knobs are fractions of. Built from the angle
+     * a second time, a band could come out a quarter turn or a pixel-center off and still look like bands.
+     */
+    @Test
+    fun `a slab's edges lie where the axis reads its boundaries`() {
+        for (degrees in listOf(0f, 20f, 45f, 90f, 110f, 135f, 160f)) {
+            val axis = frameAxis(degrees, width = 1080, height = 2400)
+            val quad = axis.slab(from = 0.3f, to = 0.7f, reach = 3480f)
+            val label = "$degrees°"
+            // Corners 0 and 3 are the near edge, 1 and 2 the far one — each an edge run across the whole frame.
+            for (corner in listOf(0, 3)) {
+                assertEquals(label, 0.3f, axis.at(quad[corner * 2], quad[corner * 2 + 1]), 1e-4f)
+            }
+            for (corner in listOf(1, 2)) {
+                assertEquals(label, 0.7f, axis.at(quad[corner * 2], quad[corner * 2 + 1]), 1e-4f)
+            }
+        }
+    }
 }

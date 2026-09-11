@@ -3,11 +3,9 @@ package inkspire.morphic.core.graphics.wallpaper
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.Path
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
-import kotlin.math.hypot
 
 /**
  * A slab of parallel bands lying across a calm ground — *Diagonal Bands*, the most restrained design in the catalog.
@@ -150,37 +148,9 @@ object DiagonalBandsGenerator : Generator {
         for (band in 0..plan.boundaries.size) {
             val from = if (band == 0) 0f else plan.boundaries[band - 1]
             paint.color = tones[band % tones.size]
-            canvas.drawPath(path(slab(axis, start + plan.coverage * from, end, reach)), paint)
+            canvas.drawPath(axis.slabPath(start + plan.coverage * from, end, reach), paint)
         }
         canvas.restore()
-    }
-
-    /**
-     * The quad covering [axis] from share [from] to share [to], reaching [reach] pixels either side of it —
-     * interleaved `x, y`, in the axis' own pixel coordinates.
-     *
-     * Built from the axis' two ends rather than from its angle, so the band edges lie exactly where [FrameAxis.at]
-     * reads the boundaries: a quad worked out from the degrees a second time would be the projection written twice.
-     */
-    internal fun slab(axis: FrameAxis, from: Float, to: Float, reach: Float): FloatArray {
-        val ax = axis.endX - axis.startX
-        val ay = axis.endY - axis.startY
-        val length = hypot(ax, ay)
-        if (length <= 0f) return FloatArray(0)
-        val px = -ay / length * reach
-        val py = ax / length * reach
-        val fx = axis.startX + ax * from
-        val fy = axis.startY + ay * from
-        val tx = axis.startX + ax * to
-        val ty = axis.startY + ay * to
-        return floatArrayOf(fx + px, fy + py, tx + px, ty + py, tx - px, ty - py, fx - px, fy - py)
-    }
-
-    private fun path(quad: FloatArray): Path = Path().apply {
-        if (quad.isEmpty()) return@apply
-        moveTo(quad[0], quad[1])
-        for (i in 2 until quad.size step 2) lineTo(quad[i], quad[i + 1])
-        close()
     }
 
     /**
