@@ -145,25 +145,41 @@ object SoftOverlapsGenerator : Generator {
             val rx = radius * aspect
             val ry = radius / aspect
             val tone = tones[i % tones.size]
+            // Multiply is laid opaque, as the color the form multiplies to — see [modulated].
+            val ink = if (blend == OverlapBlend.MULTIPLY) modulated(tone, FormAlpha) else tone
+            val alpha = if (blend == OverlapBlend.MULTIPLY) 1f else FormAlpha
             when (look) {
                 OverlapLook.FILL -> {
                     paint.shader = null
-                    paint.color = tone
+                    paint.color = ink
                 }
                 // Measured on the form's own extent, so a wide ellipse fades over its width rather than in a circle.
+                // A modulated glow fades to white, which multiplies to nothing, where the others fade to transparent.
                 OverlapLook.GLOW -> paint.shader = RadialGradient(
                     cx, cy, max(rx, ry),
-                    intArrayOf(tone, tone and RgbMask),
+                    intArrayOf(ink, if (blend == OverlapBlend.MULTIPLY) White else tone and RgbMask),
                     floatArrayOf(0f, 1f),
                     Shader.TileMode.CLAMP,
                 )
             }
             // After the color, which resets it — and it modulates the shader too, so one line covers both looks.
-            paint.alpha = (FormAlpha * ChannelMax).roundToInt()
+            paint.alpha = (alpha * ChannelMax).roundToInt()
             canvas.drawPath(blobPath(cx, cy, rx, ry, radii(ShapePoints, deform, random)), paint)
         }
         return bitmap
     }
+
+    /**
+     * The opaque color a form of [tone] at [alpha] multiplies its ground by — [tone] lerped toward white by how
+     * transparent the form is.
+     *
+     * **`PorterDuff.Mode.MULTIPLY` is Skia's *modulate*, not the multiply blend**: it multiplies alpha along with
+     * color, so a translucent form laid with it leaves a translucent hole in an opaque ground — and a wallpaper is
+     * shown over whatever is behind it. Over an opaque ground the multiply blend is `ground × lerp(1, tone, alpha)`,
+     * which is exactly what modulating by this color at full alpha gives, at every API level; `BlendMode.MULTIPLY`
+     * would say it directly and is API 29.
+     */
+    internal fun modulated(tone: Int, alpha: Float): Int = LinearGradientGenerator.lerpArgb(White, tone, alpha)
 
     /** How many forms [density] asks for — one alone on the ground, up to a frame full of them. */
     internal fun blobCount(density: Float): Int = Amount.at(density)
@@ -264,6 +280,9 @@ object SoftOverlapsGenerator : Generator {
 
     /** How far a glow's edge is softened, as a share of the short side. */
     private const val GlowBlurFraction = 0.03f
+
+    /** Opaque white — what multiplies a ground by one, and so a modulated glow's rim. */
+    private const val White = 0xFFFFFFFF.toInt()
 
     /** The low 24 bits of an ARGB color — its RGB, alpha masked off, which is a glow's transparent rim. */
     private const val RgbMask = 0x00FFFFFF

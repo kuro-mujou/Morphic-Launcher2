@@ -52,6 +52,30 @@ class SoftOverlapsGeneratorTest {
         }
     }
 
+    /**
+     * **Multiply is laid as an opaque color, and it must multiply exactly as the blend would.** The modulate mode it
+     * rides on multiplies alpha too, which is how every Multiply bake used to come out translucent; the opaque color
+     * is only a fix if modulating by it equals `ground × lerp(1, tone, alpha)`, per channel.
+     */
+    @Test
+    fun `a modulated form multiplies its ground as the multiply blend would`() {
+        val tone = 0xFFC9603E.toInt()
+        val ground = 0xFF1F3A4D.toInt()
+        val alpha = 0.85f
+        val ink = SoftOverlapsGenerator.modulated(tone, alpha)
+        assertEquals("the ink must be opaque, or it punches the ground", 0xFF, ink ushr 24)
+
+        for (shift in intArrayOf(16, 8, 0)) {
+            val s = (tone shr shift and 0xFF) / 255f
+            val d = (ground shr shift and 0xFF) / 255f
+            val blend = d * (1f - alpha + alpha * s)
+            val modulate = d * (ink shr shift and 0xFF) / 255f
+            assertEquals("channel at $shift", blend * 255f, modulate * 255f, 1f)
+        }
+        assertEquals(tone, SoftOverlapsGenerator.modulated(tone, 1f))
+        assertEquals(0xFFFFFFFF.toInt(), SoftOverlapsGenerator.modulated(tone, 0f))
+    }
+
     @Test
     fun `a ring with no deformation is an exact ellipse`() {
         val factors = SoftOverlapsGenerator.radii(points = 8, deform = 0f, random = Random(7))
