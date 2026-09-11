@@ -1,7 +1,7 @@
 # Morph Engine
 
 **Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands, Waves, Wave
-Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone, Dot Grid, Mondrian and Modern Mosaic rolled out, and the field bucket re-measured and mostly dissolved
+Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone, Dot Grid, Mondrian, Modern Mosaic and Rounded Tiles rolled out, and the field bucket re-measured and mostly dissolved
 (2026-09-11). Drawn
 from three screen captures of Smart Launcher's wallpaper studio taken by the author, each of which overturned a
 conclusion drawn from the one before.
@@ -370,7 +370,7 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  ten primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
+  nine primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
   shuffle of either is the same picture.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
     null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
@@ -682,6 +682,22 @@ claim to apply.
     so here the passing needles read as foreign. Shrinking a leaving tile toward its center instead would not hold the
     partition, and the partition is the mechanism. The colorful midpoint goes muddy, as it does for every flat-color
     design so far.
+  - **Rounded Tiles ✅ (2026-09-11) — one phase, so the rank slides.** The seed decides one number: where the rank of
+    bars sits across its lanes, up to half a lane either way. Every other quantity is a knob, including the aim,
+    despite the class note saying the aim was seeded. That paragraph, and the one naming *Rotation* as the fan, were
+    both stale and are corrected. So the plan is the knobs and the phase, and the scrub lerps the phase: the whole rank
+    slides as one, each bar keeping its angle, gradient and color, at most one lane per shuffle. It is Wave Dividers'
+    kind of scrub.
+  - **The bake: 961 of 961 harness renders byte-identical.** With the fan open and the bars overlapping, the harness
+    frames change exactly evenly, 4.49% of pixels at every step.
+  - **Verified on emulator-5554**, over four shuffles. The drag changes the picture exactly evenly (11.2% of pixels per
+    step on one shuffle, 7.4% on another). The spring settles in three frames and every frame after is pixel-identical
+    to the bake, and a sub-threshold release returns **0.000%** of pixels changed.
+  - **How far a shuffle moves the rank is luck, and it can be almost nothing.** Two random phases lie a third of a lane
+    apart on average, but the first two shuffles measured moved the rank 2 px and 20 px of a 180 px lane. A probe of
+    2,000 random pairs confirmed the spread is healthy (median 0.27 of a lane), so those were low draws rather than a
+    correlated seed. A shuffle near the bottom of that range is a scrub that barely moves, which is faithful to what
+    the seed decides.
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a

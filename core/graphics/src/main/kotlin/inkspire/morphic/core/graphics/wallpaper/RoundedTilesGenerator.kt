@@ -35,13 +35,13 @@ import kotlin.random.Random
  * than a rounded rectangle with a radius of its own. [DesignParams.roundness] is that length here: at `1` every bar
  * has shortened to its own cap.
  *
- * **[DesignParams.rotation] is their *Direction*, and it is the design.** At `0` every bar sits parallel and the
+ * **[DesignParams.irregularity] is their *Direction*, and it is the design.** At `0` every bar sits parallel and the
  * picture is a stack of stripes, which is how theirs opens and why its name looks wrong until the knob is moved;
  * climbing it gives bar `i` its own angle, so the set opens into a fan and the rounded caps swing into the frame.
+ * [DesignParams.rotation] is the whole rank's aim.
  *
- * **The fan's *overall* angle is seeded rather than exposed.** Theirs has a second orientation knob for it and there
- * is one field in that family, so the identity takes it and the aim comes from [render]'s seed — which is what
- * [PolygonCascadeGenerator] does with its heading, and it means a shuffle re-aims the picture.
+ * **The seed decides one thing: which part of the rank the frame shows** — a phase of up to half a lane either way.
+ * So a shuffle slides the rank across its lanes, which is what [scrub] draws.
  *
  * The rest: [DesignParams.density] is their *Count* (`1..10`, and the bars always fill the frame, so it sets their
  * thickness too), [DesignParams.scale] their *Spacing* — **signed**, so its low end overlaps the bars rather than
@@ -78,16 +78,59 @@ object RoundedTilesGenerator : Generator {
         finish = VariantKnob("Blend", TileBlend.entries.map { it.label }),
     )
 
+    /**
+     * A rank of bars planned but not painted: the knobs, and the one thing the seed decides.
+     *
+     * @property phase where the rank sits across its lanes, in lanes, `-0.5 ..< 0.5` — the seed's.
+     */
+    internal class Plan(val params: DesignParams, val phase: Float)
+
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val bitmap = createBitmap(width, height)
-        val canvas = Canvas(bitmap)
+        draw(Canvas(bitmap), plan(params, seed), palette, width, height)
+        return bitmap
+    }
+
+    /** The rank [params] and [seed] describe. */
+    internal fun plan(params: DesignParams, seed: Long): Plan =
+        // What the shuffle moves, now that the aim is a knob: which part of the rank the frame happens to show.
+        Plan(params, Random(seed).nextFloat() - HalfLane)
+
+    /**
+     * A scrub between two ranks: the rank slides across its lanes from one phase to the other, and nothing else moves.
+     *
+     * **Nothing to pair**: the bars are the knobs', so bar `i` at one end is bar `i` at the other, and the most a
+     * shuffle can move one is a lane.
+     */
+    override fun scrub(
+        width: Int,
+        height: Int,
+        palette: Palette,
+        params: DesignParams,
+        from: Long,
+        to: Long,
+    ): WallpaperMorph? {
+        val a = plan(params, from)
+        val b = plan(params, to)
+        return WallpaperMorph { canvas, t, w, h -> draw(canvas, between(a, b, t), palette, w, h) }
+    }
+
+    /** The rank [t] of the way from [a] to [b]; the ends are the plans themselves, as every design's are. */
+    internal fun between(a: Plan, b: Plan, t: Float): Plan = when {
+        t <= 0f -> a
+        t >= 1f -> b
+        else -> Plan(a.params, a.phase + (b.phase - a.phase) * t)
+    }
+
+    /** Paints [plan] into [canvas] at `[width]` × `[height]`, in [palette] — the bake and every scrub frame alike. */
+    internal fun draw(canvas: Canvas, plan: Plan, palette: Palette, width: Int, height: Int) {
+        val params = plan.params
         canvas.drawColor(palette.colorAt(palette.size - 1)) // the ground is the darkest stop, as theirs is
         val tones = RampTones.belowGround(palette)
-        if (tones.isEmpty()) return bitmap // a single-stop palette is all ground
+        if (tones.isEmpty()) return // a single-stop palette is all ground
 
         val count = barCount(params.density)
         val blend = blendOf(params.finish)
-        val random = Random(seed)
         // Their *Rotation*: the whole rank's aim. A half turn covers every aim a set of bars has, since a bar turned
         // 180° is the same bar — which is also what their own `0..100 → 0..180°` measured out to.
         val aim = params.rotation.coerceIn(0f, 1f) * PI.toFloat()
@@ -97,8 +140,7 @@ object RoundedTilesGenerator : Generator {
         // three times too fat. `across` is the frame's extent along the lane axis and `along` its extent down a bar.
         val across = abs(sin(aim)) * width + abs(cos(aim)) * height
         val along = abs(cos(aim)) * width + abs(sin(aim)) * height
-        // What the shuffle moves, now that the aim is a knob: which part of the rank the frame happens to show.
-        val phase = random.nextFloat() - 0.5f
+        val phase = plan.phase
         val lanes = lanes(count)
         val pitch = across / count
         // Their *Spacing* is signed, so its low end **overlaps** the bars rather than merely closing the gaps — which
@@ -159,7 +201,6 @@ object RoundedTilesGenerator : Generator {
             canvas.restore()
         }
         canvas.restore()
-        return bitmap
     }
 
     /** How many bars [density] asks for — one across the whole frame, up to a fine rank of them. */
@@ -265,6 +306,9 @@ object RoundedTilesGenerator : Generator {
     private const val InnerShadowStroke = 0.3f
     private const val InnerShadowSoftness = 0.2f
     private const val MaxShadowAlpha = 0.45f
+
+    /** Half a lane — how far the seed may set the rank off center, either way. */
+    private const val HalfLane = 0.5f
 
     /** A byte's greatest value — what a `0..1` strength scales to when it becomes a paint's alpha. */
     private const val ChannelMax = 255

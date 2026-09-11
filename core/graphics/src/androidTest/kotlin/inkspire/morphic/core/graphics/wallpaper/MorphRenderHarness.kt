@@ -351,6 +351,30 @@ class MorphRenderHarness {
         }
     }
 
+    /**
+     * One Rounded Tiles shuffle with the fan open and the bars overlapping, colorful — ten frames of the rank sliding.
+     *
+     * The fan open so each bar has its own angle, and overlapping so the blend has something to combine. What to
+     * look for: **the whole rank should slide across its lanes as one**, each bar keeping its angle and color, and
+     * the overlaps should brighten and dim smoothly as the bars move rather than flicker.
+     */
+    @Test
+    fun renderRoundedTilesMorph() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val colorful = PaletteColorMode.resolve(Palette(Dusk), WallpaperColorMode.COLORFUL)
+        val params = DesignParams(scale = 0f, irregularity = 0.8f, colorMode = WallpaperColorMode.COLORFUL)
+        val from = RoundedTilesGenerator.plan(params, seed = 42L)
+        val to = RoundedTilesGenerator.plan(params, seed = 43L)
+
+        for (step in 0..Steps) {
+            val t = step.toFloat() / Steps
+            val bitmap = createBitmap(Width, Height)
+            RoundedTilesGenerator.draw(Canvas(bitmap), RoundedTilesGenerator.between(from, to, t), colorful, Width, Height)
+            saveHarnessPng(resolver, "morph_tiles_${(t * 100).toInt().toString().padStart(3, '0')}.png", bitmap)
+            bitmap.recycle()
+        }
+    }
+
     private companion object {
         /** "Dusk", the render harness's palette — warm sand and terracotta against deep teal. */
         val Dusk = listOf(

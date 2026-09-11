@@ -1,6 +1,7 @@
 package inkspire.morphic.core.graphics.wallpaper
 
 import inkspire.morphic.core.graphics.wallpaper.RoundedTilesGenerator.TileBlend
+import inkspire.morphic.core.model.wallpaper.DesignParams
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -75,5 +76,27 @@ class RoundedTilesGeneratorTest {
             val lanes = RoundedTilesGenerator.lanes(count)
             assertTrue("count $count: a lane left the reach", lanes.all { abs(it) <= 0.5f + 1e-6f })
         }
+    }
+
+    @Test
+    fun `the seed sets the phase within half a lane either way, and nothing else`() {
+        for (seed in 1L..50L) {
+            val plan = RoundedTilesGenerator.plan(DesignParams(), seed)
+            assertTrue("seed $seed put the rank ${plan.phase} lanes over", plan.phase >= -0.5f && plan.phase < 0.5f)
+            assertEquals(DesignParams(), plan.params)
+        }
+    }
+
+    /**
+     * **A scrub slides the rank evenly and lands on the other phase**, which is the whole of it: a shuffle moves the
+     * bars at most a lane, so a slide that went the long way round, or stopped short, would be a jump at the handoff.
+     */
+    @Test
+    fun `a scrub slides the rank from one phase to the other`() {
+        val a = RoundedTilesGenerator.plan(DesignParams(), seed = 3L)
+        val b = RoundedTilesGenerator.plan(DesignParams(), seed = 4L)
+        assertEquals(a.phase, RoundedTilesGenerator.between(a, b, 0f).phase, 0f)
+        assertEquals(b.phase, RoundedTilesGenerator.between(a, b, 1f).phase, 0f)
+        assertEquals((a.phase + b.phase) / 2f, RoundedTilesGenerator.between(a, b, 0.5f).phase, 1e-6f)
     }
 }
