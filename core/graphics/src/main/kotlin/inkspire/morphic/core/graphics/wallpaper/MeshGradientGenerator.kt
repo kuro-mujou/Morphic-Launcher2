@@ -2,13 +2,10 @@ package inkspire.morphic.core.graphics.wallpaper
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.RectF
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.model.wallpaper.DesignParams
 import inkspire.morphic.core.model.wallpaper.Palette
 import kotlin.math.min
-import kotlin.math.roundToInt
 import kotlin.random.Random
 
 /**
@@ -76,7 +73,8 @@ object MeshGradientGenerator : Generator {
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val bitmap = createBitmap(width, height)
-        paint(plan(params, palette, seed), bitmap)
+        val mesh = plan(params, palette, seed)
+        FieldRaster.paint(bitmap, width, height) { u, v -> colorAt(mesh, u, v) }
         return bitmap
     }
 
@@ -110,42 +108,14 @@ object MeshGradientGenerator : Generator {
      * inversion the morph plan is sized by.
      *
      * Defaulting [shortSide] to the frame's own leaves the bake at full resolution, where this is one buffer copied
-     * once.
+     * once. The loop and the blit are [FieldRaster]'s, shared with the plasma.
      */
-    internal fun draw(canvas: Canvas, mesh: Mesh, width: Int, height: Int, shortSide: Int = min(width, height)) {
-        val frame = min(width, height)
-        val scale = if (frame <= 0) 1f else (shortSide.toFloat() / frame).coerceAtMost(1f)
-        val source = createBitmap(
-            (width * scale).roundToInt().coerceAtLeast(1),
-            (height * scale).roundToInt().coerceAtLeast(1),
-        )
-        paint(mesh, source)
-        canvas.drawBitmap(source, null, RectF(0f, 0f, width.toFloat(), height.toFloat()), FieldPaint)
-        source.recycle()
-    }
+    internal fun draw(canvas: Canvas, mesh: Mesh, width: Int, height: Int, shortSide: Int = min(width, height)) =
+        FieldRaster.draw(canvas, width, height, shortSide) { u, v -> colorAt(mesh, u, v) }
 
-    /**
-     * The pixel loop, and the only place it exists — [render] runs it straight into the bitmap it hands back, and
-     * [draw] runs it into whatever buffer a scrub can afford.
-     *
-     * Shared rather than written twice because a field evaluated two ways is the same hazard as a picture drawn two
-     * ways, and quieter: the two would agree at every setting anyone checked and drift wherever they were not.
-     */
-    private fun paint(mesh: Mesh, bitmap: Bitmap) {
-        val width = bitmap.width
-        val height = bitmap.height
-        val row = IntArray(width)
-        for (y in 0 until height) {
-            val v = if (height <= 1) 0.5f else y.toFloat() / (height - 1)
-            for (x in 0 until width) {
-                val u = if (width <= 1) 0.5f else x.toFloat() / (width - 1)
-                val wu = u + sample(mesh.dx, WarpSpan, u, v)
-                val wv = v + sample(mesh.dy, WarpSpan, u, v)
-                row[x] = sampleColor(mesh, wu, wv)
-            }
-            bitmap.setPixels(row, 0, width, 0, y, width, 1)
-        }
-    }
+    /** [mesh]'s color at ([u], [v]) of the frame, both `0..1` — read through the warp, then off the color lattice. */
+    private fun colorAt(mesh: Mesh, u: Float, v: Float): Int =
+        sampleColor(mesh, u + sample(mesh.dx, WarpSpan, u, v), v + sample(mesh.dy, WarpSpan, u, v))
 
     /**
      * Two lattices prepared to interpolate, or **null where they are not the same shape**.
@@ -331,15 +301,6 @@ object MeshGradientGenerator : Generator {
     /** The bilinear sample of [mesh]'s colors at ([u], [v]) — clamped, so a warp off the edge reads the edge. */
     internal fun sampleColor(mesh: Mesh, u: Float, v: Float): Int =
         ColorLattice.sample(mesh.colors, mesh.span, mesh.span, u, v)
-
-    /**
-     * What a downscaled field is blown back up with — bilinear, which for a field is exact rather than merely tidy.
-     *
-     * Nearest-neighbour would show the buffer's own pixel grid, which is the one artifact that would make a scrub
-     * look like a *preview* of the picture rather than the picture. There is no dithering to preserve and no edge to
-     * keep crisp: every gradient here is continuous, so the filter is reconstructing the field rather than guessing.
-     */
-    private val FieldPaint = Paint(Paint.FILTER_BITMAP_FLAG)
 
     /**
      * The short side a scrub frame of this design is evaluated at — **measured, not guessed** (2026-09-10,
