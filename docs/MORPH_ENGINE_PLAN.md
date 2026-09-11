@@ -1,7 +1,7 @@
 # Morph Engine
 
 **Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands, Waves, Wave
-Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone, Dot Grid, Mondrian, Modern Mosaic, Rounded Tiles and Ribbon Flow rolled out, and the field bucket re-measured and mostly dissolved
+Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone, Dot Grid, Mondrian, Modern Mosaic, Rounded Tiles, Ribbon Flow and Ribbons rolled out, and the field bucket re-measured and mostly dissolved
 (2026-09-11). Drawn
 from three screen captures of Smart Launcher's wallpaper studio taken by the author, each of which overturned a
 conclusion drawn from the one before.
@@ -370,7 +370,7 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  eight primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
+  seven primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
   shuffle of either is the same picture.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
     null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
@@ -723,6 +723,27 @@ claim to apply.
   - **Verified on emulator-5554.** The drag changes the picture evenly at 3% of pixels per step, the spring settles in
     three frames and every frame after is pixel-identical to the bake, and a sub-threshold release returns **0.000%** of
     pixels changed.
+  - **Ribbons ✅ (2026-09-11) — a bundle mirrored by its seed, read from one side.** The seed decides where the spine
+    starts, where it ends and how far it overshoots, all continuous, and whether it is mirrored across the frame or
+    upside down, both choices. The continuous three interpolate, and so does the upside-down flip: its S flattens
+    through a straight line and bends the other way.
+  - **Mirroring across the frame is the hard case, and it has a reading rather than a rule.** A mirrored spine's
+    control points interpolated against an unmirrored one's all meet at the frame's middle halfway, and the bundle
+    folds into a vertical line. But a curve mirrored left to right is the same curve read from its other end, so the
+    scrub reads both spines left to right (`forward`) first. Read that way, they share their `x` exactly, only the S
+    bends, and the fan's pinch slides along the bundle to the other side. That needed `Spine` to carry its spread and
+    splay **per control point** rather than per end: reading a spine backward is then just reversing four arrays, and
+    `a spine read forward draws the same lines, backwards` pins that it is the same bundle, point for point. The bake
+    keeps its own orientation, so its paths are exactly as they were.
+  - **The lines stay nested through the scrub**, since every moment is a mix of two nested bundles and the offsets are
+    linear in it. `a scrub between opposite sweeps keeps the bundle across the frame and its lines nested` checks both
+    halves at full splay.
+  - **The bake: 961 of 961 harness renders byte-identical.** Between two opposite sweeps at full splay the harness
+    frames change 7.1% of pixels per step falling evenly to 6.3%, with no step at either end, where the handoff swaps
+    a curve read backward for the bake's own.
+  - **Verified on emulator-5554**, over two shuffles. The drag changes 6–11% of pixels per step, evenly, the spring
+    settles in three frames and every frame after is pixel-identical to the bake, and a sub-threshold release returns
+    **0.000%** of pixels changed.
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a

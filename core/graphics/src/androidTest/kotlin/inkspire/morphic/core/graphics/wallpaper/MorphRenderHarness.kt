@@ -399,6 +399,31 @@ class MorphRenderHarness {
         }
     }
 
+    /**
+     * One Ribbons shuffle between two bundles sweeping opposite ways across the frame, fully splayed, colorful.
+     *
+     * Opposite sweeps because that is the one this design's scrub is built around: read naively, the two would fold
+     * into a vertical line halfway. What to look for: **the bundle should stay across the frame the whole way, its S
+     * bending and its pinch sliding to the other side**, and the lines should stay nested — a fan, never a scribble.
+     */
+    @Test
+    fun renderRibbonsMorph() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val colorful = PaletteColorMode.resolve(Palette(Dusk), WallpaperColorMode.COLORFUL)
+        val params = DesignParams(irregularity = 1f, colorMode = WallpaperColorMode.COLORFUL)
+        val from = RibbonsGenerator.plan(params, seed = 42L)
+        val leftward = from.spine.xs[0] > from.spine.xs[3]
+        val to = (43L..200L).map { RibbonsGenerator.plan(params, it) }.first { (it.spine.xs[0] > it.spine.xs[3]) != leftward }
+
+        for (step in 0..Steps) {
+            val t = step.toFloat() / Steps
+            val bitmap = createBitmap(Width, Height)
+            RibbonsGenerator.draw(Canvas(bitmap), RibbonsGenerator.between(from, to, t), colorful, Width, Height)
+            saveHarnessPng(resolver, "morph_ribbons_${(t * 100).toInt().toString().padStart(3, '0')}.png", bitmap)
+            bitmap.recycle()
+        }
+    }
+
     private companion object {
         /** "Dusk", the render harness's palette — warm sand and terracotta against deep teal. */
         val Dusk = listOf(

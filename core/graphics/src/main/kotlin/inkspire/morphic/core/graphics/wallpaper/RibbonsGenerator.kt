@@ -58,30 +58,97 @@ object RibbonsGenerator : Generator {
     )
 
     /**
-     * The bundle's backbone: one cubic in unit coordinates, plus how far the lines are spread at each of its ends.
+     * The bundle's backbone: one cubic in unit coordinates, and how the lines are spread and splayed at each of its
+     * control points.
+     *
+     * **Per control point rather than per end**, so that a spine read from its other end is the same spine with every
+     * array reversed — which is what lets [between] carry a bundle sweeping one way into one sweeping the other.
      *
      * @property xs the four control points' x, running off both edges so the bundle enters and leaves the frame
      *   rather than starting inside it.
      * @property ys their y — an S, with each end overshooting so the curve arcs before it settles.
-     * @property startSpread how far apart the lines sit where they begin, as a fraction of the frame's height.
-     * @property endSpread the same where they end. **Larger, and how much larger is the design's shape**: a fan closes
-     *   its start to almost nothing against this, a weave keeps it nearly as open.
+     * @property spreads how far apart the lines sit at each control point, as a fraction of the frame's height —
+     *   growing from where the lines begin to where they end, and **how much it grows is the design's shape**: a fan
+     *   closes its start to almost nothing, a weave keeps it nearly as open.
+     * @property turns which way [DesignParams.irregularity]'s splay pushes each control point: the two interior ones
+     *   oppositely, the ends not at all.
      */
     internal class Spine(
         val xs: FloatArray,
         val ys: FloatArray,
-        val startSpread: Float,
-        val endSpread: Float,
+        val spreads: FloatArray,
+        val turns: FloatArray,
     )
+
+    /** A bundle planned but not painted: its spine, how many lines ride it, and how far they splay. */
+    internal class Plan(val spine: Spine, val count: Int, val splay: Float)
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val bitmap = createBitmap(width, height)
-        val canvas = Canvas(bitmap)
+        draw(Canvas(bitmap), plan(params, seed), palette, width, height)
+        return bitmap
+    }
+
+    /** The bundle [params] and [seed] describe. */
+    internal fun plan(params: DesignParams, seed: Long): Plan =
+        Plan(spine(seed, params.scale, params.variant), lineCount(params.density), params.irregularity.coerceIn(0f, 1f))
+
+    /**
+     * A scrub between two bundles: the spine bends from one S into the other, and the fan's tight end travels to
+     * wherever the other has it.
+     *
+     * **Nothing to pair**: a line's place in the bundle is its index, so line `i` at one end is line `i` at the other.
+     */
+    override fun scrub(
+        width: Int,
+        height: Int,
+        palette: Palette,
+        params: DesignParams,
+        from: Long,
+        to: Long,
+    ): WallpaperMorph? {
+        val a = plan(params, from)
+        val b = plan(params, to)
+        return WallpaperMorph { canvas, t, w, h -> draw(canvas, between(a, b, t), palette, w, h) }
+    }
+
+    /**
+     * The bundle [t] of the way from [a] to [b]; the ends are the plans themselves, as every design's are.
+     *
+     * **Both spines are read left to right first ([forward])**, and that is the whole of the difficulty. The seed may
+     * mirror a spine across the frame, and a mirrored spine's control points interpolated against an unmirrored one's
+     * all meet at the frame's middle halfway through — the bundle folding into a vertical line. Read from the same
+     * side, the two share their `x` exactly, so only the S bends and the fan's pinch slides along it.
+     */
+    internal fun between(a: Plan, b: Plan, t: Float): Plan = when {
+        t <= 0f -> a
+        t >= 1f -> b
+        else -> {
+            val from = forward(a.spine)
+            val to = forward(b.spine)
+            fun mix(x: FloatArray, y: FloatArray) = FloatArray(Controls) { x[it] + (y[it] - x[it]) * t }
+            Plan(
+                Spine(mix(from.xs, to.xs), mix(from.ys, to.ys), mix(from.spreads, to.spreads), mix(from.turns, to.turns)),
+                a.count,
+                a.splay,
+            )
+        }
+    }
+
+    /** [spine] read left to right — itself, or every array reversed where it sweeps the other way. */
+    internal fun forward(spine: Spine): Spine = if (spine.xs.first() <= spine.xs.last()) {
+        spine
+    } else {
+        with(spine) { Spine(xs.reversedArray(), ys.reversedArray(), spreads.reversedArray(), turns.reversedArray()) }
+    }
+
+    /** Paints [plan] into [canvas] at `[width]` × `[height]`, in [palette] — the bake and every scrub frame alike. */
+    internal fun draw(canvas: Canvas, plan: Plan, palette: Palette, width: Int, height: Int) {
         canvas.drawColor(palette.colorAt(palette.size - 1)) // darkest stop — the ground
 
-        val count = lineCount(params.density)
-        val spine = spine(seed, params.scale, params.variant)
-        val splay = params.irregularity.coerceIn(0f, 1f)
+        val count = plan.count
+        val spine = plan.spine
+        val splay = plan.splay
         // The stops the lines are drawn from, swept across the bundle so a full palette reads as one gradient of
         // light rather than as a set of differently-colored lines. Asked of `StopContrast` rather than taken as
         // "everything but the ground": the stop *next* to the ground is a tone away from it, and lines drawn in it
@@ -122,7 +189,6 @@ object RibbonsGenerator : Generator {
             paint.color = colors[i]
             canvas.drawPath(paths[i], paint)
         }
-        return bitmap
     }
 
     /** How many lines [density] asks for — a loose handful up to a dense sheaf. */
@@ -133,8 +199,8 @@ object RibbonsGenerator : Generator {
      *
      * The line's place in the bundle is `-0.5` at one edge to `+0.5` at the other, which is what the spread is
      * multiplied by; the middle line sits exactly on the spine. **The y offset grows control point by control point**
-     * from [Spine.startSpread] to [Spine.endSpread], which is the fan, and it is monotonic in [index] at every one of
-     * them, which is what keeps the lines nested.
+     * along [Spine.spreads], which is the fan, and it is monotonic in [index] at every one of them, which is what keeps
+     * the lines nested.
      *
      * [splay] widens the bundle at one interior control point and narrows it at the other, scaled by the same
      * place-in-the-bundle — so the lines stop being translates of each other and the bundle twists through its own
@@ -149,10 +215,8 @@ object RibbonsGenerator : Generator {
         val place = if (count <= 1) 0f else index.toFloat() / (count - 1) - 0.5f
         val out = FloatArray(8)
         for (k in 0 until Controls) {
-            val along = k.toFloat() / (Controls - 1)
-            val spread = spine.startSpread + (spine.endSpread - spine.startSpread) * along
             out[k * 2] = spine.xs[k]
-            out[k * 2 + 1] = spine.ys[k] + place * (spread + splay * MaxSplay * Splay[k])
+            out[k * 2 + 1] = spine.ys[k] + place * (spine.spreads[k] + splay * MaxSplay * spine.turns[k])
         }
         return out
     }
@@ -180,7 +244,8 @@ object RibbonsGenerator : Generator {
         // a weave stays open and fills the frame.
         val open = MinSpread + scale.coerceIn(0f, 1f) * (MaxSpread - MinSpread)
         val closed = open * if (variant == VariantWeave) WeaveEndRatio else FanEndRatio
-        return Spine(xs, ys, closed, open)
+        val spreads = FloatArray(Controls) { closed + (open - closed) * (it.toFloat() / (Controls - 1)) }
+        return Spine(xs, ys, spreads, Splay.copyOf())
     }
 
     /** Which way each control point is pushed by the splay: the two interior ones, oppositely; the ends, not at all. */

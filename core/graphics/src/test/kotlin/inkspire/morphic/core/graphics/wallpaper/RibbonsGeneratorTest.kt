@@ -1,5 +1,6 @@
 package inkspire.morphic.core.graphics.wallpaper
 
+import inkspire.morphic.core.model.wallpaper.DesignParams
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -88,8 +89,8 @@ class RibbonsGeneratorTest {
     fun `the spread knob widens the bundle at both ends`() {
         val tight = RibbonsGenerator.spine(3L, scale = 0f, variant = 0)
         val wide = RibbonsGenerator.spine(3L, scale = 1f, variant = 0)
-        assertTrue("open end", wide.endSpread > tight.endSpread * 2f)
-        assertTrue("closed end scales with it", wide.startSpread > tight.startSpread)
+        assertTrue("open end", wide.spreads.last() > tight.spreads.last() * 2f)
+        assertTrue("closed end scales with it", wide.spreads.first() > tight.spreads.first())
     }
 
     @Test
@@ -97,9 +98,9 @@ class RibbonsGeneratorTest {
         val fan = RibbonsGenerator.spine(3L, scale = 0.5f, variant = 0)
         val weave = RibbonsGenerator.spine(3L, scale = 0.5f, variant = 1)
         // Same open end either way — the shape is which end closes, not how wide the bundle is.
-        assertEquals(fan.endSpread, weave.endSpread, 1e-6f)
-        assertTrue("a fan converges", fan.startSpread < fan.endSpread * 0.2f)
-        assertTrue("a weave does not", weave.startSpread > weave.endSpread * 0.5f)
+        assertEquals(fan.spreads.last(), weave.spreads.last(), 1e-6f)
+        assertTrue("a fan converges", fan.spreads.first() < fan.spreads.last() * 0.2f)
+        assertTrue("a weave does not", weave.spreads.first() > weave.spreads.last() * 0.5f)
     }
 
     @Test
@@ -107,5 +108,47 @@ class RibbonsGeneratorTest {
         val a = RibbonsGenerator.spine(7L, scale = 0.5f, variant = 0)
         val b = RibbonsGenerator.spine(7L, scale = 0.5f, variant = 0)
         assertTrue(a.xs.contentEquals(b.xs) && a.ys.contentEquals(b.ys))
+    }
+
+    /**
+     * **A spine read from its other end is the same bundle**, every line drawn through the same points in reverse.
+     * [RibbonsGenerator.between] reads both spines this way before bending one into the other, so a reading that moved
+     * the bundle would be a jump at the start of every scrub whose seed swept the other way.
+     */
+    @Test
+    fun `a spine read forward draws the same lines, backwards`() {
+        val swept = (1L..40L).map { RibbonsGenerator.spine(it, scale = 0.5f, variant = 0) }.first { it.xs[0] > it.xs[3] }
+        val forward = RibbonsGenerator.forward(swept)
+        for (line in 0 until 9) {
+            val drawn = RibbonsGenerator.lineControls(line, 9, swept, splay = 0.7f)
+            val read = RibbonsGenerator.lineControls(line, 9, forward, splay = 0.7f)
+            for (k in 0 until 4) {
+                assertEquals(drawn[k * 2], read[(3 - k) * 2], 0f)
+                assertEquals(drawn[k * 2 + 1], read[(3 - k) * 2 + 1], 0f)
+            }
+        }
+    }
+
+    /**
+     * **Between a bundle sweeping one way and one sweeping the other, the lines stay nested and the bundle keeps its
+     * width across the frame** — the fold this reading exists to prevent would pull every control point to the
+     * middle, and the ordering is the design's own promise.
+     */
+    @Test
+    fun `a scrub between opposite sweeps keeps the bundle across the frame and its lines nested`() {
+        val params = DesignParams(irregularity = 1f)
+        val plans = (1L..40L).map { RibbonsGenerator.plan(params, it) }
+        val a = plans.first { it.spine.xs[0] < it.spine.xs[3] }
+        val b = plans.first { it.spine.xs[0] > it.spine.xs[3] }
+        for (step in 1..9) {
+            val moment = RibbonsGenerator.between(a, b, step / 10f)
+            assertTrue("the bundle folded at ${step / 10f}", moment.spine.xs[3] - moment.spine.xs[0] > 1f)
+            for (k in 0 until 4) {
+                val ys = (0 until moment.count).map {
+                    RibbonsGenerator.lineControls(it, moment.count, moment.spine, moment.splay)[k * 2 + 1]
+                }
+                assertTrue("control $k out of order at ${step / 10f}", ys.zipWithNext().all { (p, q) -> p < q })
+            }
+        }
     }
 }
