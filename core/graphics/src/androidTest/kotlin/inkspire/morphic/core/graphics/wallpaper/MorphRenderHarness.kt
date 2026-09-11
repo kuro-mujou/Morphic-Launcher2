@@ -36,19 +36,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class MorphRenderHarness {
 
-    private val palette = PaletteColorMode.resolve(
-        Palette(
-            listOf(
-                0xFFF2E2C4.toInt(),
-                0xFFE6A15C.toInt(),
-                0xFFC9603E.toInt(),
-                0xFF2C6E6B.toInt(),
-                0xFF1F3A4D.toInt(),
-                0xFF121E2B.toInt(),
-            ),
-        ),
-        WallpaperColorMode.BICHROMATIC,
-    )
+    private val palette = PaletteColorMode.resolve(Palette(Dusk), WallpaperColorMode.BICHROMATIC)
 
     /**
      * One shuffle, as the scrub would walk it — two seeds, eleven frames.
@@ -75,7 +63,48 @@ class MorphRenderHarness {
         }
     }
 
+    /**
+     * One Confetti shuffle, colorful and focused near — the setting where the most can go wrong at once.
+     *
+     * Colorful, because bichromatic leaves one ink and nothing to fade between. *Near*, because the blur is quantized
+     * to a few levels and the painter's order is by depth, and both change as depths cross mid-scrub. What to look
+     * for: **discs should drift and swell within their own neighborhood, never cross the frame**; a disc changing
+     * color should pass through a blend rather than flip; and the frame-to-frame difference should stay small and
+     * even. Forty steps rather than ten, so a pop shows as one frame differing sharply from both its neighbors.
+     */
+    @Test
+    fun renderConfettiMorph() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val colorful = PaletteColorMode.resolve(Palette(Dusk), WallpaperColorMode.COLORFUL)
+        val params = DesignParams(variant = 1, colorMode = WallpaperColorMode.COLORFUL)
+        val inks = colorful.size - 1
+        val morph = requireNotNull(
+            ConfettiGenerator.morph(
+                ConfettiGenerator.plan(Width, Height, params, inks, seed = 42L),
+                ConfettiGenerator.plan(Width, Height, params, inks, seed = 43L),
+            ),
+        )
+
+        for (step in 0..FineSteps) {
+            val t = step.toFloat() / FineSteps
+            val bitmap = createBitmap(Width, Height)
+            ConfettiGenerator.draw(Canvas(bitmap), morph.at(t), colorful, Width, Height)
+            saveHarnessPng(resolver, "morph_confetti_${step.toString().padStart(2, '0')}.png", bitmap)
+            bitmap.recycle()
+        }
+    }
+
     private companion object {
+        /** "Dusk", the render harness's palette — warm sand and terracotta against deep teal. */
+        val Dusk = listOf(
+            0xFFF2E2C4.toInt(),
+            0xFFE6A15C.toInt(),
+            0xFFC9603E.toInt(),
+            0xFF2C6E6B.toInt(),
+            0xFF1F3A4D.toInt(),
+            0xFF121E2B.toInt(),
+        )
+        const val FineSteps = 40
         const val Width = 1080
         const val Height = 2400
         const val Steps = 10

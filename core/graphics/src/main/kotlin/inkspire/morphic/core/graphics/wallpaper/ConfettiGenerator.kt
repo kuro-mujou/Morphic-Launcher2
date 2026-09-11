@@ -47,6 +47,9 @@ import kotlin.random.Random
  *
  * [dots] is pure and tested — the lattice must cover a *rotated* frame (a corner left bare is a bald patch nothing else
  * explains), the radii must stay inside the cell, and the color weighting must actually favour the early stops.
+ *
+ * **It plans and then paints**, so a shuffle can be scrubbed: [plan] places the discs, [draw] paints them onto any
+ * canvas, and [morph] walks every disc from one frame's cell position to the other's — see docs/MORPH_ENGINE_PLAN.md.
  */
 object ConfettiGenerator : Generator {
 
@@ -69,25 +72,76 @@ object ConfettiGenerator : Generator {
      *   knob with a fraction of its range and almost nothing to show. Every disc the same size is the one case with no
      *   depth at all, and there it is `1` for all of them — see [Dot.depth]'s use in the focus blur.
      * @property ink which palette stop above the ground the disc is painted in, `1..n-1`.
+     * @property nextInk the stop the disc is on its way to, on a moment of a [Morph] — the same as [ink] on a disc
+     *   that was planned. **A stop is a choice rather than a quantity**, so a disc changing ink cannot be half of one;
+     *   it is painted [inkMix] of the way between two. Switching at the midpoint instead would flip every disc whose
+     *   ink a shuffle changes in the same frame, which on a full palette is most of them.
+     * @property inkMix how far from [ink] toward [nextInk] the disc is painted, `0..1`.
      */
-    internal data class Dot(val x: Float, val y: Float, val radius: Float, val depth: Float, val ink: Int)
+    internal data class Dot(
+        val x: Float,
+        val y: Float,
+        val radius: Float,
+        val depth: Float,
+        val ink: Int,
+        val nextInk: Int = ink,
+        val inkMix: Float = 0f,
+    )
+
+    /**
+     * A frame of discs placed but not painted — everything [draw] needs, in no particular palette.
+     *
+     * **In the pixels of the frame it was planned for**, where Vitrall's plan is in a frame of its own: the lattice
+     * pitch is a share of the long side, so this is the same picture at any size of one shape and [draw] reaches
+     * another size by scaling the canvas rather than by re-placing. Planning in pixels is what keeps the bake exactly
+     * the render it was before the split; a round trip through unit coordinates rounds the odd disc edge differently.
+     *
+     * @property focus the *Focus* choice, [DesignParams.variant] resolved — `0` flat, `1` near sharp, `2` far sharp.
+     * @property resolution the lattice's cells across the long side, kept so [morph] can tell whether two plans share
+     *   one lattice.
+     */
+    internal class Plan(
+        val dots: List<Dot>,
+        val focus: Int,
+        val resolution: Int,
+        val width: Int,
+        val height: Int,
+    )
 
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val bitmap = createBitmap(width, height)
-        val canvas = Canvas(bitmap)
-        canvas.drawColor(palette.colorAt(0)) // stop 0 is the ground, light or dark as the palette itself decides
-        if (palette.size < 2) return bitmap
+        draw(Canvas(bitmap), plan(width, height, params, inks = palette.size - 1, seed = seed), palette, width, height)
+        return bitmap
+    }
 
-        val dots = dots(
+    /**
+     * The discs [params] and [seed] describe, in a `[width]` × `[height]` frame, for a palette with [inks] stops above
+     * its ground.
+     *
+     * **It takes the palette's stop count and not its colors**, because the weighting that makes the first ink common
+     * and the last rare is spread over however many stops there are. So a recolor to a palette of the same size is a
+     * redraw of this plan, and one of a different size is a new plan.
+     */
+    internal fun plan(width: Int, height: Int, params: DesignParams, inks: Int, seed: Long): Plan {
+        val resolution = Amount.at(params.density)
+        return Plan(
+            dots = dots(width, height, resolution, params.irregularity, params.scale, inks, seed),
+            focus = params.variant.coerceIn(0, 2),
+            resolution = resolution,
             width = width,
             height = height,
-            resolution = Amount.at(params.density),
-            scatter = params.irregularity,
-            size = params.scale,
-            inks = palette.size - 1,
-            seed = seed,
         )
-        val focus = params.variant.coerceIn(0, 2)
+    }
+
+    /**
+     * Paints [plan] into [canvas] at `[width]` × `[height]`, in [palette] — the bake into a software bitmap and a
+     * scrub into a hardware canvas alike, so the two cannot drift.
+     */
+    internal fun draw(canvas: Canvas, plan: Plan, palette: Palette, width: Int, height: Int) {
+        canvas.drawColor(palette.colorAt(0)) // stop 0 is the ground, light or dark as the palette itself decides
+        if (palette.size < 2) return
+
+        val dots = plan.dots
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
         val blurs = arrayOfNulls<BlurMaskFilter>(BlurLevels + 1)
 
@@ -98,13 +152,77 @@ object ConfettiGenerator : Generator {
         // size: that is what makes both focus variants render sharp when the scatter leaves no depth to work with.
         val farthest = dots.minOfOrNull { it.depth } ?: 0f
 
+        val resized = width != plan.width || height != plan.height
+        if (resized) {
+            canvas.save()
+            canvas.scale(width.toFloat() / plan.width, height.toFloat() / plan.height)
+        }
         // Far discs first, so a near one laps over what is behind it — the ordering a depth of field needs to read.
         for (dot in dots.sortedBy { it.depth }) {
-            paint.color = palette.colorAt(dot.ink)
-            paint.maskFilter = blurFor(dot, focus, nearest, farthest, blurs)
+            paint.color = colorOf(dot, palette)
+            paint.maskFilter = blurFor(dot, plan.focus, nearest, farthest, blurs)
             canvas.drawCircle(dot.x, dot.y, dot.radius, paint)
         }
-        return bitmap
+        if (resized) canvas.restore()
+    }
+
+    /** [dot]'s paint in [palette] — its own stop, or a blend toward the next one while a [Morph] is changing it. */
+    private fun colorOf(dot: Dot, palette: Palette): Int {
+        val ink = palette.colorAt(dot.ink)
+        if (dot.inkMix <= 0f) return ink
+        return LinearGradientGenerator.lerpArgb(ink, palette.colorAt(dot.nextInk), dot.inkMix)
+    }
+
+    /**
+     * Two frames of discs prepared to interpolate, or **null where they are not strewn over the same lattice**.
+     *
+     * **A jittered lattice needs no matching**, and that is this design's finding: the morph plan's rule for scattered
+     * primitives — pair by nearest centroid, scale the unmatched ones in and out — assumed discs with no identity, and
+     * these have one. Every disc belongs to a lattice cell, two frames on one lattice hold the same cells, so a disc's
+     * partner is the disc at its own index, and neither end has pushed it more than half a pitch off that cell.
+     *
+     * The same cells means the same frame and the same [Plan.resolution]; the count then settles which cells survived
+     * the cull at the frame's edge. That cull is monotone in its margin, so of two plans on one lattice one holds the
+     * other's discs — and equal counts mean equal sets.
+     */
+    internal fun morph(from: Plan, to: Plan): Morph? {
+        val sameLattice = from.width == to.width && from.height == to.height && from.resolution == to.resolution
+        return if (sameLattice && from.dots.size == to.dots.size) Morph(from, to) else null
+    }
+
+    /** Two frames of discs, index for index, and every moment between them. */
+    internal class Morph(private val from: Plan, private val to: Plan) {
+
+        /**
+         * The frame [t] of the way across; the ends are the plans themselves, as every design's are.
+         *
+         * **The painter's order is re-sorted per moment and can change mid-scrub**, since it is by depth and depths
+         * cross. Two discs cross only at equal depth, which is equal size, so the swap flips the overlap between two
+         * same-sized discs — and only where they overlap and differ in ink. Holding either end's order instead would
+         * put the pop at that end, where the scrub hands over to the bake.
+         */
+        fun at(t: Float): Plan = when {
+            t <= 0f -> from
+            t >= 1f -> to
+            else -> Plan(
+                dots = List(from.dots.size) { between(from.dots[it], to.dots[it], t) },
+                // A focus is a choice, not a quantity, so it switches at the midpoint — and a shuffle never changes it.
+                focus = if (t < 0.5f) from.focus else to.focus,
+                resolution = from.resolution,
+                width = from.width,
+                height = from.height,
+            )
+        }
+
+        private fun between(a: Dot, b: Dot, t: Float) = Dot(
+            x = a.x + (b.x - a.x) * t,
+            y = a.y + (b.y - a.y) * t,
+            radius = a.radius + (b.radius - a.radius) * t,
+            depth = a.depth + (b.depth - a.depth) * t,
+            ink = a.ink,
+            nextInk = b.ink,
+            inkMix = t,
+        )
     }
 
     /**
@@ -150,9 +268,10 @@ object ConfettiGenerator : Generator {
                 val pick = random.nextFloat()
 
                 // Culled on the *lattice* position at the *largest* radius a disc could take, not on where this one
-                // ended up — so which discs exist is decided by the lattice alone and no knob can add or drop one at
-                // the frame edge. The price is a ring of discs drawn just outside the frame; the alternative is a
-                // count that changes as a slider moves, which is the kind of thing nobody notices until it matters.
+                // ended up — so which discs exist is decided by the lattice and the size, and neither the scatter nor
+                // the seed can add or drop one at the frame edge. The price is a ring of discs drawn just outside the
+                // frame; the alternative is a count that changes as a slider moves, which is the kind of thing nobody
+                // notices until it matters.
                 val bx = cx + col * pitch * cos - row * pitch * sin
                 val by = cy + col * pitch * sin + row * pitch * cos
                 if (offFrame(bx, by, maxRadius + MaxOffset * pitch, width, height)) continue

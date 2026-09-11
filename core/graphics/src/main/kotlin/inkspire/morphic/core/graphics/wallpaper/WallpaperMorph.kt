@@ -18,9 +18,10 @@ import inkspire.morphic.core.model.wallpaper.WallpaperRecipe
  * prepared while nothing is happening and only asked for moments once a finger is down — see
  * docs/MORPH_ENGINE_PLAN.md.
  *
- * **An interface with one implementation per bucket, because the two buckets do genuinely different work.** A
- * subdivision re-cuts the frame into polygons and issues draw calls; a field re-evaluates a small buffer of pixels and
- * lets the canvas blow it up. What they share is this signature, and that is the extent of what they can share.
+ * **An interface with one implementation per kind of design, because the kinds do genuinely different work.** A
+ * subdivision re-cuts the frame into polygons and issues draw calls; a scatter moves independent shapes and issues
+ * draw calls; a field re-evaluates a small buffer of pixels and lets the canvas blow it up. What they share is this
+ * signature, and that is the extent of what they can share.
  */
 interface WallpaperMorph {
 
@@ -50,6 +51,23 @@ private class SubdivisionMorph(
 }
 
 /**
+ * A scatter scrub: every disc walks from its cell position in one frame to its position in the other, at full
+ * resolution.
+ *
+ * **A primitive design like the subdivision, and cheaper**: nothing is re-cut, because the discs are independent and
+ * each already knows its partner — the lattice cell they share.
+ */
+private class ScatterMorph(
+    private val morph: ConfettiGenerator.Morph,
+    private val palette: Palette,
+) : WallpaperMorph {
+
+    override fun draw(canvas: Canvas, t: Float, width: Int, height: Int) {
+        ConfettiGenerator.draw(canvas, morph.at(t), palette, width, height)
+    }
+}
+
+/**
  * A field scrub: the lattice interpolates and the field is re-evaluated on a small buffer, blown up by the canvas.
  *
  * **The downscale is where this bucket's affordability comes from**, and its resolution is the design's own measured
@@ -72,9 +90,9 @@ object WallpaperMorphs {
      * **Null rather than a degraded scrub**, because every way of failing here is a way of putting a *different*
      * picture on screen than the one that will be applied. The refusals:
      *
-     * - **A design with no plan seam.** Vitrall and the mesh gradient are the two so far, one per bucket; M6 of the
-     *   morph plan is the rest of the catalog, one generator at a time. Everything else has a `render` and nothing to
-     *   interpolate.
+     * - **A design with no plan seam.** Vitrall, Confetti and the mesh gradient are the three so far — a subdivision,
+     *   a scatter and a field; M6 of the morph plan is the rest of the catalog, one generator at a time. Everything
+     *   else has a `render` and nothing to interpolate.
      * - **Two different designs.** Two pictures of one design share a *kind* of construction, which is what makes
      *   them interpolable at all; a Vitrall and a mesh gradient share nothing to put into correspondence.
      * - **Two different palettes.** Interpolating two palettes is a real thing to build — the reference does it, its
@@ -104,6 +122,11 @@ object WallpaperMorphs {
                 ),
                 palette,
             )
+
+            WallpaperDesign.CONFETTI -> ConfettiGenerator.morph(
+                ConfettiGenerator.plan(width, height, from.params, palette.size - 1, from.seed),
+                ConfettiGenerator.plan(width, height, to.params, palette.size - 1, to.seed),
+            )?.let { ScatterMorph(it, palette) }
 
             WallpaperDesign.MESH_GRADIENT -> MeshGradientGenerator.morph(
                 MeshGradientGenerator.plan(from.params, palette, from.seed),

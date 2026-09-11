@@ -1,6 +1,6 @@
 # Morph Engine
 
-**Status:** M1–M5 built (2026-09-10); M6 next. Drawn from three screen captures of Smart Launcher's wallpaper
+**Status:** M1–M5 built (2026-09-10); M6 under way — Confetti rolled out (2026-09-11). Drawn from three screen captures of Smart Launcher's wallpaper
 studio taken by the author, each of which overturned a conclusion drawn from the one before.
 
 **Covers:** the render seam both studios draw through — why `Generator.render() → Bitmap` is the wrong shape for a live
@@ -113,6 +113,13 @@ that one cut made, and pairing them separately tears it. That is a **third bucke
 
 The test for which bucket a design is in is one question: **could two of its primitives be moved independently and
 still leave a legal picture?** A scattered dot, yes. A pane, no.
+
+**And the scatter case needs no matcher either, which M6's first design found by reading its construction.** Nearest
+centroid assumed scattered primitives have no identity. This catalog's don't scatter at random — Confetti's discs,
+and `PointScatter`'s points under Voronoi, Soft Overlaps and Flow Lines, all sit on a **jittered lattice**, so every
+primitive belongs to a cell and two seeds on one lattice hold the same cells. The partner is the primitive at the same
+index, and neither end has pushed it more than half a pitch off its cell. The pairing rule above survives only for a
+design that really does place primitives with no lattice under them, and none has been found yet.
 
 ## Which generators can follow — all of them
 
@@ -333,8 +340,37 @@ claim to apply.
     y = 135..159 — the status-bar clock. Worth knowing about this design specifically: **its seed moves only the
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
-- **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Eighteen extractions left in
-  the primitive bucket and twelve parameter structs in the field one, and neither is a rewrite.
+- **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Seventeen extractions left
+  in the primitive bucket and twelve parameter structs in the field one, and neither is a rewrite.
+  - **Confetti ✅ (2026-09-11) — the first scatter, and it is not a scatter.** `plan` / `draw` / `Morph` beside
+    `dots()`, which already was the plan. The discs sit on a jittered lattice, so a disc's partner is the disc at its
+    own index and the morph is a per-disc lerp — a third kind beside the subdivision's re-cut and the field's re-read,
+    and the cheapest of the three. The matching rule above is amended for it.
+  - **The bake: 961 of 961 harness renders byte-identical** to the pre-split baseline, the whole harness rather than
+    the 26 Confetti renders alone, since `WallpaperMorphs` is shared.
+  - **The plan stays in pixels**, where Vitrall's lives in a frame of its own. The lattice pitch is a share of the
+    long side, so a plan is one picture at every size of one shape, and `draw` reaches another size by scaling the
+    canvas. A round trip through unit coordinates would round the odd disc edge differently, and the bake assertion
+    is worth more than the symmetry.
+  - **The plan takes the palette's stop count, not its colors** — the first ink is common and the last rare, spread
+    over however many stops there are. A recolor at the same size stays a redraw.
+  - **A disc's ink blends, it does not switch.** A stop is a choice, so `Vitrall`'s precedent (a flash switches at the
+    midpoint) was on the table — and wrong here: a shuffle changes the ink of most discs on a full palette, and they
+    would all flip in one frame. So a moment's disc carries two stops and a mix.
+  - **The painter's order is re-sorted per moment**, by depth, and depths cross. Two discs cross only at equal depth,
+    which is equal size, so a swap flips only the overlap of two same-sized discs of different inks. Measured at
+    forty steps (colorful, *Near* focus, the worst setting): frame-to-frame mean 0.87–0.99 of 255 at every step, with no
+    spike anywhere — neither the order swaps nor the quantized blur levels show.
+  - **Refused when the lattice differs** — a different frame or resolution, or a different size, which moves the cull
+    at the frame edge. The cull is monotone in its margin, so on one lattice equal counts mean equal sets.
+  - **Verified on emulator-5554**, bichromatic and colorful. The drag changes the picture 2.0% per step, evenly; after
+    a committing release the spring settles in two frames and every frame after is **pixel-identical** to the settled
+    bake. A sub-threshold release returns the screen with **0.000%** of pixels differing.
+  - **What it leaves open: the midpoint is muddy on a full palette.** A disc blending navy to orange passes through
+    brown and khaki, and at `t = 0.5` every changing disc is mid-blend at once, so the middle of a colorful scrub
+    reads as a duller palette. Bichromatic, the default, has one ink and never shows it. A per-disc stagger — each
+    disc's color changing over its own short window, perhaps in the swipe's direction — would keep the middle
+    saturated. It is a design choice rather than a fix, so it was not made.
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a

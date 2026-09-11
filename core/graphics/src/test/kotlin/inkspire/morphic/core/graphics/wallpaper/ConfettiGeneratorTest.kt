@@ -1,6 +1,11 @@
 package inkspire.morphic.core.graphics.wallpaper
 
+import inkspire.morphic.core.model.wallpaper.DesignParams
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.hypot
@@ -125,5 +130,66 @@ class ConfettiGeneratorTest {
     fun `a single ink palette puts every disc on it`() {
         assertEquals(floatArrayOf(1f).toList(), ConfettiGenerator.inkWeights(1).toList())
         assertTrue(dots(inks = 1).all { it.ink == 1 })
+    }
+
+    private fun plan(seed: Long, params: DesignParams = DesignParams(irregularity = 1f)) =
+        ConfettiGenerator.plan(1000, 2000, params, inks = 5, seed = seed)
+
+    /**
+     * **A disc's partner is the disc at its own index**, which is what the morph pairs by — and a misaligned pairing
+     * does not fail, it draws: every disc swings across the frame to a stranger's position and the scrub reads as a
+     * swarm. So this pins the property the pairing rests on: two seeds on one lattice leave every disc nearer its
+     * partner than any stranger could be.
+     */
+    @Test
+    fun `a shuffle keeps the lattice, so every disc is paired with its own cell`() {
+        val scatter = 0.2f
+        val from = plan(seed = 1L, DesignParams(irregularity = scatter))
+        val to = plan(seed = 2L, DesignParams(irregularity = scatter))
+        assertNotNull("two seeds on one lattice must be scrubbable", ConfettiGenerator.morph(from, to))
+        assertEquals(from.dots.size, to.dots.size)
+
+        // Each end pushes a disc up to `scatter / 2` of a pitch off its cell on either axis, so partners are within
+        // `scatter` of a pitch per axis — while the disc one index over starts a whole pitch away and can close at most
+        // that same `scatter` of it. At 0.2 the two ranges are far apart.
+        val pitch = 2000f / from.resolution
+        val reach = pitch * scatter * 1.415f
+        from.dots.zip(to.dots).forEach { (a, b) ->
+            assertTrue("a disc travels ${hypot(b.x - a.x, b.y - a.y)}px of $reach", hypot(b.x - a.x, b.y - a.y) <= reach)
+        }
+    }
+
+    @Test
+    fun `two different lattices are refused rather than paired`() {
+        val coarse = plan(seed = 1L, DesignParams(density = 0f))
+        val fine = plan(seed = 1L, DesignParams(density = 1f))
+        assertNull(ConfettiGenerator.morph(coarse, fine))
+
+        // Size moves the cull at the frame edge, so it changes which discs exist at all even on one lattice.
+        val small = plan(seed = 1L, DesignParams(scale = 0f))
+        val large = plan(seed = 1L, DesignParams(scale = 1f))
+        assertNotEquals(small.dots.size, large.dots.size)
+        assertNull(ConfettiGenerator.morph(small, large))
+    }
+
+    @Test
+    fun `a moment of a scatter morph is its two frames, disc for disc`() {
+        val from = plan(seed = 3L)
+        val to = plan(seed = 4L)
+        val morph = requireNotNull(ConfettiGenerator.morph(from, to))
+
+        assertSame(from, morph.at(0f))
+        assertSame(to, morph.at(1f))
+        val middle = morph.at(0.25f)
+        middle.dots.forEachIndexed { i, dot ->
+            val a = from.dots[i]
+            val b = to.dots[i]
+            assertEquals(a.x + (b.x - a.x) * 0.25f, dot.x, 1e-3f)
+            assertEquals(a.radius + (b.radius - a.radius) * 0.25f, dot.radius, 1e-3f)
+            // The ink is a blend between the two stops, not a switch — so no disc changes color all at once.
+            assertEquals(a.ink, dot.ink)
+            assertEquals(b.ink, dot.nextInk)
+            assertEquals(0.25f, dot.inkMix, 0f)
+        }
     }
 }
