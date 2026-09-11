@@ -455,6 +455,30 @@ class MorphRenderHarness {
         }
     }
 
+    /**
+     * One Flow Lines shuffle between two fans twisting opposite ways, at full waviness, colorful — ten frames.
+     *
+     * The cascade's scrub on an open curve, so the same things to look for: **the fan should swing about the frame's
+     * centre and never bunch toward it**, unwind through a straight rank and twist the other way, and its waves should
+     * travel along the curve rather than fade out in place.
+     */
+    @Test
+    fun renderFlowLinesMorph() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val colorful = PaletteColorMode.resolve(Palette(Dusk), WallpaperColorMode.COLORFUL)
+        val params = DesignParams(irregularity = 1f, colorMode = WallpaperColorMode.COLORFUL)
+        val from = FlowLinesGenerator.plan(params, seed = 42L)
+        val to = (43L..200L).map { FlowLinesGenerator.plan(params, it) }.first { it.sense != from.sense }
+
+        for (step in 0..Steps) {
+            val t = step.toFloat() / Steps
+            val bitmap = createBitmap(Width, Height)
+            FlowLinesGenerator.draw(Canvas(bitmap), FlowLinesGenerator.between(from, to, t), colorful, Width, Height)
+            saveHarnessPng(resolver, "morph_flowlines_${(t * 100).toInt().toString().padStart(3, '0')}.png", bitmap)
+            bitmap.recycle()
+        }
+    }
+
     private companion object {
         /** "Dusk", the render harness's palette — warm sand and terracotta against deep teal. */
         val Dusk = listOf(

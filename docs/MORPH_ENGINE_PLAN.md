@@ -1,7 +1,7 @@
 # Morph Engine
 
 **Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands, Waves, Wave
-Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone, Dot Grid, Mondrian, Modern Mosaic, Rounded Tiles, Ribbon Flow, Ribbons and Polygon Cascade rolled out, and the field bucket re-measured and mostly dissolved
+Dividers, Gradient Columns, Plasma, Bauhaus, Truchet, Halftone, Dot Grid, Mondrian, Modern Mosaic, Rounded Tiles, Ribbon Flow, Ribbons, Polygon Cascade and Flow Lines rolled out, and the field bucket re-measured and mostly dissolved
 (2026-09-11). Drawn
 from three screen captures of Smart Launcher's wallpaper studio taken by the author, each of which overturned a
 conclusion drawn from the one before.
@@ -370,7 +370,7 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  six primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
+  five primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
   shuffle of either is the same picture.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
     null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
@@ -765,6 +765,24 @@ claim to apply.
   - **Verified on emulator-5554**, over two shuffles. The drag changes 10–18% of pixels per step, evenly, the spring
     settles in three frames and every frame after is pixel-identical to the bake, and a sub-threshold release returns
     **0.000%** of pixels changed.
+  - **Flow Lines ✅ (2026-09-11) — the cascade's scrub on an open curve.** The two designs are one construction, and
+    the seed decides the same three things in both: the base curve's harmonic phases, the run, and the twist's sense.
+    So the plan and the scrub are Polygon Cascade's, through the same `SeededHarmonics.turnedTo` and `RunDraw`. The
+    fan swings about the frame's center, its waves travel along the curve, and a twist changing sense unwinds through
+    none. `tweenRun`, which only laid a run down at once, lost its last caller and is deleted.
+  - **The bake: 961 of 961 harness renders byte-identical**, and the cascade's scrub frames with them. Between two
+    fans twisting opposite ways at full waviness, the harness frames change 25–38% of pixels per step, with no step
+    at either end: a shuffle re-weaves the whole fan.
+  - **Verified on emulator-5554**, over three shuffles. The drag changes about 27% of pixels per step, evenly, the
+    spring settles in four frames and every frame after is pixel-identical to the bake, and a sub-threshold release
+    returns **0.000%** of pixels changed.
+  - **What it leaves open: a shuffle that reverses the twist unweaves the fan halfway.** The default twist is about
+    150°, and the envelope it weaves is this design's character. A sense interpolated between its signs passes
+    through no twist at all, so the middle of such a shuffle is a plain rank of parallel waves that re-weaves the
+    other way; the *Turn* knob appears to dip to zero mid-swipe. Two of the three shuffles driven did it, and about
+    half do. The cascade does the same, less visibly, since its default turn is smaller and its copies are shapes
+    rather than an envelope. No continuous path between the two senses avoids it; the alternatives are switching at
+    the midpoint, a pop, or holding one end's sense, which ends the scrub on a picture that is not the bake.
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a

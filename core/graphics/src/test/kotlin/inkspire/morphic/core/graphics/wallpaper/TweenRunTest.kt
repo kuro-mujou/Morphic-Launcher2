@@ -43,13 +43,4 @@ class TweenRunTest {
             assertEquals(expected.lastY, turned.lastY, 0.01f)
         }
     }
-
-    /** A run drawn at once is the same run as one kept and laid down later — the bake's path and a plan's are one. */
-    @Test
-    fun `a run drawn at once is the run a plan lays down`() {
-        val now = tweenRun(1080, 2400, Random(5))
-        val later = runDraw(Random(5)).at(1080, 2400)
-        assertEquals(now.firstX, later.firstX, 0f)
-        assertEquals(now.lastY, later.lastY, 0f)
-    }
 }

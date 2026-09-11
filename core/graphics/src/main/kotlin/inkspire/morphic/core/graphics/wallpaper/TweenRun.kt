@@ -88,9 +88,6 @@ internal class RunDraw(val bearing: Float, val share: Float) {
 /** A [RunDraw] from [random] — the bearing, then the length. */
 internal fun runDraw(random: Random): RunDraw = RunDraw(random.nextFloat() * TwoPi, random.nextFloat())
 
-/** A [TweenRun] across a `[width] × [height]` frame, centred on it, drawn from [random] — [runDraw] laid down at once. */
-internal fun tweenRun(width: Int, height: Int, random: Random): TweenRun = runDraw(random).at(width, height)
-
 private const val TwoPi = 2f * PI.toFloat()
 
 /** The share of the frame's extent along the heading that the run takes, at its shortest and longest. */

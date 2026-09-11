@@ -1,5 +1,6 @@
 package inkspire.morphic.core.graphics.wallpaper
 
+import inkspire.morphic.core.model.wallpaper.DesignParams
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -54,5 +55,19 @@ class FlowLinesGeneratorTest {
             "the far end must pass a full revolution",
             FlowLinesGenerator.turnRadians(1f) > 2f * PI.toFloat(),
         )
+    }
+
+    /**
+     * **A twist changing sense unwinds through none at the middle of a scrub**, rather than snapping from one way to
+     * the other — the sense is the one thing here that is a choice, and a choice interpolated has to pass through zero.
+     */
+    @Test
+    fun `a twist changing sense passes through none halfway`() {
+        val plans = (1L..40L).map { FlowLinesGenerator.plan(DesignParams(), it) }
+        val a = plans.first { it.sense > 0f }
+        val b = plans.first { it.sense < 0f }
+        assertEquals(0f, FlowLinesGenerator.between(a, b, 0.5f).sense, 1e-6f)
+        assertEquals(a.sense, FlowLinesGenerator.between(a, b, 0f).sense, 0f)
+        assertEquals(b.sense, FlowLinesGenerator.between(a, b, 1f).sense, 0f)
     }
 }

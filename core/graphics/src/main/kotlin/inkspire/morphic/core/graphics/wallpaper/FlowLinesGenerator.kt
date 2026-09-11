@@ -75,20 +75,70 @@ object FlowLinesGenerator : Generator {
         rotation = "Turn",
     )
 
+    /**
+     * A fan planned but not painted: the knobs, and the three things the seed decides — [PolygonCascadeGenerator]'s
+     * three, since the two are one construction.
+     *
+     * @property wave the base curve's bend, its phases the seed's.
+     * @property run the segment the copies' centres march along, before any frame.
+     * @property sense which way the fan twists, `1` or `-1` — and anything between, mid-scrub, where it untwists.
+     */
+    internal class Plan(val params: DesignParams, val wave: SeededHarmonics, val run: RunDraw, val sense: Float)
+
     override fun render(width: Int, height: Int, palette: Palette, params: DesignParams, seed: Long): Bitmap {
         val bitmap = createBitmap(width, height)
-        val canvas = Canvas(bitmap)
-        canvas.drawColor(palette.colorAt(palette.size - 1)) // the dark end is the ground the lit curves are drawn on
-        val tones = RampTones.belowGround(palette)
-        if (tones.isEmpty()) return bitmap // a single-stop palette is all ground, with nothing to draw on it
-        val ramp = Palette(tones.toList())
+        draw(Canvas(bitmap), plan(params, seed), palette, width, height)
+        return bitmap
+    }
 
+    /** The fan [params] and [seed] describe — the wave, then the run, then the twist's sense, as drawn always. */
+    internal fun plan(params: DesignParams, seed: Long): Plan {
         val random = Random(seed)
         // Drawn before the run, so moving the waviness knob cannot shift the seeded stream underneath the placement.
         val wave = SeededHarmonics(WaveWeights, WaveHarmonics, random)
-        val march = tweenRun(width, height, random)
+        val run = runDraw(random)
         // Which way the fan twists is the seed's, as the cascade's is: the knob asks how far, not which way.
-        val turn = (if (random.nextBoolean()) 1f else -1f) * turnRadians(params.rotation)
+        val sense = if (random.nextBoolean()) 1f else -1f
+        return Plan(params, wave, run, sense)
+    }
+
+    /**
+     * A scrub between two fans: the run swings about the frame's centre to the other's heading ([RunDraw]), the waves
+     * travel along the curve, and a twist changing sense unwinds through none — the cascade's scrub, on an open curve.
+     *
+     * **Nothing to pair**: copy `i` is the same step along the tween at either end.
+     */
+    override fun scrub(
+        width: Int,
+        height: Int,
+        palette: Palette,
+        params: DesignParams,
+        from: Long,
+        to: Long,
+    ): WallpaperMorph? {
+        val a = plan(params, from)
+        val b = plan(params, to)
+        return WallpaperMorph { canvas, t, w, h -> draw(canvas, between(a, b, t), palette, w, h) }
+    }
+
+    /** The fan [t] of the way from [a] to [b]; the ends are the plans themselves, as every design's are. */
+    internal fun between(a: Plan, b: Plan, t: Float): Plan = when {
+        t <= 0f -> a
+        t >= 1f -> b
+        else -> Plan(a.params, a.wave.turnedTo(b.wave, t), a.run.turnedTo(b.run, t), a.sense + (b.sense - a.sense) * t)
+    }
+
+    /** Paints [plan] into [canvas] at `[width]` × `[height]`, in [palette] — the bake and every scrub frame alike. */
+    internal fun draw(canvas: Canvas, plan: Plan, palette: Palette, width: Int, height: Int) {
+        val params = plan.params
+        canvas.drawColor(palette.colorAt(palette.size - 1)) // the dark end is the ground the lit curves are drawn on
+        val tones = RampTones.belowGround(palette)
+        if (tones.isEmpty()) return // a single-stop palette is all ground, with nothing to draw on it
+        val ramp = Palette(tones.toList())
+
+        val wave = plan.wave
+        val march = plan.run.at(width, height)
+        val turn = plan.sense * turnRadians(params.rotation)
 
         val copies = copyCount(params.density)
         val waves = waveCount(params.irregularity)
@@ -135,7 +185,6 @@ object FlowLinesGenerator : Generator {
                 prevY = y
             }
         }
-        return bitmap
     }
 
     /** How many copies [density] asks for — a loose rank up to a woven envelope. */
