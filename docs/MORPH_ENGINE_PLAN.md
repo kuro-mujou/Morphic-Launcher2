@@ -1,7 +1,7 @@
 # Morph Engine
 
 **Status:** M1–M5 built (2026-09-10); M6 under way — Confetti, Soft Overlaps, Voronoi, Diagonal Bands, Waves, Wave
-Dividers, Gradient Columns, Plasma, Bauhaus and Truchet rolled out, and the field bucket re-measured and mostly dissolved
+Dividers, Gradient Columns, Plasma, Bauhaus, Truchet and Halftone rolled out, and the field bucket re-measured and mostly dissolved
 (2026-09-11). Drawn
 from three screen captures of Smart Launcher's wallpaper studio taken by the author, each of which overturned a
 conclusion drawn from the one before.
@@ -370,7 +370,7 @@ claim to apply.
     warp**, since the node colours are a function of position and palette alone, so a mesh shuffle is inherently
     subtle and the scrub is faithful to that rather than underpowered.
 - **M6 — roll out**, one generator at a time, each with the byte-identical bake assertion. Left, after the field survey:
-  fourteen primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
+  thirteen primitive extractions and four edge-cut designs waiting on open question 6. **Linear Gradient and Louvers are owed no scrub at all**: both ignore the seed, so a
   shuffle of either is the same picture.
   - **The seam is on `Generator` now (2026-09-11): `scrub(width, height, palette, params, from, to)`**, defaulting to
     null, with `WallpaperMorph` a `fun interface` each design returns a one-line lambda of. `WallpaperMorphs.between`
@@ -573,6 +573,29 @@ claim to apply.
     is a field of crescents and no loop survives it. That is what turning tiles looks like, and it recovers by the
     last tenth. A stagger in the swipe's direction would keep most of the maze whole at any moment. That is the same
     design choice as Confetti's, and it is not made here either.
+  - **Halftone ✅ (2026-09-11) — a scatter on a lattice, whose seed is a whole noise field.** The seed decides two
+    things: each dot's jitter off its cell, and the noise field that sizes and tones every dot. The dots pair by index
+    as Confetti's do, and each drifts within its own cell. A dot the field leaves bare at one end stays in the plan and
+    grows out of nothing, since a dot's radius is continuous at the floor where it vanishes. The plan holds positions
+    in shares of the frame, where the render always put them, so it takes no size and no palette.
+  - **The field turns rather than blends, and the numbers are why.** Two seeds' fields are unrelated, and a straight
+    average of two unrelated fields swings only about 0.7 as far from its middle as either one does. Measured over
+    eight shuffles of the default screen, a straight blend's midpoint keeps **0.70** of the ends' spread, so the middle
+    would pass for the same screen with its bare paper filling in and its biggest dots shrinking. Weighted by the cosine
+    and sine of a quarter turn, the squares of the two weights sum to one, and the midpoint keeps **1.00**.
+    `the middle of a scrub keeps the screen's contrast, where a straight blend flattens it` measures both, so the reason
+    for the turn stays checked. In the frames the effect shows directly: bare paper holds at 87.6–88.2% of the frame
+    across the whole scrub, and the clusters appear to slide rather than fade in place, because a turn between two
+    smooth fields moves their features.
+  - **The field walks the ramp.** A dot's tone was always the field read off the ramp, so a dot changing tone passes
+    through the palette's own colors between them, as Voronoi's cells do.
+  - **The bake: 961 of 961 harness renders byte-identical.** Across the harness's ten steps at full jitter the
+    per-step change holds at 4.5–4.7% of pixels, with no step at either end.
+  - **Verified on emulator-5554.** The drag changes the picture evenly at 2.7% of pixels per step, the spring settles
+    in three frames and every frame after is pixel-identical to the bake, and a sub-threshold release returns
+    **0.000%** of pixels changed.
+  - **`turnField` stays in Halftone until a second consumer arrives.** Dot Grid is the likely one: its seed is also
+    only a noise field, which pushes tiles across band seams.
 
 **Measure before M1 — the instrument exists now.** `GeneratorTimingHarness` (`core:graphics`, androidTest) times every
 generator at six sizes from full-screen down to a 64th of the pixels and least-squares each design's cost curve into a

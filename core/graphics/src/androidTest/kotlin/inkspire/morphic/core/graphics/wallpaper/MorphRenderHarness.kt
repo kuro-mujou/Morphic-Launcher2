@@ -236,6 +236,34 @@ class MorphRenderHarness {
         }
     }
 
+    /**
+     * One Halftone shuffle with its dots at full jitter, colorful — ten frames.
+     *
+     * What to look for: **dots should drift within their own cells and swell or shrink in place, never cross the
+     * screen**; bare paper should open and close in patches rather than flicker dot by dot; and the middle frame should
+     * be as contrasty a screen as the ends — big dots and bare paper both — rather than an even field of middling dots.
+     */
+    @Test
+    fun renderHalftoneMorph() {
+        val resolver = InstrumentationRegistry.getInstrumentation().targetContext.contentResolver
+        val colorful = PaletteColorMode.resolve(Palette(Dusk), WallpaperColorMode.COLORFUL)
+        val params = DesignParams(irregularity = 1f, colorMode = WallpaperColorMode.COLORFUL)
+        val morph = requireNotNull(
+            HalftoneGenerator.morph(
+                HalftoneGenerator.plan(Width, Height, params, seed = 42L),
+                HalftoneGenerator.plan(Width, Height, params, seed = 43L),
+            ),
+        )
+
+        for (step in 0..Steps) {
+            val t = step.toFloat() / Steps
+            val bitmap = createBitmap(Width, Height)
+            HalftoneGenerator.draw(Canvas(bitmap), morph.at(t), colorful, Width, Height)
+            saveHarnessPng(resolver, "morph_halftone_${(t * 100).toInt().toString().padStart(3, '0')}.png", bitmap)
+            bitmap.recycle()
+        }
+    }
+
     private companion object {
         /** "Dusk", the render harness's palette — warm sand and terracotta against deep teal. */
         val Dusk = listOf(
