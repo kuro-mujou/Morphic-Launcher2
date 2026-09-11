@@ -3,6 +3,10 @@ package inkspire.morphic.core.graphics.wallpaper
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
+import kotlin.math.hypot
+import kotlin.math.max
+import kotlin.random.Random
 
 /**
  * Ribbon Flow's pure mappings — how many lanes the rank holds, how far apart they sit, how fine the field is, how
@@ -71,13 +75,74 @@ class RibbonFlowGeneratorTest {
     @Test
     fun `the amplitude ceiling stays inside the ordering bound at every frequency`() {
         for (frequency in listOf(1e-4f, 1e-3f, 5e-3f, 0.05f)) {
-            val worstSlope = RibbonFlowGenerator.amplitudeCeiling(frequency) * frequency * 2f
+            val worstSlope = RibbonFlowGenerator.amplitudeCeiling(frequency) * frequency * RibbonFlowGenerator.PerlinMaxSlope
             assertTrue("frequency $frequency crosses at $worstSlope", worstSlope < 1f)
+        }
+    }
+
+    /**
+     * **The slope the bound divides by is the field's own**, sampled rather than assumed. The test above only holds
+     * the ceiling against [RibbonFlowGenerator.PerlinMaxSlope]; this is what keeps that number honest, and it is the
+     * one that would have caught the lines crossing.
+     */
+    @Test
+    fun `the field never climbs across a lane faster than the slope the bound assumes`() {
+        val random = Random(7)
+        var steepest = 0f
+        repeat(20) {
+            val field = PerlinNoise2d(random.nextLong())
+            repeat(40_000) {
+                val x = random.nextFloat() * 20f
+                val y = random.nextFloat() * 20f
+                steepest = max(steepest, abs(field.at(x, y + Step) - field.at(x, y - Step)) / (2 * Step))
+            }
+        }
+        assertTrue("the field climbs at $steepest", steepest < RibbonFlowGenerator.PerlinMaxSlope)
+    }
+
+    /**
+     * **No two neighboring lines cross, at any detail or count, at full Distortion** — the promise itself, checked on
+     * the offsets the render draws rather than on the bound that is meant to guarantee it.
+     */
+    @Test
+    fun `no two neighboring lines cross at full distortion`() {
+        val diagonal = hypot(1079f, 2399f)
+        for (roundness in listOf(0f, 0.25f, 0.5f, 0.75f, 1f)) for (density in listOf(0f, 0.5f, 1f)) {
+            val count = RibbonFlowGenerator.lineCount(density)
+            val spacing = RibbonFlowGenerator.spacingPx(diagonal, count)
+            val frequency = RibbonFlowGenerator.detailFor(roundness) / 2400f
+            val amplitude = RibbonFlowGenerator.amplitudeFor(frequency, diagonal)
+            for (seed in 1L..6L) assertLanesInOrder(PerlinNoise2d(seed)::at, count, spacing, amplitude, frequency)
+        }
+    }
+
+    /** Every lane of [count] lies strictly before the next, all along a frame's length. */
+    private fun assertLanesInOrder(
+        field: (Float, Float) -> Float,
+        count: Int,
+        spacing: Float,
+        amplitude: Float,
+        frequency: Float,
+    ) {
+        for (lane in 0 until count - 1) {
+            val across = (lane - (count - 1) / 2f) * spacing
+            var along = -1500f
+            while (along < 1500f) {
+                val here = RibbonFlowGenerator.offsetAt(field, along, across, amplitude, frequency)
+                val next = RibbonFlowGenerator.offsetAt(field, along, across + spacing, amplitude, frequency)
+                assertTrue("lanes $lane and ${lane + 1} cross at $along", next > here)
+                along += 4f
+            }
         }
     }
 
     @Test
     fun `a degenerate frequency still answers a finite amplitude`() {
         assertTrue(RibbonFlowGenerator.amplitudeCeiling(0f).isFinite())
+    }
+
+    private companion object {
+        /** Half the span a slope is measured over, in the field's own units. */
+        const val Step = 1e-3f
     }
 }

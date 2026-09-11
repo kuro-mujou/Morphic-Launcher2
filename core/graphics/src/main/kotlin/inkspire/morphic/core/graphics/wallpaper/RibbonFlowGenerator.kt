@@ -40,8 +40,9 @@ import kotlin.math.sin
  * and a first pass did stretch it four times, on a reading of the reference that turned out to be the noise's own
  * periodicity rather than any anisotropy. Measuring the reference's structure *down* a column gave a period within a
  * fifth of the one along a line, so its field is round; and at that frequency the ordering bound lands its maximum
- * deflection on about the deviation the reference actually draws at full *Distortion*. Stretching it was worth three
- * times too much wander at the default, which reads as a zigzag where the reference sweeps.
+ * deflection about 30% under the deviation the reference draws at full *Distortion* — under it rather than on it,
+ * since the bound is what keeps the lines from crossing. Stretching it was worth three times too much wander at the
+ * default, which reads as a zigzag where the reference sweeps.
  *
  * **[DesignParams.density] is the rank's size, not the number of lines you can see.** The lanes are ruled across the
  * frame's *diagonal* plus a margin either side, so at any angle some of them start off-frame — which is what keeps
@@ -141,13 +142,12 @@ object RibbonFlowGenerator : Generator {
         val path = Path()
         repeat(count) { lane ->
             val across = centerAcross + (lane - (count - 1) * Half) * spacing
-            val fieldAcross = across * frequency
             path.rewind()
             var along = alongStart
             var first = true
             while (along < alongEnd + step) {
                 val at = min(along, alongEnd)
-                val offset = across + amplitude * noise.at(at * frequency, fieldAcross)
+                val offset = offsetAt(noise::at, at, across, amplitude, frequency)
                 path.pointAt(at * alongX + offset * acrossX, at * alongY + offset * acrossY, first)
                 first = false
                 along += step
@@ -156,6 +156,20 @@ object RibbonFlowGenerator : Generator {
         }
         return bitmap
     }
+
+    /**
+     * Where the lane at [across] is drawn, [along] its length — the lane displaced sideways by [amplitude] times
+     * [field], read at the lane's **own** `across` so that neighbours stay in order (see the class note).
+     *
+     * All in the rank's own frame and in pixels; [frequency] is cycles per pixel.
+     */
+    internal fun offsetAt(
+        field: (Float, Float) -> Float,
+        along: Float,
+        across: Float,
+        amplitude: Float,
+        frequency: Float,
+    ): Float = across + amplitude * field(along * frequency, across * frequency)
 
     /** Starts the path or extends it — the two calls differ only in which one a point is the first of. */
     private fun Path.pointAt(x: Float, y: Float, first: Boolean) = if (first) moveTo(x, y) else lineTo(x, y)
@@ -223,8 +237,14 @@ object RibbonFlowGenerator : Generator {
     /** The share of the diagonal a line may wander off its lane — the rank is ruled this much wider on each side. */
     private const val MaxWander = 0.15f
 
-    /** The steepest this Perlin field climbs per unit of its own domain — the divisor [amplitudeCeiling] is built on. */
-    private const val PerlinMaxSlope = 2f
+    /**
+     * The steepest this Perlin field climbs per unit of its own domain — the divisor [amplitudeCeiling] is built on.
+     *
+     * **Measured, not reasoned: the field climbs to about `2.75` where its quintic fade is steepest**, well past the
+     * `2` its unit gradients suggest. A bound below the true slope fails silently — neighbouring lines cross at high
+     * *Distortion* while each still looks like a line — so a test samples the field and holds this above what it finds.
+     */
+    internal const val PerlinMaxSlope = 2.8f
 
     /** How far inside the ordering bound the largest amplitude sits, so the extreme setting is safe rather than exact. */
     private const val NonCrossingMargin = 0.85f
