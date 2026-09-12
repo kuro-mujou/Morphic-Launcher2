@@ -1,5 +1,6 @@
 package inkspire.morphic.launcher
 
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.Bundle
@@ -14,6 +15,7 @@ import inkspire.morphic.core.icon.compose.LocalIconRenderManager
 import inkspire.morphic.core.icon.render.IconRenderManager
 import inkspire.morphic.core.model.RotationMode
 import inkspire.morphic.data.settings.SettingsRepository
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -23,6 +25,15 @@ class MainActivity : ComponentActivity() {
 
     private val iconRenderManager: IconRenderManager by inject()
     private val settingsRepository: SettingsRepository by inject()
+
+    /**
+     * Presses of the home button, for the composition to answer.
+     *
+     * **Not a `StateFlow`, because this is an event and not a state** — two presses in a row mean two resets, and a
+     * conflating holder would swallow the second. `extraBufferCapacity` so `tryEmit` never has to suspend or fail;
+     * a press with nothing collecting is correctly dropped, since there is then no composition to reset.
+     */
+    private val homePresses = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge(
@@ -43,10 +54,28 @@ class MainActivity : ComponentActivity() {
         setContent {
             CompositionLocalProvider(LocalIconRenderManager provides iconRenderManager) {
                 ProvideIconRecipes {
-                    LauncherNavHost()
+                    LauncherNavHost(homePresses = homePresses)
                 }
             }
         }
+    }
+
+    /**
+     * The home button, arriving at a launcher that is already running.
+     *
+     * **This is the only signal there is, and without it the button does nothing visible.** `launchMode="singleTask"`
+     * plus `category.HOME` means pressing home does not start anything — the system hands the live instance a fresh
+     * HOME intent, and an Activity that ignores it leaves whatever was on top still on top. So settings, the icon
+     * studio and the wallpaper studio each sat over the home screen the user had just asked for, with only the back
+     * gesture to escape them.
+     *
+     * Filtered on `CATEGORY_HOME` rather than acting on every new intent: the same Activity is also reachable through
+     * `CATEGORY_LAUNCHER` (its row in another launcher's app list), and arriving that way is an ordinary open rather
+     * than a request to be taken home.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.hasCategory(Intent.CATEGORY_HOME)) homePresses.tryEmit(Unit)
     }
 
     /**

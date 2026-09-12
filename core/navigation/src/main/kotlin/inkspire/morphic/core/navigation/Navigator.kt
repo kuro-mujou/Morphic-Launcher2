@@ -34,6 +34,23 @@ interface Navigator {
      *   caller (or the system back handler) to let the gesture mean something else — on a launcher, "already home".
      */
     fun goBack(): Boolean
+
+    /**
+     * Pops everything above the start destination in one move.
+     *
+     * **The third method this interface's own notes said to add when a caller finally needed it**, and the caller is
+     * the home button. A launcher is `singleTask` and already running, so pressing home does not relaunch anything —
+     * it delivers a fresh HOME intent to the live instance, and without this the settings screen or the icon studio
+     * simply stays on top of the launcher the user just asked to see. That is the one navigation failure a launcher
+     * cannot have: home is the button that is supposed to always work.
+     *
+     * Not `goBack()` in a loop at the call site, which is the shape this would otherwise take: that is the reaching
+     * *around* the interface those notes warn about, and it animates every intermediate destination on the way past.
+     *
+     * @return true if anything was popped; false when already at the start destination, so a caller can tell "went
+     *   home" from "was already there" — the shell needs that difference to decide whether anything else must reset.
+     */
+    fun goHome(): Boolean
 }
 
 /**
@@ -65,5 +82,14 @@ fun rememberLauncherNavigator(backStack: NavBackStack<NavKey>): Navigator = reme
         // Guards the start destination: the launcher's HOME must always be under everything, so back from HOME is
         // "nothing to pop" rather than an empty stack with no screen to show.
         override fun goBack(): Boolean = backStack.size > 1 && backStack.removeLastOrNull() != null
+
+        // Same guard, applied until it bites. A loop rather than `subList(1, size).clear()` because the backing list
+        // is snapshot state and the sublist view of one is not something to hand a bulk mutation to; the stack is a
+        // handful of entries deep and the writes coalesce into the frame either way.
+        override fun goHome(): Boolean {
+            val popped = backStack.size > 1
+            while (backStack.size > 1) backStack.removeLastOrNull()
+            return popped
+        }
     }
 }

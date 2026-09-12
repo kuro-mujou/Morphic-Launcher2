@@ -1500,6 +1500,25 @@ being offered.
   the About screen's whole argument. Showing the version and linking out achieves the same end, and the routes out
   wait on a website and a live listing that do not exist yet.
 
+**The home button works from everywhere, which it did not.** `MainActivity` had no `onNewIntent`, and that is the
+whole of the signal: the launcher is `launchMode="singleTask"` and declares `category.HOME`, so pressing home starts
+nothing — the system hands the live instance a fresh HOME intent, and an Activity ignoring it leaves whatever was on
+top still on top. Settings, the icon studio and the wallpaper studio each sat over the home screen the user had just
+asked for, escapable only by back. L1 has the same bug and no `onNewIntent` anywhere, so there was nothing to port.
+
+- **It is answered at two layers, because it is two different things.** `Navigator.goHome()` pops the stack to
+  `HomeRoute` — the third method that interface's own notes said to add *when a caller needed it*, rather than a
+  `goBack()` loop reaching around it and animating every destination on the way past. And `LauncherShell` closes an
+  open side surface, which popping cannot reach: an open APPS surface is not a destination, it is a pan on the pager.
+  Pressing home from APPS and landing on APPS was the same fault one level down. The two handlers live together in
+  `ReturnToHome`, since back and home are one rule — "an open surface closes to HOME" — through two mechanisms.
+- **The press travels as a `MutableSharedFlow`, not a `StateFlow`**: it is an event, and a conflating holder would
+  swallow the second of two presses. Filtered on `CATEGORY_HOME`, because the same Activity is also reachable through
+  `CATEGORY_LAUNCHER` — its row in another launcher's app list — and arriving that way is an ordinary open.
+- The signal's one extra parameter pushed `LauncherNavHost` past detekt's length bound, and what came out is
+  `HomeEntry`: the only destination with real wiring in it, so the key-to-screen table around it reads as a table
+  again rather than as one long function.
+
 **Navigation + shell (B5) done.** `core:navigation` holds `HomeRoute` and a two-method `Navigator`; feature
 vocabulary stays *out* (L1 exported an 11-value `SettingsSection` to every consumer), which is why `SettingsRoute`
 itself lives in `feature:settings` now that it carries a section — see the surface-menu notes. `app`

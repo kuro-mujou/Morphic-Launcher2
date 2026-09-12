@@ -50,6 +50,7 @@ import inkspire.morphic.core.designsystem.surface.ScrollAxes
 import inkspire.morphic.core.designsystem.surface.SurfaceBinding
 import inkspire.morphic.core.designsystem.surface.SurfaceGestureLock
 import inkspire.morphic.core.designsystem.surface.SurfacePager
+import inkspire.morphic.core.designsystem.surface.SurfacePagerState
 import inkspire.morphic.core.designsystem.surface.rememberSurfacePagerState
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
@@ -75,6 +76,7 @@ import inkspire.morphic.feature.apps.AppsScreen
 import inkspire.morphic.feature.apps.scrollAxes
 import inkspire.morphic.feature.home.HomeScreen
 import inkspire.morphic.feature.home.scrollAxes
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
@@ -97,6 +99,7 @@ import org.koin.compose.koinInject
  */
 @Composable
 fun LauncherShell(
+    homePresses: Flow<Unit>,
     onOpenSettings: () -> Unit,
     onOpenAppsSettings: (AppsLayout) -> Unit,
     onEditIcon: (ComponentKey) -> Unit,
@@ -157,9 +160,7 @@ fun LauncherShell(
         // always loses. See `ItemSwipeClaim`.
         val itemSwipeClaim = remember { ItemSwipeClaim() }
 
-        // Back closes an open side surface and returns to HOME. Disabled when already on HOME so back falls through to
-        // the system — on a launcher there is nowhere further to go, and swallowing it would trap the user.
-        BackHandler(enabled = pagerState.openEdge != null) { scope.launch { pagerState.close() } }
+        ReturnToHome(pagerState, homePresses)
 
         // **The launcher's one drag coordinator, and this is the layer it belongs to** — the common ancestor of HOME
         // and every side surface, which is what docs/DRAG_AND_DROP_DESIGN.md §2 has specified from the start. Each
@@ -335,6 +336,28 @@ private val TopActionZoneId = ZoneId("top-action")
  * the launcher — which is exactly what [DropIntent.REMOVE] exists to say. The band itself is the affordance.
  */
 private val TopActionRemovePlan = PlacementPlan(GridPlacement(0, 0, 0), DropIntent.REMOVE)
+
+/**
+ * The two ways out of an open side surface: the back gesture, and the home button.
+ *
+ * **One place, because they are one rule** — "an open surface closes to HOME" — reached by two mechanisms the platform
+ * keeps apart. Back is a `BackHandler` and is *disabled* when nothing is open, so on HOME it falls through to the
+ * system: there is nowhere further to go on a launcher, and swallowing it would trap the user. Home arrives as an
+ * intent to an Activity that is already running, so it can only be a signal from `MainActivity` rather than something
+ * the composition observes for itself, and it is guarded on something being open so a press while already resting on
+ * HOME animates nothing.
+ *
+ * **Neither is answerable by popping the navigation stack**, which is what handles the same press on every other
+ * destination: an open side surface is not a destination at all, it is a pan on this pager.
+ */
+@Composable
+private fun ReturnToHome(pagerState: SurfacePagerState, homePresses: Flow<Unit>) {
+    val scope = rememberCoroutineScope()
+    BackHandler(enabled = pagerState.openEdge != null) { scope.launch { pagerState.close() } }
+    LaunchedEffect(homePresses, pagerState) {
+        homePresses.collect { if (pagerState.openEdge != null) pagerState.close() }
+    }
+}
 
 /**
  * The **top-action band** and the drop zone behind it: two halves of one thing, so they are wired together here
