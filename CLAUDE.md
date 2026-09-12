@@ -460,10 +460,10 @@ What is built per module, why each piece is shaped the way it is, and what is de
   `~/.gradle/wrapper/dists/gradle-9.6.1-bin/*/gradle-9.6.1/bin/gradle :app:assembleDebug` works today.
 - **No item is reachable by an accessibility service** — `launcherItemGestures` is raw `pointerInput`
   with no `semantics { onClick { … } }`.
-- `feature:apps` declares junit but has **no tests**. `feature:settings` has seven, and
-  `StudioViewportTest` is **red** — it was written against a `StudioViewport` signature that has since changed
-  (`chrome`/`centroid`/`drag` replaced five flat parameters), so the module's whole test source set fails to compile
-  and no test in it can run until that one file is brought up to date.
+- `feature:apps` declares junit but has **no tests**. `feature:settings` has seven classes / 42 tests, all green.
+  Worth knowing why that sentence is here: one of them was left behind by a signature change and stopped the whole
+  module's tests **compiling**, so for a while none of the other six could run either. A test source set compiles as
+  a unit — a stale test is not a gap in its own coverage, it is a gap in everyone's.
 - **The About section is the one screen whose content is generated rather than written**, and two build steps stand
   behind it: the AboutLibraries plugin on `:app` (`R.raw.aboutlibraries`, the open-source list) and
   `PrivacyPolicyHtmlTest`, which regenerates the repo-root `privacy-policy.html` from `PrivacyPolicy.kt` and fails
