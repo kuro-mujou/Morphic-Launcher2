@@ -43,6 +43,11 @@ Thumbs.db
 *.keystore
 keystore.properties
 
+# Play Console package-name ownership token (Android developer verification). Kept on disk so re-verifying does not
+# mean another trip through the console, but it identifies the developer account rather than the app, so it is not
+# the repo's to carry.
+app/src/main/assets/adi-registration.properties
+
 # Captured logcat — the icon-measurement diagnostics are dumped here while chasing a sizing bug
 # (see docs/ICON_SIZE_PLAN.md). One device's output, never a shared artifact.
 icon-measure.txt
