@@ -1,5 +1,6 @@
 package inkspire.morphic.feature.settings.iconstudio
 
+import androidx.compose.ui.geometry.Offset
 import inkspire.morphic.data.settings.IconStudioWorkspace
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -19,20 +20,61 @@ class StudioViewportTest {
     private val canvas = 1000f
     private val topInset = 100f
 
+    /**
+     * The panel as a sheet along the bottom, which is the ordinary arrangement — so the icon rests at the top.
+     *
+     * **Every case below that is not about the resting place uses this one**, and none of them is weaker for it: the
+     * pan and zoom clamps are rules about the canvas and the bound's size, and the chrome reaches them only through
+     * where the bound starts. Running all of them twice would be the same arithmetic from a different origin.
+     */
+    private val chrome = StudioCanvasChrome(topInset, StudioPanelEdge.BOTTOM)
+
+    /** The panel as a column down the leading edge — the arrangement with its own resting rule. See [sideResting]. */
+    private val sideChrome = StudioCanvasChrome(topInset, StudioPanelEdge.START)
+
     /** The bound at rest, which every other case is read against. */
-    private fun resting() = studioIconBound(canvas, canvas, topInset, IconStudioWorkspace.Default)
+    private fun resting() = studioIconBound(canvas, canvas, IconStudioWorkspace.Default, chrome)
+
+    /** The bound at rest in the side arrangement. */
+    private fun sideResting() = studioIconBound(canvas, canvas, IconStudioWorkspace.Default, sideChrome)
 
     @Test
-    fun `rests against the chrome at the top`() {
+    fun `rests against the chrome at the top with the panel along the bottom`() {
         // "All the way to the top" means exactly this: the bound's upper edge is the inset and nothing more.
         assertEquals(topInset, resting().top, Tolerance)
     }
 
     @Test
-    fun `rests shifted off the rail's edge`() {
+    fun `rests shifted off the rail's edge with the panel along the bottom`() {
         // Left of center, because the layer rail rests down the end edge — see `IconBoundShift`.
         val center = resting().let { it.left + it.side / 2f }
         assertTrue("expected the bound left of center, was $center", center < canvas / 2f)
+    }
+
+    @Test
+    fun `rests against the end with the panel down the leading edge`() {
+        // **The same rule turned ninety degrees, and the one the two above cannot speak for.** The panel is a column
+        // on the leading edge now, so "as far from the controls as the canvas allows" means the *end* — the opposite
+        // side from the arrangement above, which is why the edge is a parameter rather than something the viewport
+        // assumes. Getting it wrong rests the icon underneath the panel that is being used to edit it, and the
+        // picture is perfectly plausible: an icon, on a canvas, at a sensible size.
+        val bound = sideResting()
+        val center = bound.left + bound.side / 2f
+
+        assertTrue("expected the bound right of center, was $center", center > canvas / 2f)
+        // Short of the edge, not against it: what the gap keeps clear is the layer rail, which rests there too.
+        assertTrue("the bound reached the end edge: ${bound.left + bound.side}", bound.left + bound.side < canvas)
+    }
+
+    @Test
+    fun `centers below the chrome with the panel down the leading edge`() {
+        // Vertically it takes the middle of what is left under the chrome, there being no second control on that axis
+        // to lean away from — so the space above the bound and the space below it are the same. Asserted as that
+        // equality rather than against a computed y, which would be this file restating `restingCenter`'s arithmetic
+        // and would agree with it however wrong both were.
+        val bound = sideResting()
+
+        assertEquals(bound.top - topInset, canvas - (bound.top + bound.side), Tolerance)
     }
 
     @Test
@@ -40,14 +82,12 @@ class StudioViewportTest {
         val dragged = IconStudioWorkspace.Default.pinched(
             canvasWidth = canvas,
             canvasHeight = canvas,
-            topInset = topInset,
-            centroidX = 500f,
-            centroidY = 500f,
-            dragX = 60f,
-            dragY = 40f,
+            chrome = chrome,
+            centroid = Offset(500f, 500f),
+            drag = Offset(60f, 40f),
             zoomBy = 1f,
         )
-        val bound = studioIconBound(canvas, canvas, topInset, dragged)
+        val bound = studioIconBound(canvas, canvas, dragged, chrome)
 
         assertEquals(resting().left + 60f, bound.left, Tolerance)
         assertEquals(resting().top + 40f, bound.top, Tolerance)
@@ -65,14 +105,12 @@ class StudioViewportTest {
         val zoomed = IconStudioWorkspace.Default.pinched(
             canvasWidth = canvas,
             canvasHeight = canvas,
-            topInset = topInset,
-            centroidX = centroidX,
-            centroidY = centroidY,
-            dragX = 0f,
-            dragY = 0f,
+            chrome = chrome,
+            centroid = Offset(centroidX, centroidY),
+            drag = Offset(0f, 0f),
             zoomBy = 2f,
         )
-        val after = studioIconBound(canvas, canvas, topInset, zoomed)
+        val after = studioIconBound(canvas, canvas, zoomed, chrome)
 
         // Where the centroid sat within the bound, as a fraction of it, is what must not move.
         assertEquals(
@@ -93,11 +131,9 @@ class StudioViewportTest {
         val pushed = atCeiling.pinched(
             canvasWidth = canvas,
             canvasHeight = canvas,
-            topInset = topInset,
-            centroidX = 200f,
-            centroidY = 200f,
-            dragX = 0f,
-            dragY = 0f,
+            chrome = chrome,
+            centroid = Offset(200f, 200f),
+            drag = Offset(0f, 0f),
             zoomBy = 2f,
         )
 
@@ -118,27 +154,23 @@ class StudioViewportTest {
             workspace = workspace.pinched(
                 canvasWidth = canvas,
                 canvasHeight = canvas,
-                topInset = topInset,
-                centroidX = 500f,
-                centroidY = 500f,
-                dragX = 200f,
-                dragY = 0f,
+                chrome = chrome,
+                centroid = Offset(500f, 500f),
+                drag = Offset(200f, 0f),
                 zoomBy = 1f,
             )
         }
-        val pinned = studioIconBound(canvas, canvas, topInset, workspace)
+        val pinned = studioIconBound(canvas, canvas, workspace, chrome)
 
         workspace = workspace.pinched(
             canvasWidth = canvas,
             canvasHeight = canvas,
-            topInset = topInset,
-            centroidX = 500f,
-            centroidY = 500f,
-            dragX = -50f,
-            dragY = 0f,
+            chrome = chrome,
+            centroid = Offset(500f, 500f),
+            drag = Offset(-50f, 0f),
             zoomBy = 1f,
         )
-        val returned = studioIconBound(canvas, canvas, topInset, workspace)
+        val returned = studioIconBound(canvas, canvas, workspace, chrome)
 
         assertEquals(pinned.left - 50f, returned.left, Tolerance)
     }
@@ -148,14 +180,12 @@ class StudioViewportTest {
         val shoved = IconStudioWorkspace.Default.pinched(
             canvasWidth = canvas,
             canvasHeight = canvas,
-            topInset = topInset,
-            centroidX = 500f,
-            centroidY = 500f,
-            dragX = 9_000f,
-            dragY = 9_000f,
+            chrome = chrome,
+            centroid = Offset(500f, 500f),
+            drag = Offset(9_000f, 9_000f),
             zoomBy = 1f,
         )
-        val bound = studioIconBound(canvas, canvas, topInset, shoved)
+        val bound = studioIconBound(canvas, canvas, shoved, chrome)
         val centerX = bound.left + bound.side / 2f
         val centerY = bound.top + bound.side / 2f
 
@@ -176,15 +206,13 @@ class StudioViewportTest {
             workspace = workspace.pinched(
                 canvasWidth = canvas,
                 canvasHeight = canvas,
-                topInset = topInset,
-                centroidX = 500f,
-                centroidY = 500f,
-                dragX = -300f,
-                dragY = 0f,
+                chrome = chrome,
+                centroid = Offset(500f, 500f),
+                drag = Offset(-300f, 0f),
                 zoomBy = 1f,
             )
         }
-        val pushed = studioIconBound(canvas, canvas, topInset, workspace)
+        val pushed = studioIconBound(canvas, canvas, workspace, chrome)
 
         // Dragged as far left as it goes, the icon's *right* edge has arrived at the canvas's right edge — the whole
         // of that side is reachable — and has not gone past it, so no blank canvas shows beside it.
@@ -199,15 +227,13 @@ class StudioViewportTest {
             workspace = workspace.pinched(
                 canvasWidth = canvas,
                 canvasHeight = canvas,
-                topInset = topInset,
-                centroidX = 500f,
-                centroidY = 500f,
-                dragX = 400f,
-                dragY = 400f,
+                chrome = chrome,
+                centroid = Offset(500f, 500f),
+                drag = Offset(400f, 400f),
                 zoomBy = 1f,
             )
         }
-        val bound = studioIconBound(canvas, canvas, topInset, workspace)
+        val bound = studioIconBound(canvas, canvas, workspace, chrome)
 
         assertTrue("a gap opened on the left: ${bound.left}", bound.left <= 0f)
         assertTrue("a gap opened at the top: ${bound.top}", bound.top <= 0f)
@@ -220,11 +246,9 @@ class StudioViewportTest {
         val untouched = IconStudioWorkspace.Default.copy(panX = 0.2f).pinched(
             canvasWidth = 0f,
             canvasHeight = 0f,
-            topInset = 0f,
-            centroidX = 0f,
-            centroidY = 0f,
-            dragX = 30f,
-            dragY = 30f,
+            chrome = StudioCanvasChrome(0f, StudioPanelEdge.BOTTOM),
+            centroid = Offset(0f, 0f),
+            drag = Offset(30f, 30f),
             zoomBy = 1.5f,
         )
 

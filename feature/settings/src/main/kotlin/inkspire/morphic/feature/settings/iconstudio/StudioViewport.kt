@@ -115,8 +115,8 @@ internal val StudioZoomRange = 0.5f..3f
  * icon has been dragged" at any zoom. The centroid-anchored half of a pinch is [pinched]'s job, which is what keeps
  * this one a plain resolution with nothing remembered in it.
  *
- * @param topInset how much of the canvas's top edge the chrome occupies — the system inset plus the row of pill
- *   buttons. The resting bound starts immediately below it, which is what "all the way to the top" means here.
+ * @param chrome how much of the canvas's top edge is occupied — the system inset plus the row of pill buttons — and
+ *   which edge the control panel is on, since that is the side the resting bound is placed away from.
  */
 internal fun studioIconBound(
     canvasWidth: Float,
