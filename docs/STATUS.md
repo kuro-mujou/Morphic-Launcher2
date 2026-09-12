@@ -1537,7 +1537,7 @@ since nothing was consumed.
 - One extraction fell out of it rather than being a tidy-up: `PanPump` now owns **settling**, so the "join the drain
   before you spring" rule is stated once instead of at three call sites each carrying its own copy of the comment.
 
-**Navigation + shell (B5) done.** `core:navigation` holds `HomeRoute` and a two-method `Navigator`; feature
+**Navigation + shell (B5) done.** `core:navigation` holds `HomeRoute` and a three-method `Navigator`; feature
 vocabulary stays *out* (L1 exported an 11-value `SettingsSection` to every consumer), which is why `SettingsRoute`
 itself lives in `feature:settings` now that it carries a section — see the surface-menu notes. `app`
 once declared its own dev-harness key, which is what proved `entryProvider` is a mapping and not a registry — a
