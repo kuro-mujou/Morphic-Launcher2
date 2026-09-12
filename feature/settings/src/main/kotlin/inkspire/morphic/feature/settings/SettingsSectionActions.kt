@@ -28,6 +28,10 @@ internal fun SettingsSectionActions(section: SettingsSection?) {
         SettingsSection.DOCK,
         SettingsSection.FOLDER,
         SettingsSection.EXTRAS,
+        SettingsSection.ABOUT,
+        SettingsSection.PERMISSIONS,
+        SettingsSection.PRIVACY,
+        SettingsSection.LICENSES,
         null,
             -> Unit
     }

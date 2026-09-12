@@ -1,6 +1,8 @@
 package inkspire.morphic.feature.settings.di
 
 import inkspire.morphic.feature.settings.SettingsShellViewModel
+import inkspire.morphic.feature.settings.about.AboutViewModel
+import inkspire.morphic.feature.settings.about.LicensesViewModel
 import inkspire.morphic.feature.settings.apps.AppsSectionViewModel
 import inkspire.morphic.feature.settings.dock.DockViewModel
 import inkspire.morphic.feature.settings.effects.EffectsViewModel
@@ -41,6 +43,12 @@ val settingsSurfaceModule = module {
     viewModel { OrientationViewModel(get()) }
     viewModel { EffectsViewModel(get(), get()) }
     viewModel { IconsViewModel(get(), get()) }
+
+    // About reads the package manager rather than a store, so its `get()` is the application `Context` from
+    // `androidContext()`. Licenses reads the manifest `:app` generated, which reaches here as an interface —
+    // see `LicenseManifestSource`.
+    viewModel { AboutViewModel(get()) }
+    viewModel { LicensesViewModel(get()) }
 
     // The one ViewModel here taking a parameter: the studio cannot work out *what it is editing* for itself, and
     // that arrives as the destination. Passed at `koinViewModel { parametersOf(route) }` rather than read from a

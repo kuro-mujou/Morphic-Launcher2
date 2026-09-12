@@ -47,6 +47,15 @@ style:
     max: 4
 
 complexity:
+  # **A `when` over an enum is a lookup table, and its arm count is the size of its domain rather than a measure of
+  # how tangled it is.** Four functions in `feature:settings` are exactly that — section to title, section to pane,
+  # section to app-bar actions, section to parent — and they are exhaustive *on purpose*, so that a section added
+  # later fails to compile until every one of them says what it does. Under the default they get harder to keep
+  # honest with each section added, which pushes toward an `else` branch: the one shape that would let a new section
+  # silently render the wrong pane. So a method whose whole body is one `when` is exempt, and everything else is
+  # still measured at detekt's own threshold.
+  CyclomaticComplexMethod:
+    ignoreSingleWhenExpression: true
   # Deliberately *not* `ignoreAnnotated: ['Composable']`. A long composable is exactly the thing worth finding — a
   # 446-line one is hiding sections that want names. 100 is loose enough that ordinary Compose layout passes and
   # tight enough that the real offenders do not.

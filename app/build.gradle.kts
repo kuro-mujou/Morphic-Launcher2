@@ -5,6 +5,8 @@ plugins {
     alias(libs.plugins.launcher.android.application.compose)
     // `app` declares its own `@Serializable` nav key (the dev harness), so it needs the plugin itself.
     alias(libs.plugins.kotlin.serialization)
+    // Emits `R.raw.aboutlibraries` from the resolved dependency graph — the About screen's open-source list.
+    alias(libs.plugins.aboutlibraries.android)
 }
 
 /**
@@ -20,6 +22,32 @@ plugins {
 val keystorePropertiesFile = rootProject.file("keystore.properties")
 val keystoreProperties = Properties().apply {
     if (keystorePropertiesFile.exists()) keystorePropertiesFile.inputStream().use { load(it) }
+}
+
+/**
+ * The open-source list, generated rather than written down.
+ *
+ * The plugin walks **this module's** resolved graph — which is the application's, and so the only one that describes
+ * what actually ships — reads each artifact's POM for its name, author and license, and writes the result into
+ * `R.raw.aboutlibraries` before Kotlin compiles. `:app` reads that id directly (`RawLicenseManifest`), so a resource
+ * that failed to generate is a compile error rather than an empty screen in a release build, where `shrinkResources`
+ * would additionally have stripped a resource nothing referenced by name.
+ *
+ * `fetchRemoteLicense`/`fetchRemoteFunding` stay off: both reach GitHub during the build, which makes the build
+ * network-dependent and rate-limited to fill in metadata a POM already carries.
+ */
+aboutLibraries {
+    collect {
+        fetchRemoteLicense = false
+        fetchRemoteFunding = false
+    }
+    export {
+        // `generated` is a build timestamp, and it alone would make every build's output differ from the last for
+        // no reason anyone can see. `description` and `funding` are per-artifact prose the screen does not show.
+        // **`content` deliberately stays** — it is the license *text*, deduplicated into one entry per license
+        // rather than one per library, and a licenses screen that cannot show the license is half a screen.
+        excludeFields.addAll("generated", "description", "funding")
+    }
 }
 
 android {

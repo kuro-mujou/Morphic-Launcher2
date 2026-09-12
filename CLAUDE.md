@@ -436,7 +436,7 @@ launch onto the repository; we don't.)
 
 ## Current status
 
-The launcher runs: HOME (both pairings), all five APPS layouts, widgets, the drag toolkit, eight
+The launcher runs: HOME (both pairings), all five APPS layouts, widgets, the drag toolkit, nine
 settings sections, the icon studio, wallpaper. Foundations P0–P1 are done and P9 is flipped — this
 declares `category.HOME` and resolves from the home button.
 
@@ -460,7 +460,15 @@ What is built per module, why each piece is shaped the way it is, and what is de
   `~/.gradle/wrapper/dists/gradle-9.6.1-bin/*/gradle-9.6.1/bin/gradle :app:assembleDebug` works today.
 - **No item is reachable by an accessibility service** — `launcherItemGestures` is raw `pointerInput`
   with no `semantics { onClick { … } }`.
-- `feature:settings` and `feature:apps` declare junit but have **no tests**.
+- `feature:apps` declares junit but has **no tests**. `feature:settings` has seven, and
+  `StudioViewportTest` is **red** — it was written against a `StudioViewport` signature that has since changed
+  (`chrome`/`centroid`/`drag` replaced five flat parameters), so the module's whole test source set fails to compile
+  and no test in it can run until that one file is brought up to date.
+- **The About section is the one screen whose content is generated rather than written**, and two build steps stand
+  behind it: the AboutLibraries plugin on `:app` (`R.raw.aboutlibraries`, the open-source list) and
+  `PrivacyPolicyHtmlTest`, which regenerates the repo-root `privacy-policy.html` from `PrivacyPolicy.kt` and fails
+  until the result is committed. Editing the policy therefore takes two steps, and the test is what makes the second
+  one unskippable.
 
 ## Conventions summary
 

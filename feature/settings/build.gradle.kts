@@ -65,6 +65,13 @@ dependencies {
     implementation(libs.haze.blur)
     implementation(libs.haze.blur.materials)
 
+    // The About section's open-source list. `:app` generates the manifest and hands it here as a string (see
+    // `LicenseManifestSource`); this module owns the schema it is parsed with, since it is the only one that reads it.
+    // The `kotlin-serialization` plugin is already applied above for this module's nav keys.
+    implementation(libs.kotlinx.serialization.json)
+
+    implementation(libs.timber) // a manifest that will not parse is a build fault, and this screen is where it shows
+
     // This module's first test, for `IconStudioState.canUseFixedSource` — a pure rule about which sources a layer may
     // take, and the sort of decision this codebase tests rather than eyeballs (`CellFit`, `MenuAnchoring`,
     // `AppCollectionHostState`). It is worth pinning because getting it wrong is silent in both directions: too strict

@@ -4,12 +4,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ViewList
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Dock
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.ScreenRotation
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Wallpaper
@@ -104,6 +108,32 @@ enum class SettingsSection {
      * this sentence rather than the name.
      */
     EXTRAS,
+
+    /**
+     * **About**: what this build is, what it asks the device for, and the two documents that answer for it.
+     *
+     * The one section that configures nothing — every other value here names something the user can change. It is a
+     * section anyway because it is reached the way the others are and drawn in the same panes, and giving it a
+     * mechanism of its own would be a second kind of settings row for a single destination.
+     *
+     * A hub, with [PERMISSIONS], [PRIVACY] and [LICENSES] beneath it. None belongs in the index: a top-level row for
+     * the licenses of a launcher's dependencies would sit at the same level as the home screen.
+     */
+    ABOUT,
+
+    /**
+     * Every permission the installed package declares, as the package manager reports them. Under [ABOUT].
+     *
+     * A destination rather than a block on the hub, which is where it started: it is a list, and it was the longest
+     * thing on a screen whose job is to point elsewhere.
+     */
+    PERMISSIONS,
+
+    /** The privacy policy, in full, in the app. Under [ABOUT]. */
+    PRIVACY,
+
+    /** Every open-source library this build ships, with its license. Under [ABOUT]. */
+    LICENSES,
 }
 
 /**
@@ -126,9 +156,8 @@ internal data class SettingsSectionMeta(
  * pane said "Widget area" would be worse than either. Every other row ignores the argument, which is the honest cost
  * of keeping one vocabulary rather than two.
  */
-internal fun SettingsSection.meta(homeLayout: HomeLayout): SettingsSectionMeta {
-    val isList = homeLayout == HomeLayout.LIST_WITH_WIDGET_AREA
-    return when (this) {
+internal fun SettingsSection.meta(homeLayout: HomeLayout): SettingsSectionMeta =
+    when (this) {
         SettingsSection.WALLPAPER -> SettingsSectionMeta(
             "Wallpaper", Icons.Outlined.Wallpaper,
         )
@@ -154,9 +183,9 @@ internal fun SettingsSection.meta(homeLayout: HomeLayout): SettingsSectionMeta {
             // and a surface does not change identity when its arrangement does.
             "Home screen", Icons.Outlined.Home,
         )
-        SettingsSection.HOME_GRID -> mainAreaMeta(isList)
+        SettingsSection.HOME_GRID -> mainAreaMeta(homeLayout)
 
-        SettingsSection.DOCK -> sideZoneMeta(isList)
+        SettingsSection.DOCK -> sideZoneMeta(homeLayout)
 
         SettingsSection.APPS -> SettingsSectionMeta(
             "App screen", Icons.Outlined.Apps,
@@ -169,8 +198,25 @@ internal fun SettingsSection.meta(homeLayout: HomeLayout): SettingsSectionMeta {
         SettingsSection.EXTRAS -> SettingsSectionMeta(
             "Extras", Icons.Outlined.Tune,
         )
+
+        SettingsSection.ABOUT -> SettingsSectionMeta(
+            "About", Icons.Outlined.Info,
+        )
+
+        SettingsSection.PERMISSIONS -> SettingsSectionMeta(
+            "Permissions", Icons.Outlined.Lock,
+        )
+
+        SettingsSection.PRIVACY -> SettingsSectionMeta(
+            "Privacy policy", Icons.Outlined.PrivacyTip,
+        )
+
+        // Named for what it is rather than "Licenses": on its own that word reads as *this app's* license, which is
+        // the one thing the pane does not show.
+        SettingsSection.LICENSES -> SettingsSectionMeta(
+            "Open-source licenses", Icons.Outlined.Code,
+        )
     }
-}
 
 /**
  * HOME's **main area** row, named for what the current pairing makes it.
@@ -181,19 +227,25 @@ internal fun SettingsSection.meta(homeLayout: HomeLayout): SettingsSectionMeta {
  * Split out of [meta] with [sideZoneMeta] because those two are the only rows that read the pairing at all: leaving
  * their branches inline made a lookup table of eleven entries read as a function with logic in it, and pushed it
  * past detekt's complexity bound the moment a twelfth section arrived.
+ *
+ * Each reads the pairing itself rather than taking an `isList` computed by [meta]. That is what leaves [meta] a bare
+ * `when` and nothing else — the shape `CyclomaticComplexMethod.ignoreSingleWhenExpression` exempts, and the reason
+ * this table can go on gaining a row per section without pressure toward an `else`.
  */
-private fun mainAreaMeta(isList: Boolean): SettingsSectionMeta = if (isList) {
-    SettingsSectionMeta("List", Icons.AutoMirrored.Outlined.ViewList)
-} else {
-    SettingsSectionMeta("Grid", Icons.Outlined.GridView)
-}
+private fun mainAreaMeta(homeLayout: HomeLayout): SettingsSectionMeta =
+    if (homeLayout == HomeLayout.LIST_WITH_WIDGET_AREA) {
+        SettingsSectionMeta("List", Icons.AutoMirrored.Outlined.ViewList)
+    } else {
+        SettingsSectionMeta("Grid", Icons.Outlined.GridView)
+    }
 
 /** HOME's **side zone** row, named for what the current pairing makes it — [mainAreaMeta]'s twin. */
-private fun sideZoneMeta(isList: Boolean): SettingsSectionMeta = if (isList) {
-    SettingsSectionMeta("Widget area", Icons.Outlined.Widgets)
-} else {
-    SettingsSectionMeta("Dock", Icons.Outlined.Dock)
-}
+private fun sideZoneMeta(homeLayout: HomeLayout): SettingsSectionMeta =
+    if (homeLayout == HomeLayout.LIST_WITH_WIDGET_AREA) {
+        SettingsSectionMeta("Widget area", Icons.Outlined.Widgets)
+    } else {
+        SettingsSectionMeta("Dock", Icons.Outlined.Dock)
+    }
 
 /**
  * The section this one is reached *through*, or null when it is a row in the list.
@@ -210,6 +262,7 @@ private fun sideZoneMeta(isList: Boolean): SettingsSectionMeta = if (isList) {
 internal val SettingsSection.parent: SettingsSection?
     get() = when (this) {
         SettingsSection.HOME_GRID, SettingsSection.DOCK -> SettingsSection.HOME
+        SettingsSection.PERMISSIONS, SettingsSection.PRIVACY, SettingsSection.LICENSES -> SettingsSection.ABOUT
         SettingsSection.WALLPAPER,
         SettingsSection.EFFECTS,
         SettingsSection.ICONS,
@@ -219,6 +272,7 @@ internal val SettingsSection.parent: SettingsSection?
         SettingsSection.APPS,
         SettingsSection.FOLDER,
         SettingsSection.EXTRAS,
+        SettingsSection.ABOUT,
             -> null
     }
 
@@ -261,4 +315,8 @@ internal val settingsGroups: List<SettingsGroup> = listOf(
     // "Personalization" it would claim to be a look; what it holds is neither, and a third heading over a single row
     // would be a label longer than the thing it labels.
     SettingsGroup(null, listOf(SettingsSection.EXTRAS)),
+    // **About sits in a panel of its own rather than beside Extras**, though both are unheaded single rows and the
+    // list would look tidier with one panel holding two. Every other row in this index changes the launcher; this one
+    // only describes it, and the gap between two panels is the only thing in the list that can say so.
+    SettingsGroup(null, listOf(SettingsSection.ABOUT)),
 )

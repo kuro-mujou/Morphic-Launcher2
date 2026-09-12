@@ -58,6 +58,11 @@ haze = "2.0.0-alpha04"
 # First-run coach-mark tour for the Icon Studio (icon-only tool rail).
 kmp-showcase = "0.1.0"
 
+# AboutLibraries — build-time only. Walks the resolved dependency graph, scrapes each POM, and emits the
+# open-source list the About screen reads. The list is *derived* rather than written down, which is the whole
+# reason for the dependency: a hand-kept one is wrong the first time a library is added and says nothing about it.
+aboutlibraries = "15.2.0"
+
 [libraries]
 # AndroidX core
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core" }
@@ -140,6 +145,8 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
+# Applied to `:app` alone: the graph that ships is the application's, not any one module's.
+aboutlibraries-android = { id = "com.mikepenz.aboutlibraries.plugin.android", version.ref = "aboutlibraries" }
 
 # Convention plugins — defined in build-logic, applied to modules
 launcher-android-application = { id = "launcher.android.application" }

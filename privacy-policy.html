@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Morphic Launcher — Privacy Policy</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fbfbfa; --fg: #1a1a19; --muted: #5f5f5c; --rule: #e2e2df; --card: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #121211; --fg: #ebebe8; --muted: #9a9a95; --rule: #2b2b29; --card: #1a1a19; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0 1.25rem 5rem;
+    background: var(--bg); color: var(--fg);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  main { max-width: 44rem; margin: 0 auto; }
+  header { padding: 4rem 0 2rem; border-bottom: 1px solid var(--rule); margin-bottom: 2.5rem; }
+  h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 .6rem; letter-spacing: -0.02em; }
+  h2 { font-size: 1.15rem; margin: 2.75rem 0 .75rem; letter-spacing: -0.01em; }
+  h3 { font-size: 1rem; margin: 1.75rem 0 .4rem; }
+  p, li { color: var(--fg); }
+  .meta { color: var(--muted); font-size: .9rem; margin: 0; }
+  .pkg {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .875em; background: var(--card); border: 1px solid var(--rule);
+    border-radius: 4px; padding: .1em .35em;
+  }
+  .lede {
+    background: var(--card); border: 1px solid var(--rule); border-radius: 12px;
+    padding: 1.25rem 1.4rem; margin: 0 0 1rem;
+  }
+  .lede p { margin: 0; font-size: 1.05rem; }
+  ul { padding-left: 1.25rem; }
+  li { margin: .4rem 0; }
+  a { color: inherit; text-underline-offset: 3px; }
+  footer {
+    margin-top: 3.5rem; padding-top: 1.5rem; border-top: 1px solid var(--rule);
+    color: var(--muted); font-size: .9rem;
+  }
+</style>
+</head>
+<body>
+<main>
+
+  <header>
+    <h1>Privacy Policy — Morphic Launcher</h1>
+    <p class="meta">Package <span class="pkg">inkspire.morphic.launcher</span> · Effective 12 September 2026</p>
+  </header>
+
+  <div class="lede">
+    <p>Morphic Launcher collects nothing and sends nothing. It has no account, no ads, no analytics and no crash reporting. It does not request the Android INTERNET permission, so it cannot transmit data anywhere even in principle — the operating system enforces this, and you can check it yourself on the About screen.</p>
+  </div>
+  <p>Everything below describes what the app reads on your device, and why. None of it leaves your device.</p>
+
+  <h2>What the app accesses on your device</h2>
+
+  <h3>Your installed apps</h3>
+  <p>A launcher's job is to show and start your apps, so it reads the list of apps installed on the device along with their names and icons. This is used to draw your home screen and app list, and to launch what you tap. The list is never recorded off-device.</p>
+
+  <h3>Your layout and settings</h3>
+  <p>Where you put each icon, your folders, your icon designs, your wallpaper choice and every preference you set are stored in the app's own private storage on the device. Uninstalling the app deletes all of it.</p>
+
+  <h3>Images you choose</h3>
+  <p>With your permission to read images (READ_MEDIA_IMAGES, or READ_EXTERNAL_STORAGE on Android 12 and older), the app can use a picture you pick as a wallpaper. There is one other, narrower use: the wallpaper capture feature has no way to take a screenshot for you, so it asks you to take one and then watches for the next image to appear in your gallery, using only that one. It does not scan, index, upload or otherwise read your photo library.</p>
+
+  <h3>Setting your wallpaper</h3>
+  <p>SET_WALLPAPER lets the app apply a wallpaper you have chosen. It is used for nothing else.</p>
+
+  <h3>Uninstalling apps</h3>
+  <p>REQUEST_DELETE_PACKAGES lets the app ask Android to uninstall an app when you choose to remove one from your home screen. Android shows its own confirmation, and the app cannot remove anything without it.</p>
+
+  <h2>Two things handled by others, not by us</h2>
+  <ul>
+    <li><strong>Widgets.</strong> The launcher can host widgets belonging to other apps. Those widgets are the other app's code, running under that app's own privacy policy — not this one.</li>
+    <li><strong>Android's own backup.</strong> If device backup is enabled in your Android settings, the app's settings and layout may be included in your device's backup to your own Google account. That backup is performed and controlled by Android and Google, not by this app, and is governed by Google's privacy policy. You can exclude it by turning device backup off in your Android settings.</li>
+  </ul>
+
+  <h2>Data we collect</h2>
+  <p>None. There is no server, no account, no identifier, no telemetry and no third-party SDK that collects anything. Nothing is shared or sold, because nothing is gathered in the first place.</p>
+
+  <h2>Children</h2>
+  <p>The app is not directed at children and collects no personal information from anyone, of any age.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If the app ever gains a feature that changes any of the above, this policy will be updated and its effective date changed before that version is released.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy: <a href="mailto:mguyenmanhtuan@gmail.com">mguyenmanhtuan@gmail.com</a></p>
+
+  <footer>Morphic Launcher · Last updated 12 September 2026</footer>
+</main>
+</body>
+</html>

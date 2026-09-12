@@ -1409,6 +1409,68 @@ because a store cannot check either without measuring. **Every surface now repor
 narrower `setGridConfig`/`setPagerGrid`: pushing the input down means page capacity and icon sizing both derive there.
 Full plan, phase state and the settled dock spec: [docs/SETTINGS_PORT_PLAN.md](SETTINGS_PORT_PLAN.md).
 
+**About is the ninth section, and the only one that configures nothing.** A hub over three children — permissions, the
+privacy policy and the open-source list — and the first pane in the surface that is pure report. The name and version
+it shows are read from `PackageManager` rather than from `BuildConfig`, which is a deliberate choice of *source*: a
+version string a build file wrote is wrong exactly when someone asks about it, where a package-manager read describes
+the APK on the device in front of the reader. The app's own **label** is read the same way, so this screen cannot end
+up calling the launcher something the home-app chooser does not.
+
+- **It is one version row and three ways onward, after a pass on the device.** The first cut put the package name, the
+  min/target SDK levels and the SHA-256 of the signing certificate on the hub, under a `Package` heading, with the
+  whole permission list inline under a second one. On a phone that pushed the three rows that matter below the fold to
+  show facts nobody had arrived with — so the fingerprint block is gone and the permission list became a destination.
+  What is left above the documents is the row a bug report starts with: `Version / 0.1.0 (1)`, plus a **`Debug`**
+  marker that is *absent* on a release build rather than inverted, per the standing rule — the ordinary case has
+  nothing to announce and a debug build must not be mistakable for one.
+
+- **The permissions pane is Android's answer, not ours.** Every declared permission with its constant in full
+  (unprettified: a shortened permission cannot be checked against a manifest or against the system's own app-info
+  screen, and checking is what the reader is there for), with a one-line note where we have one and *no note* where we
+  do not. A permission this screen has not been told about still appears, and still looks unexplained, because a
+  curated list is worth nothing — and that is not a hypothetical: the device run turned up
+  `READ_MEDIA_VISUAL_USER_SELECTED`, which Android 14 attaches beside `READ_MEDIA_IMAGES` without anyone here writing
+  it down, sitting unexplained exactly as designed until a note was written for it. The other such entry is the
+  signature permission `androidx.core` names after the host package. The pane shares `AboutViewModel` with the hub —
+  one `getPackageInfo`, one snapshot, two views of it.
+  - **The `INTERNET` line is gone, and it is the one deletion worth recording.** The pane used to open with a sentence
+    chosen by `AboutState.requestsInternet` — a search of what Android reports, so that the strongest claim on the
+    screen could not outlive the day it stopped being true. It was cut on the author's call as prose over a list that
+    already says it: `INTERNET` is simply not among the entries. The fact is still verifiable, one inference further
+    away, and the derivation is the thing to reinstate rather than re-typed prose if the claim is ever wanted back.
+
+- **The open-source list is generated at build time, and that is its whole value.** The AboutLibraries Gradle plugin
+  (`com.mikepenz.aboutlibraries.plugin.android`, applied to `:app` alone) walks the *application's* resolved
+  dependency graph, reads each artifact's POM and writes `R.raw.aboutlibraries` before Kotlin compiles — 144
+  artifacts and two licenses at the time of writing, every one with a name, publisher, website and license. Only the
+  plugin is taken: the screen is ours, over our own `MorphicGroupPanel` rows, so `aboutlibraries-compose` never
+  enters the graph and the Material You look it draws never reaches this palette. `fetchRemoteLicense` is off
+  (it makes the build depend on GitHub to fill in what a POM already carries) and `generated` is excluded from the
+  export (a build timestamp would make every build's output differ from the last), while `content` is deliberately
+  kept — it is the license *text*, deduplicated to one entry per license rather than one per library, and a licenses
+  screen that cannot show the license is half a screen.
+
+- **`:app` reads the raw resource and hands it across as an interface** (`LicenseManifestSource`, declared in
+  `feature:settings`, implemented by `RawLicenseManifest` in `:app`'s `launcherModule`). The obvious alternative —
+  `Resources.getIdentifier` from inside the feature — fails *in release only*: a resource referenced by name and not
+  by symbol is one `shrinkResources` may strip, so the screen would be full in debug and empty in the APK users
+  install. Named directly in the module that owns it, a missing manifest is a compile error.
+
+- **Licenses before libraries**, which follows the data rather than the reference screens this was modelled on: the
+  manifest deduplicates a license across every artifact under it, so the two full texts sit at the top once and each
+  library names which applies. The alternative puts the same eleven thousand characters of Apache text behind 140
+  separate rows. A license expands in place rather than opening a third pane — the settings shell nests exactly one
+  level, and this pane is already the second.
+
+- **The privacy policy lives in the app, and the hosted page is generated from it.** `PrivacyPolicy.kt` is the single
+  document; `PrivacyPolicyDetail` draws it and `PrivacyPolicyHtmlTest` renders it to the repo-root
+  `privacy-policy.html` that Play Console is given a URL for, rewriting the file and failing when the committed copy
+  has fallen behind. Two renderings of one legal statement is the exact case the shared-derivation rule exists for,
+  and the worst one to keep in step by hand: each looks complete from inside itself. The cost is that the document
+  carries no inline markup — emphasis is structure instead (`PolicyBullet.term`, `PolicyBlock.Contact`), because a
+  markup language would mean a parser in the app and a second one in the generator, which is the fault being avoided
+  one level up.
+
 **Navigation + shell (B5) done.** `core:navigation` holds `HomeRoute` and a two-method `Navigator`; feature
 vocabulary stays *out* (L1 exported an 11-value `SettingsSection` to every consumer), which is why `SettingsRoute`
 itself lives in `feature:settings` now that it carries a section — see the surface-menu notes. `app`

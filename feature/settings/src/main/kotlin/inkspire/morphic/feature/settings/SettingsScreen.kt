@@ -48,6 +48,10 @@ import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.HomeLayout
+import inkspire.morphic.feature.settings.about.AboutDetail
+import inkspire.morphic.feature.settings.about.LicensesDetail
+import inkspire.morphic.feature.settings.about.PermissionsDetail
+import inkspire.morphic.feature.settings.about.PrivacyPolicyDetail
 import inkspire.morphic.feature.settings.apps.AppsDetail
 import inkspire.morphic.feature.settings.dock.DockDetail
 import inkspire.morphic.feature.settings.effects.EffectsDetail
@@ -216,7 +220,13 @@ private fun SettingsSinglePane(
                         .background(colors.background),
                 )
             } else {
-                SettingsDetail(target, WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom, appsLayout, onOpenSection)
+                SettingsDetail(
+                    section = target,
+                    insetSides = WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
+                    homeLayout = homeLayout,
+                    appsLayout = appsLayout,
+                    onOpenSection = onOpenSection,
+                )
             }
         }
     }
@@ -280,7 +290,13 @@ private fun SettingsTwoPane(
                 transitionSpec = { fadeIn(tween(DETAIL_FADE_MS)) togetherWith fadeOut(tween(DETAIL_FADE_MS)) },
                 label = "settings-detail",
             ) { section ->
-                SettingsDetail(section, WindowInsetsSides.End + WindowInsetsSides.Bottom, appsLayout, onOpenSection)
+                SettingsDetail(
+                    section = section,
+                    insetSides = WindowInsetsSides.End + WindowInsetsSides.Bottom,
+                    homeLayout = homeLayout,
+                    appsLayout = appsLayout,
+                    onOpenSection = onOpenSection,
+                )
             }
         }
     }
@@ -294,14 +310,38 @@ private fun SettingsTwoPane(
  *
  * @param insetSides the edges this pane must keep its content clear of, which only the shell knows — the same detail
  *   owes both sides on a phone and only the end on a tablet, where a list pane covers the other one.
+ * @param homeLayout HOME's pairing, for the one pane that draws `SettingsNavRow`s of its own without having a reason
+ *   to read the store. The Home hub gets it from its own ViewModel because it *edits* it; About only needs it to
+ *   resolve a row's name through the one function that names sections, so it takes the shell's copy rather than
+ *   inventing a value the type would accept and the vocabulary would not.
  */
 @Composable
 private fun SettingsDetail(
     section: SettingsSection,
     insetSides: WindowInsetsSides,
+    homeLayout: HomeLayout,
     appsLayout: AppsLayout?,
     onOpenSection: (SettingsSection, AppsLayout?) -> Unit,
 ) = PunchThroughPane(insetSides) {
+    SectionPane(section, homeLayout, appsLayout, onOpenSection)
+}
+
+/**
+ * The table itself, separated from the pane it is drawn in.
+ *
+ * Two things, and they were one function until the table outgrew it: the punch-through wrapper is a *decision about
+ * the surface*, and this is a mapping from a section to the composable that draws it. Split so that this one's body is
+ * a bare `when` — the shape `CyclomaticComplexMethod.ignoreSingleWhenExpression` exempts, which is what lets the
+ * mapping stay exhaustive as sections are added instead of acquiring an `else` that would silently draw the wrong
+ * pane for the next one.
+ */
+@Composable
+private fun SectionPane(
+    section: SettingsSection,
+    homeLayout: HomeLayout,
+    appsLayout: AppsLayout?,
+    onOpenSection: (SettingsSection, AppsLayout?) -> Unit,
+) {
     when (section) {
         SettingsSection.WALLPAPER -> WallpaperDetail()
         SettingsSection.EFFECTS -> EffectsDetail()
@@ -314,6 +354,10 @@ private fun SettingsDetail(
         SettingsSection.APPS -> AppsDetail(initialLayout = appsLayout)
         SettingsSection.FOLDER -> FolderDetail()
         SettingsSection.EXTRAS -> ExtrasDetail()
+        SettingsSection.ABOUT -> AboutDetail(homeLayout = homeLayout, onOpenSection = onOpenSection)
+        SettingsSection.PERMISSIONS -> PermissionsDetail()
+        SettingsSection.PRIVACY -> PrivacyPolicyDetail()
+        SettingsSection.LICENSES -> LicensesDetail()
     }
 }
 
