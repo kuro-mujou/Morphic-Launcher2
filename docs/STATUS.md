@@ -1471,6 +1471,35 @@ up calling the launcher something the home-app chooser does not.
   markup language would mean a parser in the app and a second one in the generator, which is the fault being avoided
   one level up.
 
+**The settings index has one row above it now, and it is the first piece of onboarding.** `O6`'s default-launcher
+step, pulled forward out of [docs/ONBOARDING_PLAN.md](ONBOARDING_PLAN.md) because it is the one gap a user hits on a
+fresh install and cannot work around — the APK declares `category.HOME`, so Morphic *appears* in the system chooser,
+and nothing had ever asked. `DefaultLauncherRole` (`feature:settings/setup`) wraps the two mechanisms: the role
+request dialog from API 29, and the system's "Default home app" screen below it, each checked for a receiver before
+being offered.
+
+- **Doneness is derived, never recorded** — locked decision 3 of that plan, and this is the case that shows why. It
+  is resolved from the HOME intent rather than asked of `RoleManager.isRoleHeld`, which exists only from API 29 while
+  minSdk is 26, and which is the less direct question anyway: resolving the intent asks exactly what the home button
+  does. With no default chosen the system resolves its own chooser, which is not this package, so a fresh install
+  reads false.
+- **The state is one nullable `Intent`**, non-null meaning "ask, and this is how". A boolean beside an intent would
+  make a visible row with nothing to launch representable; this way it is not. It is re-derived on every `ON_RESUME`,
+  because the step completes in a system dialog that reports nothing back — being shown again is the only moment the
+  answer can be learned, and a row still offering what the user has just done is the exact control this codebase
+  refuses to draw.
+- **Read by `SettingsList` itself rather than passed in, unlike `homeLayout`.** The pairing is a parameter because the
+  app bar is named from it too and the two must not disagree; nothing else draws this row, so there is nothing to
+  disagree with — and threading it through both pane composables added an argument each that neither read, which is
+  what pushed them past detekt's `LongParameterList` and is how the asymmetry got noticed.
+- **Not Carbon Launcher's shape, which is what prompted it.** That launcher carries a permanent "App Info" card at the
+  top of settings holding the version, an update check and a set-as-default row. Ours spends that slot only while the
+  question is unanswered. The version stays on About — a fact does not belong in the slot reserved for actions — and
+  **there is no update check**, deliberately: an in-app one needs either Play Services, which the rooted devices that
+  motivated it do not have, or the `INTERNET` permission, which would retire the privacy policy's central claim and
+  the About screen's whole argument. Showing the version and linking out achieves the same end, and the routes out
+  wait on a website and a live listing that do not exist yet.
+
 **Navigation + shell (B5) done.** `core:navigation` holds `HomeRoute` and a two-method `Navigator`; feature
 vocabulary stays *out* (L1 exported an 11-value `SettingsSection` to every consumer), which is why `SettingsRoute`
 itself lives in `feature:settings` now that it carries a section — see the surface-menu notes. `app`

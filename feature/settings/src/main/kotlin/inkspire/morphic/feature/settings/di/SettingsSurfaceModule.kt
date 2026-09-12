@@ -15,8 +15,10 @@ import inkspire.morphic.feature.settings.iconstudio.IconStudioViewModel
 import inkspire.morphic.feature.settings.iconstudio.IconsViewModel
 import inkspire.morphic.feature.settings.orientation.OrientationViewModel
 import inkspire.morphic.feature.settings.register.SurfaceRegisterViewModel
+import inkspire.morphic.feature.settings.setup.DefaultLauncherRole
 import inkspire.morphic.feature.settings.wallpaper.WallpaperViewModel
 import inkspire.morphic.feature.settings.wallpaperstudio.WallpaperStudioViewModel
+import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
@@ -30,7 +32,10 @@ import org.koin.dsl.module
  * setting of its own to read (see [SettingsShellViewModel]).
  */
 val settingsSurfaceModule = module {
-    viewModel { SettingsShellViewModel(get()) }
+    // The role is a `single`: it holds nothing but the context and answers a question about the device,
+    // so one is as good as many — and the setup hub will want the same one from the home surface menu.
+    single { DefaultLauncherRole(androidContext()) }
+    viewModel { SettingsShellViewModel(get(), get()) }
     viewModel { SurfaceRegisterViewModel(get()) }
     viewModel { WallpaperViewModel(get()) }
     viewModel { WallpaperStudioViewModel(get()) }

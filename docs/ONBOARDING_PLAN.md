@@ -31,9 +31,15 @@ to know exists. This is not an oversight; the default's own KDoc says so and nam
 
 **This plan is that owner.** Nothing below may push the decision back into `data:settings`.
 
-**2. Nothing asks to be the launcher.** There is no `RoleManager` reference in the tree. The APK declares
+**2. Nothing asks to be the launcher.** ~~There is no `RoleManager` reference in the tree.~~ The APK declares
 `category.HOME`, so it appears in the system chooser — and that is the whole of it. A user who installs and opens
 Morphic from their app list gets the launcher surface without it being their home app, and nothing says so.
+
+> **Answered ahead of the rest, 2026-09-12.** `O6`'s first step is built: `DefaultLauncherRole` in
+> `feature:settings/setup` and a `SetupRow` above the settings index, drawn only while this launcher is not the home
+> app. It was pulled forward because it is the one gap here a user hits on the first run and cannot work around, and
+> because it needs none of `O1`–`O5` — its doneness is derived, so there is no slice to read and no gate to pass. The
+> rest of this paragraph still stands: nothing says so *on the home surface*, which is `O5`'s half of decision 4.
 
 **3. Home fills itself, silently and arbitrarily.** `HomeViewModel.seedIfEmpty` places the first `rows-1 × cols` apps
 in whatever order `AppRepository` emits. That is a reasonable default and it stays — but it is *invisible*: nothing
@@ -183,6 +189,15 @@ the home surface menu, gone when empty.
 **O6 — the steps.** Default launcher (`RoleManager.createRequestRoleIntent(ROLE_HOME)`, `ACTION_HOME_SETTINGS`
 below API 29; doneness by resolving the HOME intent), wallpaper, icon style, first widget — each deep-linking into
 its existing section.
+
+**The default-launcher step is built**, out of order and alone — see the note under finding 2. What exists is
+`DefaultLauncherRole` (both mechanisms, both API branches, doneness by resolving HOME) and one `SetupRow` rendered
+by `SettingsList` above the index, fed by `SettingsShellViewModel.defaultLauncherRequest` and re-derived on every
+`ON_RESUME`. Three things it deliberately does **not** have, all of which belong to `O5`: it is not dismissible (a
+step that cannot be dismissed needs no stored id, and this is the one step nobody should be able to hide), it is not
+on the home surface menu, and it is not in a card with other steps. The state is a single nullable `Intent` — non-null
+means "ask, like this" — which is the shape `O5` turns into a list. Nothing here has to be deleted to build the hub;
+the row moves into it.
 
 **O7 — start over.** A settings action that clears the `onboarding` slice and re-arms the picker. Small, and it is
 how every slice above gets tested twice.

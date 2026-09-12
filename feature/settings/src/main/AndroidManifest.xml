@@ -16,9 +16,24 @@
       Not covered by the launcher role either: being the default home app exempts `LauncherApps` from visibility
       filtering, not `PackageManager.queryIntentServices`.
     -->
+    <!--
+      And package visibility for the **home app itself**, which `DefaultLauncherRole.isDefault` resolves to answer
+      whether that is us. Without this the answer is not merely missing, it is *inverted*, which is why it earns its
+      own note beside the one above: a launcher is one of the few kinds of app that does **not** declare
+      MAIN/LAUNCHER — it would then sit in its own app drawer — so the query `data:apps` already declares cannot see
+      Pixel Launcher, Nova, or any other. The resolution is filtered down to the only HOME activity we are allowed to
+      see, which is *our own*, so a launcher that is not the default concludes that it is, and the row offering to
+      make it the default is never drawn. Nothing errors and nothing is empty; the screen is simply wrong.
+
+      Narrow, like its neighbor: this exposes only activities answering MAIN/HOME, which on a device is a handful.
+    -->
     <queries>
         <intent>
             <action android:name="android.service.wallpaper.WallpaperService" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
         </intent>
     </queries>
 
