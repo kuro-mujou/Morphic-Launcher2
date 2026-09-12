@@ -23,13 +23,20 @@ private val StudioTint = Color.DarkGray.copy(alpha = 0.4f)
 val StudioContentColor = Color.White
 
 /**
- * The one material every floating surface in the icon studio is made of: the live canvas beneath, blurred, under a
+ * The one material every floating surface in **either** studio is made of: the live work beneath, blurred, under a
  * dark wash.
  *
  * **A shared modifier rather than a convention**, so a new panel cannot arrive looking slightly different from the
- * rest. The studio has several — a tool rail, an extras rail, the settings container, a layer popup — and they
+ * rest. The icon studio has several — a tool rail, an extras rail, the settings container, a layer popup — and they
  * overlap the same canvas at different depths; one material is what makes them read as one system rather than as four
  * translucent rectangles.
+ *
+ * **The wallpaper studio is the second consumer, and it is what makes this the studios' material rather than the icon
+ * studio's.** Its panels used to be a flat 86%-black scrim, which was the honest answer while there was no blur to
+ * reach for and is a hole punched in the picture being designed now that there is. What it needs from this is exactly
+ * what the icon studio needs: a surface legible over a canvas that could be any color, which still shows the canvas.
+ * It lives in this package rather than a shared one because moving it is a repackaging of nine files and a separate
+ * idea from either studio's UI.
  *
  * **The material is the library's, not a radius of ours.** `HazeMaterials.ultraThin` carries the blur radius, the tint
  * blend and the noise as one recipe, so the only number left to choose is the tint color. An earlier cut composed
@@ -38,10 +45,11 @@ val StudioContentColor = Color.White
  * what the paragraph above exists to prevent.
  *
  * **Why this is Haze and not `wallpaperBackdrop`.** The launcher's own blur samples a pre-blurred *wallpaper*
- * bitmap by position — right for a surface sliding over the picture, and only ever able to show the wallpaper. The
- * studio canvas is deliberately not the wallpaper: it is a flat color or a checkerboard, plus the icon being
- * edited. So this is the one screen whose backdrop is content the launcher itself draws, which `wallpaperBackdrop`
- * structurally cannot serve. Haze blurs whatever is actually beneath the node, live.
+ * bitmap by position — right for a surface sliding over the picture, and only ever able to show **the wallpaper that
+ * is set**. Neither studio's backdrop is that: the icon studio's canvas is a flat color or a checkerboard plus the
+ * icon being edited, and the wallpaper studio's is a wallpaper that has not been applied and may never be. Both are
+ * content the launcher itself draws a frame at a time, which `wallpaperBackdrop` structurally cannot serve. Haze
+ * blurs whatever is actually beneath the node, live.
  *
  * **The content color is fixed white, which is the one place the studio departs from the theme.** Everywhere else
  * chrome follows wallpaper brightness or the system. Here the thing behind the glass is a canvas the *user* sets to
@@ -66,9 +74,10 @@ val StudioContentColor = Color.White
  * occasionally not responding.
  *
  * Requires a node upstream marked `Modifier.hazeSource(state)` with the same [state], which is what
- * `HazeInput.Sources` names — in the studio that is the preview canvas, and it is always composed, so a surface here
- * never has nothing to sample. Anything reusing this modifier outside the studio owes itself that check: there is no
- * longer an opaque background behind the blur to fall back to.
+ * `HazeInput.Sources` names — the icon studio's preview canvas and the wallpaper studio's preview, each of which is
+ * always composed *and always paints something*, so a surface here never has nothing to sample. Anything reusing this
+ * modifier owes itself both halves of that check: there is no opaque background behind the blur to fall back to, and a
+ * source node that draws nothing (a `Box` waiting on its first bitmap, say) is the same failure as no source at all.
  *
  * @param shape the surface's outline; the blur and the wash are both clipped to it.
  */

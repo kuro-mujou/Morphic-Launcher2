@@ -2,6 +2,7 @@ package inkspire.morphic.feature.settings.wallpaperstudio
 
 import android.graphics.Bitmap
 import inkspire.morphic.core.graphics.wallpaper.WallpaperMorph
+import inkspire.morphic.core.model.wallpaper.WallpaperDesign
 import inkspire.morphic.core.model.wallpaper.WallpaperRecipe
 
 /**
@@ -20,6 +21,10 @@ import inkspire.morphic.core.model.wallpaper.WallpaperRecipe
  * @property scrub the next shuffle, prepared in advance and ready to be dragged through — null while it is still
  *   being built, and null for good on a recipe that cannot be scrubbed, which is the screen's cue to fall back to a
  *   discrete shuffle.
+ * @property thumbnails the catalog painted at tile size, one bitmap per design, in the *current* recipe — what the
+ *   design grid draws. Partial by design: it fills in as each render lands, and it is empty both before the grid is
+ *   opened and while a repaint is under way. A design missing from it has not been painted yet, never "has no
+ *   picture".
  * @property landing whether a committed scrub is still the thing on screen, waiting for the render of the window it
  *   landed on. **The screen must keep drawing the scrub until this clears**, because the recipe changed the instant
  *   the gesture committed and the bitmap under it is still the window the swipe started from — dropping the scrub any
@@ -31,6 +36,7 @@ data class WallpaperStudioState(
     val applying: Boolean = false,
     val scrub: WallpaperScrub? = null,
     val landing: Boolean = false,
+    val thumbnails: Map<WallpaperDesign, Bitmap> = emptyMap(),
 )
 
 /**

@@ -21,7 +21,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -51,6 +55,12 @@ import kotlin.time.Duration.Companion.milliseconds
  * [Generators] do not check for cancellation, so one keeps running on its dispatcher after the loop has let it go. The
  * settle is what makes that survivable — a full pass only starts once the recipe has been still — and the drafts it
  * competes with are an order of magnitude cheaper. Making the generators cooperate is the fix if it is ever felt.
+ *
+ * **The design grid is a second render loop, and it is deliberately not this one.** The preview paints one recipe at
+ * screen size twice; the grid paints the whole catalog at tile size once, and the two must not share a conflating
+ * flow, since a tile arriving would otherwise cancel the preview the user is actually looking at. What they *do*
+ * share is [paintRecipe]: a tile that resolved its palette or stacked its filters differently from the preview would
+ * be a picture of a wallpaper tapping it cannot give you, and nothing on screen would say so.
  *
  * **A filter change re-renders from the generator, not from the shown bitmap.** The filter stack is not reversible
  * (a blur cannot be un-blurred), so there is no filtered bitmap to peel a pass off — the honest thing is to redraw the
@@ -84,6 +94,9 @@ class WallpaperStudioViewModel(
      */
     private val requests = MutableStateFlow<RenderRequest?>(null)
 
+    /** The tile the design grid wants filled, or null while the grid is closed. */
+    private val tiles = MutableStateFlow<TileSize?>(null)
+
     init {
         viewModelScope.launch {
             // Whether the picture on screen came from this request's draft — read by the settled pass, which must not
@@ -110,6 +123,32 @@ class WallpaperStudioViewModel(
                 },
             )
         }
+
+        // **The catalog repaints when anything but the design moves, which is what [ThumbnailRequest] is shaped to
+        // say.** Combining the tile size with the recipe and distinguishing on the *request* is what makes tapping a
+        // tile free: a design change produces an equal request and so no emission at all, where comparing recipes
+        // would repaint all thirty-two on the one edit the grid exists to make.
+        viewModelScope.launch {
+            combine(tiles, mutableState.map { it.recipe }) { tile, recipe ->
+                tile?.let { ThumbnailRequest(it.width, it.height, recipe) }
+            }
+                .distinctUntilChanged()
+                .collectLatest { request ->
+                    // Cleared before the pass rather than overwritten during it, so a grid whose palette just changed
+                    // fills in from empty rather than showing the old palette tile by tile until each is replaced.
+                    mutableState.update { it.copy(thumbnails = emptyMap()) }
+                    if (request == null) return@collectLatest
+                    // Published one at a time, in catalog order, so the grid fills from the top while it is being
+                    // read. The whole catalog at tile size is on the order of a second; holding everything back until
+                    // the last one lands would show a blank panel for all of it.
+                    WallpaperDesign.entries.forEach { design ->
+                        val bitmap = withContext(Dispatchers.Default) {
+                            paintRecipe(request.recipeFor(design), request.width, request.height)
+                        }
+                        mutableState.update { it.copy(thumbnails = it.thumbnails + (design to bitmap)) }
+                    }
+                }
+        }
     }
 
     /** The preview size in pixels — the screen reports it once it is laid out, and again if it changes. */
@@ -118,6 +157,33 @@ class WallpaperStudioViewModel(
         viewportWidth = width
         viewportHeight = height
         rerender(dissolve = true)
+    }
+
+    /**
+     * The design grid is open and one of its tiles is [width]x[height] pixels — paint the catalog at that size.
+     *
+     * **Measured by a tile rather than worked out from the grid's width**, so the pixels painted are the pixels drawn
+     * rather than the pixels a second copy of the column arithmetic predicted. That second copy is the kind of thing
+     * that looks right in both places and is wrong in one — and it could not be right here anyway, since the grid
+     * hands its rounding remainder to the leading column and a formula has no way to know which column it is for.
+     *
+     * **The caller owes it stability, and that is load-bearing.** A size arriving a pixel different from the last one
+     * makes a request that compares unequal, which cancels the pass and clears the catalog — correct for a rotation
+     * and ruinous for a scroll. `WallpaperDesignGrid` is what guarantees it; its KDoc carries the reason.
+     */
+    fun previewDesigns(width: Int, height: Int) {
+        tiles.value = TileSize(width, height)
+    }
+
+    /**
+     * The design grid is gone — stop painting the catalog and drop it.
+     *
+     * **Not housekeeping.** The pass is keyed on the recipe, so a grid left running would repaint all thirty-two
+     * designs on *every frame* of a Style slider opened after it, competing for the dispatcher with the previews those
+     * frames exist to produce.
+     */
+    fun stopPreviewingDesigns() {
+        tiles.value = null
     }
 
     /** Switch to [design], keeping the seed and palette — the same variation of a different generator. */
@@ -268,17 +334,34 @@ class WallpaperStudioViewModel(
      * throws first.
      */
     private suspend fun paint(request: RenderRequest, scale: Float): Bitmap = withContext(Dispatchers.Default) {
-        val width = (request.width * scale).roundToInt().coerceAtLeast(1)
-        val height = (request.height * scale).roundToInt().coerceAtLeast(1)
-        val recipe = request.recipe
-        // The color mode is applied to the palette here, once, so the generator honors it without knowing it exists.
-        val palette = PaletteColorMode.resolve(recipe.palette, recipe.params.colorMode)
-        val base = Generators.forDesign(recipe.design).render(width, height, palette, recipe.params, recipe.seed)
-        FilterPipeline.apply(base, recipe.filters)
+        paintRecipe(
+            recipe = request.recipe,
+            width = (request.width * scale).roundToInt().coerceAtLeast(1),
+            height = (request.height * scale).roundToInt().coerceAtLeast(1),
+        )
     }
 
     private fun show(bitmap: Bitmap, draft: Boolean, dissolve: Boolean) {
         mutableState.update { it.copy(shot = WallpaperShot(bitmap, draft = draft, dissolve = dissolve)) }
+    }
+
+    /**
+     * A recipe resolved to pixels — the whole of what "this recipe looks like" means, at whatever size is asked for.
+     *
+     * **Shared by the preview and the design grid because the two have to agree invisibly.** Both resolve the color
+     * mode against the palette before the generator sees it, and both stack the filters after it. Either step done
+     * differently in one of them yields a tile that is a picture of a wallpaper tapping it cannot give you, with
+     * nothing on screen to say so — three lines that merely look alike in two files being the bug this codebase keeps
+     * rediscovering.
+     *
+     * **Blocking, and the dispatcher is the caller's to supply.** Both callers already wrap it in `withContext` for a
+     * reason of their own (abandonability), so taking one here would only nest a second.
+     */
+    private fun paintRecipe(recipe: WallpaperRecipe, width: Int, height: Int): Bitmap {
+        // The color mode is applied to the palette here, once, so the generator honors it without knowing it exists.
+        val palette = PaletteColorMode.resolve(recipe.palette, recipe.params.colorMode)
+        val base = Generators.forDesign(recipe.design).render(width, height, palette, recipe.params, recipe.seed)
+        return FilterPipeline.apply(base, recipe.filters)
     }
 
     /**
@@ -295,6 +378,50 @@ class WallpaperStudioViewModel(
         val height: Int,
         val dissolve: Boolean,
     )
+
+    /** One tile of the design grid, in pixels — measured and reported by the tile itself. */
+    private data class TileSize(val width: Int, val height: Int)
+
+    /**
+     * One pass over the whole design catalog: the size to paint each tile at, and everything the recipe says **except
+     * which design it is**.
+     *
+     * **The missing field is the type's entire job.** With every other field pinned, the catalog is a function of this
+     * value alone — so tapping a tile, which changes nothing but the design, leaves the request equal and the grid
+     * untouched. Carrying a whole [WallpaperRecipe] here would instead compare unequal on that one tap and repaint all
+     * thirty-two, which is the edit the grid exists to make.
+     *
+     * **It carries the filters, so a tile shows the wallpaper rather than the generator's raw output.** They survive
+     * the shrink because [FilterPipeline] measures in fractions of the frame rather than in pixels — the same property
+     * the draft pass leans on.
+     */
+    private data class ThumbnailRequest(
+        val width: Int,
+        val height: Int,
+        val seed: Long,
+        val params: DesignParams,
+        val palette: Palette,
+        val filters: Map<WallpaperFilter, Float>,
+    ) {
+
+        constructor(width: Int, height: Int, recipe: WallpaperRecipe) : this(
+            width = width,
+            height = height,
+            seed = recipe.seed,
+            params = recipe.params,
+            palette = recipe.palette,
+            filters = recipe.filters,
+        )
+
+        /** This request as one tile's recipe: everything it pinned, plus the design that tile stands for. */
+        fun recipeFor(design: WallpaperDesign): WallpaperRecipe = WallpaperRecipe(
+            design = design,
+            seed = seed,
+            params = params,
+            palette = palette,
+            filters = filters,
+        )
+    }
 
     private companion object {
 

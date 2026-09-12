@@ -10,27 +10,22 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material.icons.filled.Tune
@@ -45,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
@@ -52,33 +48,49 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import inkspire.morphic.core.designsystem.component.color.ColorPalettes
 import inkspire.morphic.core.designsystem.component.color.PalettePresetBrowser
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.graphics.wallpaper.WallpaperMorph
-import inkspire.morphic.core.model.wallpaper.WallpaperColorMode
-import inkspire.morphic.core.model.wallpaper.WallpaperDesign
 import inkspire.morphic.core.model.wallpaper.WallpaperFilter
 import inkspire.morphic.core.model.wallpaper.WallpaperRecipe
+import inkspire.morphic.feature.settings.iconstudio.StudioBottomBar
+import inkspire.morphic.feature.settings.iconstudio.StudioContentColor
 import inkspire.morphic.feature.settings.iconstudio.StudioIconButton
+import inkspire.morphic.feature.settings.iconstudio.StudioPillButton
+import inkspire.morphic.feature.settings.iconstudio.studioSurface
 import org.koin.androidx.compose.koinViewModel
 
 /**
- * The wallpaper studio's editor: a full-bleed live preview with the designs to pick from and a shuffle.
+ * The wallpaper studio's editor: a full-bleed live preview, with every control floating over it as glass.
  *
  * **The preview is the wallpaper, edge to edge; the controls float over it inset from the bars.** A wallpaper is
- * judged full-screen, so the picture takes the whole surface and the back button, the design row and the shuffle sit
- * on top of it rather than beside it — the same placement decision the icon studio's color picker makes for the same
- * reason.
+ * judged full-screen, so the picture takes the whole surface and the back button, the tool bar and each panel sit on
+ * top of it rather than beside it — the same placement decision the icon studio makes for the same reason.
  *
- * **A dissolve is the transition, and only between *pictures*.** A new design or a shuffled seed fades over the last;
- * a knob being dragged is a picture changing rather than a new one, so it swaps. See [WallpaperPreview].
+ * **Every floating thing here is the icon studio's glass, over the preview as its source.** That is what the Haze
+ * source on [WallpaperPreview] is for, and it settles a question the first cut of this screen got wrong in two
+ * different ways at once: its buttons were bare white glyphs with nothing behind them (illegible over a pale design)
+ * and its panels were a flat 86%-black scrim (a hole punched in the wallpaper being designed). Glass is the one
+ * material that is legible over an arbitrary picture *and* still shows it, which is the whole requirement of a
+ * chrome-over-the-work surface. `studioSurface` carries the recipe and the argument.
+ *
+ * **One panel at a time, above the bar, and null is a real state.** The bar's four entries each open a panel and
+ * pressing the lit one puts it away, leaving nothing but the wallpaper — the icon studio's tool-rail rule, for its
+ * reason: the picture is the work, so there must be a way back to just the picture. The previous arrangement had
+ * *designs* as a permanent home state filling the bar with chips, which is what left no room for the grid that
+ * replaces them.
  *
  * **A horizontal swipe shuffles**, the gesture the walkthrough found is the app's core toy — and on a design the
  * morph engine has reached it is a *scrub*: the next window is worked out in advance and the finger drags the picture
  * into it, geometry and all, with letting go early putting it back. [ShuffleSwipe] is the gesture and
- * docs/MORPH_ENGINE_PLAN.md is why it is built the way it is.
+ * docs/MORPH_ENGINE_PLAN.md is why it is built the way it is. **It lives on the preview rather than on the root**, so
+ * the wallpaper still swipes above an open panel while a drag across the panel itself is the panel's — which works
+ * because the glass is a hit target and the preview is its sibling, not its parent.
  *
  * **The dissolve is what a design without that seam still does**, and it is a fade between two finished bitmaps —
  * which is why it was only ever a placeholder: no amount of cross-fading reaches a shape that *moves*. Vitrall is the
@@ -89,14 +101,16 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
     val viewModel: WallpaperStudioViewModel = koinViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    // Which chooser the bottom bar is showing — the designs, the palettes, the filters, or the Style panel. UI
-    // position, not recipe, so it is remembered across rotation but never stored. The Style tab likewise.
-    var mode by rememberSaveable { mutableStateOf(ChooserMode.DESIGNS) }
+    // **One source, because nothing here floats over anything but the picture.** The icon studio needs two — its rail
+    // is both a surface and something the panel sees through — where this screen's panels and its bar are siblings in
+    // one column and never overlap. So the only node registered is the preview, and every piece of chrome blurs the
+    // wallpaper rather than each other.
+    val haze = rememberHazeState()
+
+    // Which panel is open, or null for none. UI position rather than recipe, so it survives rotation and is never
+    // stored. The Style panel's tab likewise.
+    var panel by rememberSaveable { mutableStateOf<StudioPanel?>(null) }
     var styleTab by rememberSaveable { mutableStateOf(StyleTab.AMOUNT) }
-    // Whether the colors chooser has its browser open above the bar. Not a fourth [ChooserMode]: the browser is a
-    // second view of the palettes the bar is already showing, and leaving the ribbon under it is what lets a pick made
-    // in the list be nudged along by the ribbon without a trip back through the toggles.
-    var browsingPresets by rememberSaveable { mutableStateOf(false) }
 
     val swipe = rememberShuffleSwipe(
         state = state,
@@ -112,22 +126,21 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
     // on this screen (every control before it was hand-colored white), and a bare MaterialTheme drew M3's default
     // purple over a monochrome studio.
     LauncherTheme(darkTheme = true) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-                .shuffleSwipe(swipe),
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
             WallpaperPreview(
                 shot = state.shot,
                 morph = swipe.live,
                 progress = { swipe.progress.value },
                 onViewport = viewModel::setViewport,
+                modifier = Modifier
+                    .shuffleSwipe(swipe)
+                    .hazeSource(haze),
             )
 
-            StudioIconButton(
+            StudioPillButton(
                 icon = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
+                hazeState = haze,
                 onClick = onBack,
                 modifier = Modifier
                     .align(Alignment.TopStart)
@@ -135,9 +148,10 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
                     .padding(12.dp),
             )
 
-            StudioIconButton(
+            StudioPillButton(
                 icon = Icons.Default.Check,
                 contentDescription = "Set as wallpaper",
+                hazeState = haze,
                 onClick = { viewModel.apply(onApplied = onBack) },
                 // Nothing to apply until a *settled* render lands — a draft is a fraction of the screen's pixels — and
                 // one write at a time. The model guards both; this greys the button so each guard is visible rather
@@ -152,119 +166,145 @@ fun WallpaperStudioScreen(onBack: () -> Unit) {
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .uiInsetsPadding(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                    .uiInsetsPadding(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)
+                    .padding(bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                // Above the bar rather than in it: the Style panel is two rows — its tabs and the control they choose —
-                // where every other chooser is one row of chips, and the bar stays one row of chips whatever is open.
-                if (mode == ChooserMode.STYLE) {
-                    WallpaperStylePanel(
-                        recipe = state.recipe,
-                        tab = styleTab,
-                        onSelectTab = { styleTab = it },
-                        onParams = viewModel::setParams,
-                    )
-                }
+                StudioPanelContent(
+                    panel = panel,
+                    state = state,
+                    haze = haze,
+                    styleTab = styleTab,
+                    onSelectStyleTab = { styleTab = it },
+                    viewModel = viewModel,
+                )
 
-                if (mode == ChooserMode.COLORS && browsingPresets) {
-                    PalettePresetBrowser(
-                        palettes = ColorPalettes.all,
-                        selected = state.recipe.palette.colors,
-                        // Applies and closes, the reference studio's behavior and the honest one: the wallpaper behind
-                        // the panel is already the tapped palette, so a confirm step would ask the user to agree with
-                        // what they can see. The ribbon below is left showing that same pick.
-                        onPick = {
-                            viewModel.setPalette(it.colors)
-                            browsingPresets = false
-                        },
-                        // Most of the screen, because a list of two-line rows is useless at chip height — and not all
-                        // of it, because the picture it is filtering has to stay visible to filter against.
-                        modifier = Modifier
-                            .fillMaxHeight(0.62f)
-                            .studioPanelGround(),
-                    )
-                }
-
-                BottomChooser(
-                    mode = mode,
-                    onModeToggle = { tapped ->
-                        mode = if (mode == tapped) ChooserMode.DESIGNS else tapped
-                        // The browser belongs to the colors chooser; leaving it must not leave a panel behind.
-                        if (mode != ChooserMode.COLORS) browsingPresets = false
-                    },
+                StudioToolBar(
+                    panel = panel,
+                    haze = haze,
+                    onToggle = { tapped -> panel = tapped.takeIf { it != panel } },
                     onShuffle = viewModel::shuffle,
-                ) {
-                    Chooser(
-                        mode = mode,
-                        recipe = state.recipe,
-                        presetsOpen = browsingPresets,
-                        onTogglePresets = { browsingPresets = !browsingPresets },
-                        onPickDesign = viewModel::pickDesign,
-                        onSetPalette = viewModel::setPalette,
-                        onToggleFilter = viewModel::toggleFilter,
-                    )
-                }
+                )
             }
         }
     }
 }
 
-
-
 /**
- * Which of the four choosers the bottom bar is showing. [DESIGNS] is home — the three toggles flip to and from it.
- *
- * [STYLE] is the one that does not replace the bar's chips: it opens a panel *above* them and leaves the designs in
- * the bar, so a knob can be tuned and a design tried without a trip back through the toggles.
+ * Which panel the studio has open. Each is one entry in the bar, and pressing the lit entry closes it — see
+ * [WallpaperStudioScreen] for why "nothing open" is a state rather than a fallback to the designs.
  */
-private enum class ChooserMode { DESIGNS, COLORS, FILTERS, STYLE }
+private enum class StudioPanel { DESIGNS, COLORS, STYLE, FILTERS }
 
 /**
- * The bottom bar: the three chooser toggles, whatever [chooser] fills the middle with, and the shuffle.
+ * The open panel, or nothing — the one place that maps a [StudioPanel] to what it draws.
  *
- * **The bar does not know what it is showing.** It owns the toggles, the one middle slot and the shuffle; which
- * chooser goes in the slot is [Chooser]'s business, decided from the same `mode` the toggles here set. Keeping the
- * two apart is what stops this growing a parameter for every control any chooser might need — it had reached ten.
+ * **Split out so the bar carries no knowledge of any panel's controls.** The bar owns four toggles and a shuffle; what
+ * a toggle reveals is settled here, from the same value the toggle sets. Keeping the two apart is what stops the bar
+ * growing a parameter for every control any panel might need — it had reached ten before the previous arrangement was
+ * taken apart.
  *
- * **One slot, not a stack.** The palette and filter toggles swap the middle rather than stacking, so the bar stays one
- * row over the wallpaper; either toggle flips back to the designs when it is already on. The style toggle is the
- * exception and opens a panel above instead, leaving the designs here. The shuffle re-seeds whichever design is
- * showing — a new variation, the same whatever the chooser.
+ * **Two of the four take most of the screen and two take as little as they can.** The designs and the colors are
+ * *browsing* surfaces — a grid of pictures, a list of named rows — and they are useless at chip height; the Style
+ * panel is one control and the filters are five switches, and every row of those is a row of the wallpaper they are
+ * being judged against. `0.62` is the fraction the preset browser arrived at and the grid now shares, so the two read
+ * as one surface appearing in one place rather than as two panels of different heights.
  */
 @Composable
-private fun BottomChooser(
-    mode: ChooserMode,
-    onModeToggle: (ChooserMode) -> Unit,
-    onShuffle: () -> Unit,
-    modifier: Modifier = Modifier,
-    chooser: @Composable () -> Unit,
+private fun StudioPanelContent(
+    panel: StudioPanel?,
+    state: WallpaperStudioState,
+    haze: HazeState,
+    styleTab: StyleTab,
+    onSelectStyleTab: (StyleTab) -> Unit,
+    viewModel: WallpaperStudioViewModel,
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    when (panel) {
+        null -> Unit
+
+        StudioPanel.DESIGNS -> WallpaperDesignGrid(
+            selected = state.recipe.design,
+            thumbnails = state.thumbnails,
+            onTileSize = viewModel::previewDesigns,
+            onGone = viewModel::stopPreviewingDesigns,
+            onPick = viewModel::pickDesign,
+            modifier = Modifier
+                .fillMaxHeight(0.62f)
+                .studioPanelGround(haze),
+        )
+
+        StudioPanel.COLORS -> PalettePresetBrowser(
+            palettes = ColorPalettes.all,
+            selected = state.recipe.palette.colors,
+            // Applies and stays open, the reference studio's behavior and the honest one: the wallpaper behind the
+            // panel is already the tapped palette, so a confirm step would ask the user to agree with what they can
+            // see. It does not close either, because the next thing a user does with a bank of palettes is usually
+            // try another one.
+            onPick = { viewModel.setPalette(it.colors) },
+            modifier = Modifier
+                .fillMaxHeight(0.62f)
+                .studioPanelGround(haze),
+        )
+
+        StudioPanel.STYLE -> WallpaperStylePanel(
+            recipe = state.recipe,
+            tab = styleTab,
+            onSelectTab = onSelectStyleTab,
+            onParams = viewModel::setParams,
+            modifier = Modifier.studioPanelGround(haze),
+        )
+
+        StudioPanel.FILTERS -> WallpaperFilterPanel(
+            recipe = state.recipe,
+            onToggle = viewModel::toggleFilter,
+            modifier = Modifier.studioPanelGround(haze),
+        )
+    }
+}
+
+/**
+ * The bottom bar: one entry per panel, then the shuffle.
+ *
+ * **A pill sized to what it holds rather than a band across the screen**, which is the icon studio's [StudioBottomBar]
+ * and its argument — a full-width bar of five buttons reads as a surface the buttons happen to sit on, and develops
+ * dead space every time an entry leaves.
+ *
+ * **The shuffle is in the bar but is not a panel**, so it is the one entry that never lights: it re-seeds whichever
+ * design is showing and is done, where the four before it put the studio into a state. Same glass, no wash.
+ */
+@Composable
+private fun StudioToolBar(
+    panel: StudioPanel?,
+    haze: HazeState,
+    onToggle: (StudioPanel) -> Unit,
+    onShuffle: () -> Unit,
+) {
+    StudioBottomBar(hazeState = haze) {
+        StudioIconButton(
+            icon = Icons.Default.GridView,
+            contentDescription = "Designs",
+            onClick = { onToggle(StudioPanel.DESIGNS) },
+            selected = panel == StudioPanel.DESIGNS,
+        )
         StudioIconButton(
             icon = Icons.Default.Palette,
             contentDescription = "Colors",
-            onClick = { onModeToggle(ChooserMode.COLORS) },
-            selected = mode == ChooserMode.COLORS,
+            onClick = { onToggle(StudioPanel.COLORS) },
+            selected = panel == StudioPanel.COLORS,
         )
         StudioIconButton(
             icon = Icons.Default.Straighten,
             contentDescription = "Style",
-            onClick = { onModeToggle(ChooserMode.STYLE) },
-            selected = mode == ChooserMode.STYLE,
+            onClick = { onToggle(StudioPanel.STYLE) },
+            selected = panel == StudioPanel.STYLE,
         )
         StudioIconButton(
             icon = Icons.Default.Tune,
             contentDescription = "Filters",
-            onClick = { onModeToggle(ChooserMode.FILTERS) },
-            selected = mode == ChooserMode.FILTERS,
+            onClick = { onToggle(StudioPanel.FILTERS) },
+            selected = panel == StudioPanel.FILTERS,
         )
-        Box(modifier = Modifier.weight(1f)) { chooser() }
         StudioIconButton(
             icon = Icons.Default.Casino,
             contentDescription = "Shuffle",
@@ -274,72 +314,30 @@ private fun BottomChooser(
 }
 
 /**
- * What fills the bar's middle slot: the designs, the palettes or the filters, whichever [mode] names.
+ * The filters: one chip per pass, lit while it is on.
  *
- * Split from [BottomChooser] so the bar carries no knowledge of any one chooser's controls — see its KDoc.
+ * **It wraps rather than scrolling sideways.** The whole set is five and always will be five-ish, and a scrolling row
+ * hides however many do not fit behind a gesture with nothing on screen to suggest it — where two short lines show
+ * all of them at once and cost one row of wallpaper more.
  */
 @Composable
-private fun Chooser(
-    mode: ChooserMode,
+private fun WallpaperFilterPanel(
     recipe: WallpaperRecipe,
-    presetsOpen: Boolean,
-    onTogglePresets: () -> Unit,
-    onPickDesign: (WallpaperDesign) -> Unit,
-    onSetPalette: (List<Int>) -> Unit,
-    onToggleFilter: (WallpaperFilter) -> Unit,
+    onToggle: (WallpaperFilter) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    when (mode) {
-        // Two ways into one bank: the chip opens the named, filterable browser for "something green", the ribbon
-        // beside it answers "show me the next one" in a tap. Neither replaces the other.
-        ChooserMode.COLORS ->
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ChooserChip(label = "Presets", selected = presetsOpen, onClick = onTogglePresets)
-                // Lazy, because the bank runs to several hundred palettes — the picker ribbon's reason.
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    items(ColorPalettes.all, key = { it.name }) { palette ->
-                        PalettePill(
-                            colors = palette.colors,
-                            selected = palette.colors == recipe.palette.colors,
-                            onClick = { onSetPalette(palette.colors) },
-                        )
-                    }
-                }
-            }
-
-        ChooserMode.FILTERS ->
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                WallpaperFilter.entries.forEach { filter ->
-                    ChooserChip(
-                        label = filter.label,
-                        selected = filter in recipe.filters,
-                        onClick = { onToggleFilter(filter) },
-                    )
-                }
-            }
-
-        // Style keeps the designs here, its own panel being above the bar.
-        ChooserMode.DESIGNS, ChooserMode.STYLE ->
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                WallpaperDesign.entries.forEach { design ->
-                    ChooserChip(
-                        label = design.label,
-                        selected = design == recipe.design,
-                        onClick = { onPickDesign(design) },
-                    )
-                }
-            }
+    FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        WallpaperFilter.entries.forEach { filter ->
+            ChooserChip(
+                label = filter.label,
+                selected = filter in recipe.filters,
+                onClick = { onToggle(filter) },
+            )
+        }
     }
 }
 
@@ -353,6 +351,10 @@ private fun Chooser(
  *
  * **It measures itself and reports its pixel size**, so the generator paints exactly the resolution being shown rather
  * than a fixed guess scaled to fit. `onGloballyPositioned` would do, but the size is all that is wanted.
+ *
+ * **It paints black under the render, which is what the glass over it needs.** This node is the Haze source for every
+ * floating surface on the screen, and a source that draws nothing hands them nothing to blur — so the studio's ground
+ * belongs on the sampled node rather than on the root above it.
  *
  * **A live [morph] is painted over the bitmap rather than instead of it**, which is what makes the two handoffs
  * invisible. Going in, the scrub's first frame is the window already on screen; coming out, its last frame is the
@@ -368,10 +370,12 @@ private fun WallpaperPreview(
     morph: WallpaperMorph?,
     progress: () -> Float,
     onViewport: (Int, Int) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
+            .background(Color.Black)
             .onSizeChanged { onViewport(it.width, it.height) },
     ) {
         AnimatedContent(
@@ -406,108 +410,51 @@ private fun WallpaperPreview(
 }
 
 /**
- * The ground the studio's floating panels sit on — the Style panel and the preset browser.
+ * The ground every floating panel in the studio sits on — the designs, the palettes, the Style knob and the filters.
  *
- * **Shared because they are the same surface, not because the numbers happen to match.** Both are a panel of chrome
- * over an arbitrary wallpaper, and two panels drifting to two scrims would read as two surfaces on one screen. The
- * frosted backdrop the design system defers is what would eventually replace this.
+ * **Shared because they are the same surface, not because the numbers happen to match.** All four are chrome over an
+ * arbitrary wallpaper, and four panels drifting to four grounds would read as four surfaces on one screen.
  *
- * **The alpha is set by the browser, not by the Style panel** — and it is most of the way to opaque. A thin strip of
- * slider over a picture stays readable at `0.6`; two thirds of the screen filled with rows of small text and small
- * swatches does not, because the wallpaper's own shapes run *through* the list and read as rows that are not there.
- * The number is the one a reading surface needs, and the strip only gets darker for it.
+ * **It is the icon studio's glass now, where it used to be an 86%-black scrim.** The scrim was the honest answer while
+ * there was no blur to reach for: a wallpaper's own shapes run *through* a list of small text and small swatches and
+ * read as rows that are not there, so the panel had to be most of the way to opaque to be readable, and the cost was a
+ * near-black hole punched in the picture being designed. A blur removes exactly the thing that made the wallpaper
+ * unreadable — its detail — while leaving its color and its light, which is the whole reason the design system wanted
+ * frosted chrome in the first place. `studioSurface` fixes the material for every studio surface, so there is nothing
+ * left to choose here but the corner and the padding.
+ *
+ * @param shape defaulted to the panel corner; a caller wanting a pill passes one.
  */
-internal fun Modifier.studioPanelGround(): Modifier = this
+@Composable
+internal fun Modifier.studioPanelGround(
+    haze: HazeState,
+    shape: Shape = RoundedCornerShape(20.dp),
+): Modifier = this
     .fillMaxWidth()
-    .padding(horizontal = 16.dp)
-    .clip(RoundedCornerShape(16.dp))
-    .background(Color.Black.copy(alpha = 0.86f))
-    .padding(horizontal = 12.dp, vertical = 10.dp)
+    .padding(horizontal = 12.dp)
+    .studioSurface(haze, shape = shape)
+    .padding(horizontal = 12.dp, vertical = 12.dp)
 
-/** One labelled chip in the picker row — a design, a filter or a Style tab, lit when it is the one showing. */
+/** One labelled chip in a panel — a filter or a Style tab, lit when it is the one showing. */
 @Composable
 internal fun ChooserChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
-            .background(Color.White.copy(alpha = if (selected) 0.9f else 0.18f))
+            // A chip sits *on* a panel that is already glass, so it takes a flat wash rather than a blur of its own:
+            // Haze samples what is behind a node, and the panel is not a source, so a chip asking for glass here would
+            // be blurring the wallpaper the panel has already blurred once.
+            .background(StudioContentColor.copy(alpha = if (selected) 0.9f else 0.14f))
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge,
-            color = if (selected) Color.Black else Color.White,
+            color = if (selected) Color.Black else StudioContentColor,
         )
     }
 }
-
-/**
- * One palette in the color chooser — its colors packed into a pill, the whole thing a tap that recolors the design.
- *
- * **Tapping applies the *whole* palette, not one swatch** — the difference from the icon picker's ribbon, where each
- * swatch is its own pick. A wallpaper's generator wants a set of colors, so the pill is one unit. The one showing is
- * ringed so the chooser says which it is.
- */
-@Composable
-private fun PalettePill(colors: List<Int>, selected: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(8.dp)
-    Row(
-        modifier = Modifier
-            .clip(shape)
-            .then(if (selected) Modifier.border(2.dp, Color.White, shape) else Modifier)
-            .clickable(onClick = onClick),
-    ) {
-        colors.forEach { swatch ->
-            Box(modifier = Modifier.size(width = 16.dp, height = 34.dp).background(Color(swatch)))
-        }
-    }
-}
-
-/** A short, human name for the picker — the enum name is a code identifier, not a label. */
-private val WallpaperDesign.label: String
-    get() = when (this) {
-        WallpaperDesign.LINEAR_GRADIENT -> "Gradient"
-        WallpaperDesign.MESH_GRADIENT -> "Mesh"
-        WallpaperDesign.FLOW_FIELD -> "Flow"
-        WallpaperDesign.TRIANGULAR_FACETS -> "Facets"
-        WallpaperDesign.VORONOI -> "Voronoi"
-        WallpaperDesign.PLASMA -> "Plasma"
-        WallpaperDesign.CONTOUR -> "Contour"
-        WallpaperDesign.WAVES -> "Waves"
-        WallpaperDesign.BAUHAUS -> "Bauhaus"
-        WallpaperDesign.MONDRIAN -> "Mondrian"
-        WallpaperDesign.CONFETTI -> "Confetti"
-        WallpaperDesign.TRUCHET -> "Truchet"
-        WallpaperDesign.METABALLS -> "Blobs"
-        WallpaperDesign.RIBBONS -> "Ribbons"
-        WallpaperDesign.DOT_GRID -> "Dot Grid"
-        WallpaperDesign.HALFTONE -> "Halftone"
-        WallpaperDesign.FLOW_LINES -> "Flow Lines"
-        WallpaperDesign.RIBBON_FLOW -> "Ribbon Flow"
-        WallpaperDesign.POLYGON_CASCADE -> "Cascade"
-        WallpaperDesign.DIAGONAL_BANDS -> "Bands"
-        WallpaperDesign.GRADIENT_COLUMNS -> "Columns"
-        WallpaperDesign.LOUVERS -> "Louvers"
-        WallpaperDesign.SOFT_OVERLAPS -> "Overlaps"
-        WallpaperDesign.WAVE_DIVIDERS -> "Wave Dividers"
-        WallpaperDesign.RIBBED_GLASS -> "Ribbed Glass"
-        WallpaperDesign.VITRALL -> "Vitrall"
-        WallpaperDesign.MODERN_MOSAIC -> "Mosaic"
-        WallpaperDesign.ROUNDED_TILES -> "Bars"
-        WallpaperDesign.IMPASTO -> "Impasto"
-        WallpaperDesign.SPRAY -> "Spray"
-        WallpaperDesign.PLANET -> "Planet"
-        WallpaperDesign.MARBLE -> "Marble"
-    }
-
-/** A short, human name for the color-mode segment — the enum name is a code identifier, not a label. */
-internal val WallpaperColorMode.label: String
-    get() = when (this) {
-        WallpaperColorMode.MONOCHROMATIC -> "Mono"
-        WallpaperColorMode.BICHROMATIC -> "Duo"
-        WallpaperColorMode.COLORFUL -> "Full"
-    }
 
 /** A short, human name for the filter chip — the enum name is a code identifier, not a label. */
 private val WallpaperFilter.label: String

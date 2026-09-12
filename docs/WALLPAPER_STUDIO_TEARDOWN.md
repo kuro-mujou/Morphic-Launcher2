@@ -272,10 +272,18 @@ Device-verified. Three departures from what they do, each for a reason:
   the screen filled with small text and small swatches does not — the wallpaper's own shapes run through the list and
   read as rows that are not there. Both panels now share `studioPanelGround` at the higher number.
 
+**Design thumbnails rendered in the current palette landed (2026-09-12)** — see the plan's W14. Theirs is the
+arrangement we took whole: the palette held constant, the design varying, every tile painted from the recipe the user
+has already built. Two departures, both forced by ours being a *panel* rather than a full screen: the tiles are 3:4
+rather than the screen's aspect (a 9:19.5 tile on a three-column grid is a sliver), and the grid opens scrolled to the
+selected design, since a panel showing nine of thirty-two would otherwise open on a picture the user is not looking at.
+The palette **ribbon** went in the same pass — with the browser on a toggle rather than behind a chip, two ways into one
+bank was several hundred pills of scrolling that answered nothing the named list does not.
+
 Still theirs and not ours, in the order the teardown values them: **the stop row** (the current palette as individually
-editable circles, ground divided off as stop 0, `+` to append, tap to edit, trash to remove), **design thumbnails
-rendered in the current palette**, and the **`Edit color` sheet** (hex with copy/paste, an opacity slider, and the
-Material You tonal grid as a pick source). The stop row is the one that unlocks the rest.
+editable circles, ground divided off as stop 0, `+` to append, tap to edit, trash to remove) and the **`Edit color`
+sheet** (hex with copy/paste, an opacity slider, and the Material You tonal grid as a pick source). The stop row is the
+one that unlocks the rest.
 
 ---
 

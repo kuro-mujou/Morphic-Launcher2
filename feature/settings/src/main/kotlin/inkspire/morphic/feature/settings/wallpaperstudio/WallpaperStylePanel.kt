@@ -39,9 +39,10 @@ import kotlin.math.roundToInt
  * five lambdas would be that value taken apart and handed over in pieces — and the panel would grow another parameter
  * every time a design needs a knob the model does not have yet. It hands back the whole edited value instead.
  *
- * **It sits on a scrim, which the chip rows below do not.** A slider is a thin track and a small number over an
- * arbitrary picture — including a white one — where a chip carries its own filled pill. That ground is
- * [studioPanelGround], shared with the preset browser, the studio's other floating panel.
+ * **The ground is the caller's, not this panel's.** Every panel in the studio sits on one sheet of glass and the
+ * screen is what puts it there — `studioPanelGround`, shared by all four. This one used to apply that ground itself,
+ * which was harmless while it was the only panel with a scrim and became a double helping of padding the moment the
+ * screen started handing one in.
  */
 @Composable
 internal fun WallpaperStylePanel(
@@ -62,7 +63,7 @@ internal fun WallpaperStylePanel(
     val selected = if (tab in tabs) tab else tabs.first()
 
     Column(
-        modifier = modifier.studioPanelGround(),
+        modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(
@@ -112,6 +113,14 @@ internal fun WallpaperStylePanel(
         }
     }
 }
+
+/** A short, human name for the color-mode segment — the enum name is a code identifier, not a label. */
+private val WallpaperColorMode.label: String
+    get() = when (this) {
+        WallpaperColorMode.MONOCHROMATIC -> "Mono"
+        WallpaperColorMode.BICHROMATIC -> "Duo"
+        WallpaperColorMode.COLORFUL -> "Full"
+    }
 
 /**
  * The *amount* knob: a count of the things this design draws, or a plain scale where it draws no countable things.

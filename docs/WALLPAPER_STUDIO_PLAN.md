@@ -296,7 +296,8 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     its own knobs** (`DesignStyle` on the `Generator` interface) rather than the UI tabulating them, because a knob the
     panel offers and the generator ignores fails silently; the amount slider offers the generator's **real counts**
     through one shared mapping. Color mode moved out of the palette row into the panel, so Style is every knob in
-    `DesignParams`. Still deferred: the frosted material under the bottom bar, and per-design defaults. Full
+    `DesignParams`. Still deferred at the time: the frosted material under the bottom bar (landed in W14) and
+    per-design defaults. Full
     record in the teardown doc.
   - **W12 — the live preview. ✅ (2026-09-07)** The Style knobs preview **per frame of a drag** instead of committing on
     release, which is open question 1 answered by adopting the icon studio's mechanism rather than a second one. The
@@ -321,6 +322,37 @@ Sequenced so each phase is a usable slice, leading with the pieces that carry th
     soft halo, and `depth` lights the seam's *shoulder* rather than the frame. **The Impasto pass's method note paid for
     itself**: the one device render made before the Python replica existed is the one that came out as pleated fabric.
     Full record: [WALLPAPER_STUDIO_TEARDOWN.md](WALLPAPER_STUDIO_TEARDOWN.md) → `MARBLE`.
+  - **W14 — the chrome rebuilt: glass, a design grid, and the palette ribbon retired. ✅ (2026-09-12)** The three
+    pieces of the editor that were placeholders, replaced together because they are one surface. **The material is now
+    the icon studio's `studioSurface`** — Haze over the preview — on every floating thing: the two corner buttons (bare
+    white glyphs before, illegible over a pale design), the tool bar, and all four panels, which had been a flat
+    86%-black scrim. The scrim was the honest answer while there was no blur to reach for; a blur removes the detail
+    that made the wallpaper unreadable and keeps its color and its light, which is what "frosted chrome" meant all
+    along. That closes W10's "still deferred: the frosted material under the bottom bar", and makes the wallpaper
+    studio the **second consumer** of a modifier whose KDoc had claimed the icon studio alone. **The design chooser is
+    a grid of live thumbnails**, the teardown's top outstanding borrow: every design in the catalog painted from *the
+    recipe being edited* — palette, seed, knobs, filters pinned, only the design varying — so the grid answers "what
+    would my wallpaper be as each of these" and a tile is what tapping it gives you. It replaces a row of thirty-two
+    **labels**, which is a name-recognition test rather than a choice. Two things that had to be got right: the request
+    the catalog is keyed on carries **everything but the design**, so tapping a tile is free where a whole-recipe key
+    would repaint all thirty-two on the one edit the grid exists for; and the preview and the tiles share one
+    `paintRecipe`, since a tile that resolved its palette differently would be a picture of a wallpaper you cannot
+    have, with nothing on screen to say so. It opens on the selected design, fills in tile by tile, and stops painting
+    when it closes — a grid left running repaints the catalog on every frame of a Style slider. **The tile size the
+    grid reports has to hold still, and that was found on device rather than reasoned out:** `LazyVerticalGrid` hands
+    a `Fixed(3)` split's rounding remainder to the leading column, so at 420dpi column 0 is 304px and the other two
+    are 303. Every tile reported as it composed, each contradicting the last, the request compared unequal, and the
+    catalog cleared and repainted — only while being scrolled, which is when it is being read. The first tile measured
+    now fixes the size; a pixel is not a different picture. **And the palette
+    ribbon is gone**, the colors toggle opening `PalettePresetBrowser` directly: two ways into one bank was the W3-era
+    answer when the browser was a chip away, and with the browser a *toggle* away the ribbon was several hundred pills
+    of horizontal scrolling that answered nothing the list does not. **One panel at a time and null is a real state**
+    (the icon studio's tool-rail rule), which is what freed the bar for a Designs entry. Device-verified: grid,
+    recolor, tile pick, scroll-to-selected, panel toggling, and the shuffle swipe still reaching the wallpaper above an
+    open panel but not through it. **The known cost:** a tile is 3:4 where the screen is ~9:19.5, and a generator
+    frames itself in fractions of what it is handed — so the banded and columnar designs lay out differently in the
+    tile than full-screen. Screen-aspect tiles are a 100x216dp sliver, two rows to a panel; the shape wins nothing
+    back.
   - **W11 — the design-by-design quality pass. In progress — 16 of their 22 driven.** The engine and the panel are
     built, so what is left is per design: open theirs, render ours, compare, fix one. The **checklist of which
     designs have actually been driven** (and which were built from a one-line note instead) is in
