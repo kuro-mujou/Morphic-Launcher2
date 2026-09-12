@@ -2,14 +2,24 @@ package inkspire.morphic.core.designsystem.surface
 
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.systemGestures
+import androidx.compose.foundation.layout.union
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.IntSize
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.swipeDirectionOf
 import kotlinx.coroutines.CoroutineScope
@@ -56,11 +66,38 @@ private class PanPump(private val scope: CoroutineScope, private val state: Surf
     }
 
     /**
-     * Waits for the drain to finish — **what a settle must do before it springs.** A spring started while a
-     * `snapTo` is still queued would animate from a position the finger has already left, and the drain would then
-     * pull the value out from under it.
+     * Springs [axis] to rest from wherever the finger left it.
+     *
+     * **The pump settles because the pump is what a settle has to wait for.** A spring started while a `snapTo` is
+     * still queued would animate from a position the finger has already left, and the drain would then pull the
+     * value out from under it — so every settle joins the drain first. That rule was written out at three call
+     * sites, each with its own copy of the comment explaining it; here it is the type's, and a fourth settle cannot
+     * forget it.
+     *
+     * @param startPage the page this axis began the gesture on (0, -1 or +1), which is what decides whether a small
+     *   drag returns or advances.
+     * @param velocity in **pan space**, not screen space — the caller flips the sign, since a finger flinging right
+     *   opens the surface parked on the left and so drives the pan negative.
      */
-    suspend fun join() {
+    fun settle(axis: PanAxis, startPage: Float, velocity: Float) {
+        scope.launch {
+            join()
+            when (axis) {
+                PanAxis.HORIZONTAL -> state.settleX(startPage, velocity)
+                PanAxis.VERTICAL -> state.settleY(startPage, velocity)
+            }
+        }
+    }
+
+    /** Settles both axes to the nearest rest — for a release that never claimed, so the pan never stops mid-crossing. */
+    fun settleToNearest() {
+        scope.launch {
+            join()
+            state.settleToNearest()
+        }
+    }
+
+    private suspend fun join() {
         job?.join()
     }
 }
@@ -75,6 +112,45 @@ private fun Float.pastSlop(slop: Float): Float = when {
     this > slop -> this - slop
     this < -slop -> this + slop
     else -> 0f
+}
+
+/**
+ * The bands along the screen's edges that the **system** watches for its own gestures, in pixels.
+ *
+ * `systemGestures` is the platform's own answer to "where do I also read a swipe": the home strip along the bottom,
+ * the back strips down each side. `statusBars` is unioned in because the shade is pulled from the top and a device
+ * is free to report a zero `systemGestures` top — and the top is half of what "the system bar area" means.
+ */
+private data class SystemGestureBands(val left: Float, val top: Float, val right: Float, val bottom: Float) {
+
+    /** Whether [position] landed in any of the bands, given the gesture surface's [size]. */
+    fun contains(position: Offset, size: IntSize): Boolean =
+        position.x <= left ||
+            position.y <= top ||
+            position.x >= size.width - right ||
+            position.y >= size.height - bottom
+}
+
+/**
+ * The system's gesture bands, measured in pixels for the pointer loop.
+ *
+ * A function of its own because reading insets is composition's job and the loop below is not composition: resolving
+ * them at the boundary is what keeps `pointerInput` taking a plain value it can compare for equality, rather than
+ * re-reading a `WindowInsets` it would have to be restarted for.
+ */
+@Composable
+private fun rememberSystemGestureBands(): SystemGestureBands {
+    val density = LocalDensity.current
+    val layoutDirection = LocalLayoutDirection.current
+    val region = WindowInsets.systemGestures.union(WindowInsets.statusBars)
+    return remember(region, density, layoutDirection) {
+        SystemGestureBands(
+            left = region.getLeft(density, layoutDirection).toFloat(),
+            top = region.getTop(density).toFloat(),
+            right = region.getRight(density, layoutDirection).toFloat(),
+            bottom = region.getBottom(density).toFloat(),
+        )
+    }
 }
 
 /** The axis a surface pan is locked to for the duration of one drag. */
@@ -140,6 +216,26 @@ private const val AXIS_EPSILON = 0.001f
  * make every widget a dead zone for surface switching; waiting costs one event of latency and nothing else. Nothing
  * else observes the difference, because every other claimant holds its claim until its own gesture ends.
  *
+ * **A pan will not *open* a surface from a finger that came down in a band the system also watches** — the home strip
+ * along the bottom, the back strips down the sides, the status bar. Those gestures are not ours to win: the system
+ * reads the same finger, usually takes it, and what the user gets meanwhile is a surface half-dragged by a swipe that
+ * then turns into "go home". Declining outright makes the outcome deterministic instead of a race.
+ *
+ * **One band, every direction, rather than a table of which edge blocks which axis.** The obvious refinement — the
+ * bottom blocks vertical, the sides block horizontal — is wrong on the first case it meets: the bottom strip is *also*
+ * the quick-switch gesture, which is horizontal, so the table needs an exception immediately. What it over-blocks is
+ * small and lives in a band a few dp wide: a horizontal swipe begun in the status bar, a vertical one begun at the
+ * very edge. Starting a few dp further in is the whole of the workaround.
+ *
+ * **Closing is never suppressed**, which is why the check sits in the resting-on-HOME branch alone. A surface the user
+ * cannot drag back because their finger landed near an edge would be a far worse fault than the one this fixes, and
+ * the gesture that closes a surface is one the system is not competing for.
+ *
+ * The band is read **once, at the down**, because that is the only position the question is about: the system
+ * contests a swipe on where it *began*, and a finger that has since travelled into the middle of the screen does not
+ * stop it reading the gesture it started. The claim is then handed back whole — nothing has been consumed on the
+ * Initial pass — which is what lets the system's own gesture run clean rather than against a half-dragged surface.
+ *
  * @param enabled gate the whole gesture off when it shouldn't run.
  */
 fun Modifier.surfacePagerGesture(
@@ -148,11 +244,14 @@ fun Modifier.surfacePagerGesture(
 ): Modifier = composed {
     val scope = rememberCoroutineScope()
     val itemClaim = LocalItemSwipeClaim.current
-    pointerInput(state, itemClaim) {
+    val bands = rememberSystemGestureBands()
+    pointerInput(state, itemClaim, bands) {
         val touchSlop = viewConfiguration.touchSlop
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             if (!enabled()) return@awaitEachGesture
+
+            val fromSystemBand = bands.contains(down.position, size)
 
             // Freeze any in-flight settle so this touch takes over the pan cleanly, and capture the page each
             // axis started on (0, -1, or +1) for the settle rule.
@@ -173,7 +272,6 @@ fun Modifier.surfacePagerGesture(
             var axis: PanAxis? = null
             var claimed = false
             var justClaimed = false
-            var settled = false
             var twoFinger = false
             var accX = 0f
             var accY = 0f
@@ -246,6 +344,7 @@ fun Modifier.surfacePagerGesture(
                             claimed = true
                         } else {
                             // Resting on HOME: which edge does this swipe point at, and does it have a surface?
+                            if (fromSystemBand) break // the system is reading this same finger — see the KDoc
                             val target = if (horizontal) {
                                 if (accX > 0f) HomeEdge.LEFT else HomeEdge.RIGHT
                             } else {
@@ -288,31 +387,20 @@ fun Modifier.surfacePagerGesture(
                 }
             }
 
-            if (claimed) {
+            // Flip screen velocity into pan space: a finger flinging right (+x) opens LEFT, i.e. pan decreasing,
+            // so the settle sees a negative velocity.
+            val panAxis = axis
+            if (claimed && panAxis != null) {
                 val velocity = tracker.calculateVelocity()
-                // Flip screen velocity into pan-space: a finger flinging right (+x) opens LEFT, i.e. pan
-                // decreasing, so the settle sees a negative velocity.
-                when (axis) {
-                    // Each settle waits for the pump to finish: a spring started while a `snapTo` is still queued
-                    // would animate from a position the finger has already left, and the drain would then jump the
-                    // value out from under it.
-                    PanAxis.HORIZONTAL -> {
-                        settled = true
-                        scope.launch { pump.join(); state.settleX(startX, -velocity.x) }
-                    }
-
-                    PanAxis.VERTICAL -> {
-                        settled = true
-                        scope.launch { pump.join(); state.settleY(startY, -velocity.y) }
-                    }
-
-                    null -> Unit
+                when (panAxis) {
+                    PanAxis.HORIZONTAL -> pump.settle(panAxis, startX, -velocity.x)
+                    PanAxis.VERTICAL -> pump.settle(panAxis, startY, -velocity.y)
                 }
+            } else {
+                // A release that never claimed (a tap, or a gesture handed to a child) re-settles both axes so the
+                // pan never rests mid-transition.
+                pump.settleToNearest()
             }
-
-            // A release that never claimed (a tap, or a gesture handed to a child) re-settles both axes so the
-            // pan never rests mid-transition.
-            if (!settled) scope.launch { pump.join(); state.settleToNearest() }
         }
     }
 }

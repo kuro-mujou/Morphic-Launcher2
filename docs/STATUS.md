@@ -1519,6 +1519,24 @@ asked for, escapable only by back. L1 has the same bug and no `onNewIntent` anyw
   `HomeEntry`: the only destination with real wiring in it, so the key-to-screen table around it reads as a table
   again rather than as one long function.
 
+**And a surface pan no longer starts inside the system's own gesture bands.** `surfacePagerGesture` took a down
+anywhere, so a swipe beginning on the bottom home strip, a side back strip or the status bar was read by the launcher
+*and* by the system at once — the user got a half-dragged surface and a system gesture fighting over one finger.
+`SystemGestureBands` (`systemGestures ∪ statusBars`, measured once at the composition boundary) is consulted at the
+down, and an *opening* swipe from inside one is declined outright, which on the Initial pass costs the system nothing
+since nothing was consumed.
+
+- **One band, every direction, rather than a table of which edge blocks which axis.** The obvious refinement — bottom
+  blocks vertical, sides block horizontal — is wrong on the first case it meets: the bottom strip is also the
+  quick-switch gesture, which is horizontal. What the blunt rule over-blocks lives in a band a few dp wide and is
+  worked around by starting a few dp further in.
+- **Closing is never suppressed**, which is why the check sits in the resting-on-HOME branch alone. A surface the user
+  cannot drag back because their finger landed near an edge would be a worse fault than the one this fixes.
+- L1 had a narrower version of the same rule — `CrossPager`'s `inBottomGestureZone`, which suppressed only a
+  swipe-up-to-open-BOTTOM — and it is where the fix came from. Broadened on the author's call.
+- One extraction fell out of it rather than being a tidy-up: `PanPump` now owns **settling**, so the "join the drain
+  before you spring" rule is stated once instead of at three call sites each carrying its own copy of the comment.
+
 **Navigation + shell (B5) done.** `core:navigation` holds `HomeRoute` and a two-method `Navigator`; feature
 vocabulary stays *out* (L1 exported an 11-value `SettingsSection` to every consumer), which is why `SettingsRoute`
 itself lives in `feature:settings` now that it carries a section — see the surface-menu notes. `app`
