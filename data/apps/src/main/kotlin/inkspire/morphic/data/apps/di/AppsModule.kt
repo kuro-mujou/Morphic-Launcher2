@@ -19,9 +19,13 @@ import inkspire.morphic.data.apps.DefaultAppUninstaller
 import inkspire.morphic.data.apps.DefaultGestureActionRunner
 import inkspire.morphic.data.apps.DefaultLauncherAppsWrapper
 import inkspire.morphic.data.apps.GestureActionRunner
+import inkspire.morphic.data.apps.GestureServiceAccess
 import inkspire.morphic.data.apps.LauncherAppsRawIconSource
 import inkspire.morphic.data.apps.LauncherAppsWrapper
+import inkspire.morphic.data.apps.PlatformGestureServiceAccess
+import inkspire.morphic.data.apps.PlatformScreenLock
 import inkspire.morphic.data.apps.PlatformSystemShade
+import inkspire.morphic.data.apps.ScreenLock
 import inkspire.morphic.data.apps.SystemShade
 import inkspire.morphic.data.apps.category.AppCategorizer
 import inkspire.morphic.data.apps.category.AssetCategoryMapping
@@ -32,8 +36,10 @@ import org.koin.dsl.module
  * Koin module for `data:apps`. The bindings are singletons: the wrapper holds long-lived system services,
  * and the repository fronts the shared cache. [AppInfoDao] and [AppDispatchers] are resolved from the
  * database/common modules, and `Context` is provided by the app at Koin start (as `DatabaseModule` expects).
- * [AppLauncher], [AppUninstaller], [AppInfoOpener], [AppShortcuts], [SystemShade] and [GestureActionRunner] are thin
- * stateless commands — singletons only to avoid re-allocating them, as is [AppCategorizer].
+ * [AppLauncher], [AppUninstaller], [AppInfoOpener], [AppShortcuts], [SystemShade], [ScreenLock] and
+ * [GestureActionRunner] are thin stateless commands — singletons only to avoid re-allocating them, as is
+ * [AppCategorizer]. [GestureServiceAccess] is a singleton for a real reason: it holds the blocked action that the
+ * runner reports and the shell reads, so two instances would each see half of it.
  */
 val appsModule = module {
     single<LauncherAppsWrapper> { DefaultLauncherAppsWrapper(get<Context>()) }
@@ -43,8 +49,10 @@ val appsModule = module {
     single<AppUninstaller> { DefaultAppUninstaller(get<Context>(), get()) }
     single<AppInfoOpener> { DefaultAppInfoOpener(get()) }
     single<AppShortcuts> { DefaultAppShortcuts(get(), get()) }
-    single<SystemShade> { PlatformSystemShade(get<Context>()) }
-    single<GestureActionRunner> { DefaultGestureActionRunner(get(), get(), get()) }
+    single<SystemShade> { PlatformSystemShade() }
+    single<ScreenLock> { PlatformScreenLock() }
+    single<GestureServiceAccess> { PlatformGestureServiceAccess(get<Context>()) }
+    single<GestureActionRunner> { DefaultGestureActionRunner(get(), get(), get(), get(), get()) }
 
     // **`createdAtStart` because nothing injects it — it exists to run.** Its whole job is a subscription, so
     // waiting for a first consumer would mean waiting forever; `startKoin` creates eager singletons for exactly

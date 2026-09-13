@@ -165,14 +165,23 @@ class ItemSwipeClaim {
     /** What the pressed item would take, or empty while nothing is pressed or the item takes nothing. */
     private var directions: Set<SwipeDirection> = emptySet()
 
-    /** Publishes an item's claimed directions. Called at the down; pair with [release]. */
+    /**
+     * Whether an item is under the finger at all, whatever it takes — asked by a gesture on a surface's empty space
+     * (`surfaceDoubleTap`), which cannot tell from consumption: an item consumes nothing on a tap.
+     */
+    var itemPressed: Boolean = false
+        private set
+
+    /** Publishes that an item is pressed, and the directions it claims. Called at every item's down; pair with [release]. */
     fun claim(claimed: Set<SwipeDirection>) {
         directions = claimed
+        itemPressed = true
     }
 
     /** Clears the claim, on up or cancel. */
     fun release() {
         directions = emptySet()
+        itemPressed = false
     }
 
     /** Whether the pressed item would handle a swipe in [direction] itself. */

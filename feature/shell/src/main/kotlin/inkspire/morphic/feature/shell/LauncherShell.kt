@@ -318,6 +318,7 @@ fun LauncherShell(
                 // while it is up (it locks the surface swipe), so nothing may pan out from under it. It draws
                 // nothing at all when no menu is open.
                 MenuOverlay(menuHost)
+                GestureServicePrompt()
             }
         }
     }
@@ -532,10 +533,10 @@ private fun ShellState.surfaceBindings(onOpenAppsSettings: (AppsLayout) -> Unit)
         )
     }
 
-/** HOME's own swipe actions, each handed to [run] with its direction and where the swipe started. */
-private fun ShellState.swipeActions(run: (SwipeDirection, Float) -> Unit): Map<SwipeDirection, SwipeAction> =
+/** HOME's own swipe actions, each handed to [run] with its direction. */
+private fun ShellState.swipeActions(run: (SwipeDirection) -> Unit): Map<SwipeDirection, SwipeAction> =
     homeGestures.swipes.keys.associateWith { direction ->
-        SwipeAction(homeOneFinger(direction.revealedEdge)) { startX -> run(direction, startX) }
+        SwipeAction(homeOneFinger(direction.revealedEdge)) { run(direction) }
     }
 
 /**

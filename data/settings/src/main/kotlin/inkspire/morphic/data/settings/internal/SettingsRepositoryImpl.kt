@@ -323,6 +323,8 @@ internal class SettingsRepositoryImpl(
 
     override suspend fun setShadeStyle(style: ShadeStyle) = update(HomeGesturesSlice) { copy(shadeStyle = style) }
 
+    override suspend fun setHomeDoubleTap(action: GestureAction?) = update(HomeGesturesSlice) { copy(doubleTap = action) }
+
     override suspend fun setCategoryTabEdge(edge: VerticalEdge) =
         update(AppsChromeSlice) { copy(categoryTabEdge = edge) }
 

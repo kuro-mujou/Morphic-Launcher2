@@ -17,4 +17,7 @@ sealed interface GestureTarget {
 
     /** A swipe on HOME itself. */
     data class HomeSwipe(val direction: SwipeDirection) : GestureTarget
+
+    /** A double tap on HOME's empty space. */
+    data object HomeDoubleTap : GestureTarget
 }

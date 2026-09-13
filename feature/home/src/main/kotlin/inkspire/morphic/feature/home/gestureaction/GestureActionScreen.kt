@@ -1,7 +1,6 @@
 package inkspire.morphic.feature.home.gestureaction
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
@@ -24,21 +24,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import inkspire.morphic.core.designsystem.cell.AppIcon
 import inkspire.morphic.core.designsystem.cell.AppRowCell
 import inkspire.morphic.core.designsystem.component.MorphicGroupPanel
 import inkspire.morphic.core.designsystem.component.field.MorphicTextField
@@ -48,8 +42,8 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.GestureAction
 import inkspire.morphic.core.model.ItemGesture
+import inkspire.morphic.core.model.ShadePanel
 import inkspire.morphic.core.model.asItemGesture
-import inkspire.morphic.data.apps.AppShortcut
 import kotlinx.coroutines.launch
 
 /**
@@ -60,11 +54,9 @@ import kotlinx.coroutines.launch
  * asking which tab the query applies to. As filters they would look identical in a mockup and read as four separate
  * screens in the hand.
  *
- * **The sections here are the ones we can actually perform.** Screen off and recents need an `AccessibilityService`,
- * which is a feature with its own permission flow, so they are absent until that exists rather than present and inert
- * — this codebase's standing rule for a verb with no op behind it. Navigation actions are the same story one step
- * behind. The system panel is offered for HOME's swipes only: an item's gesture has no side of the screen to pick a
- * panel by.
+ * **The System section is offered on every gesture**, with Lock screen on HOME's own only — turning the screen off from
+ * an icon is not a gesture this launcher has. Its actions run through Morphic gestures and are saved whether or not
+ * that is on: the gesture asks for it as it fires, the one moment that also catches a service switched off later.
  *
  * @param onBack returns to the sheet the gesture was chosen from.
  * @param onChosen called after a choice is written, so the caller can close this destination — the screen does not
@@ -83,11 +75,11 @@ internal fun GestureActionScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    // Where each section starts, rebuilt whenever the list does — a chip cannot scroll to an index it computed
-    // against a different list, and the search box changes the list on every keystroke.
-    val offersSystemPanel = target is GestureTarget.HomeSwipe
-    val appsAt = if (offersSystemPanel) 4 else 2
-    val shortcutsAt by remember(state.apps.size) { derivedStateOf { appsAt + state.apps.size + 1 } }
+    // Lazy-item indices of the section headers the chips scroll to: None, then System and Apps at exactly two items each
+    // — a header and one panel, however many rows the panel holds. Counting rows instead of items overshoots the end of
+    // the list, silently.
+    val appsHeaderAt = 3
+    val shortcutsHeaderAt = appsHeaderAt + 2
 
     Column(
         modifier = modifier
@@ -118,8 +110,8 @@ internal fun GestureActionScreen(
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 8.dp),
         ) {
-            SectionChip("Apps") { scope.launch { listState.animateScrollToItem(appsAt) } }
-            SectionChip("Shortcuts") { scope.launch { listState.animateScrollToItem(shortcutsAt) } }
+            SectionChip("Apps") { scope.launch { listState.animateScrollToItem(appsHeaderAt) } }
+            SectionChip("Shortcuts") { scope.launch { listState.animateScrollToItem(shortcutsHeaderAt) } }
         }
 
         LazyColumn(
@@ -138,11 +130,9 @@ internal fun GestureActionScreen(
                 }
             }
 
-            if (offersSystemPanel) {
-                systemSection(selected = state.assigned == GestureAction.OpenSystemPanel) {
-                    viewModel.choose(GestureAction.OpenSystemPanel)
-                    onChosen()
-                }
+            systemSection(assigned = state.assigned, offersLockScreen = state.offersLockScreen) { action ->
+                viewModel.choose(action)
+                onChosen()
             }
 
             item(key = "apps-header") { SectionHeader("APPS") }
@@ -162,29 +152,22 @@ internal fun GestureActionScreen(
             }
 
             item(key = "shortcuts-header") { SectionHeader("SHORTCUTS") }
-            item(key = "shortcuts") {
-                Panel {
-                    when {
-                        state.loadingShortcuts -> SectionNote("Reading shortcuts…")
-                        // Empty has two very different causes and only one is worth acting on, so it says both.
-                        state.shortcutGroups.isEmpty() ->
-                            SectionNote("No shortcuts. Apps publish these, and only the active home app may read them.")
+            when {
+                state.loadingShortcuts -> item(key = "shortcuts-note") { Panel { SectionNote("Reading shortcuts…") } }
+                // Empty has two very different causes and only one is worth acting on, so it says both.
+                state.shortcutGroups.isEmpty() -> item(key = "shortcuts-note") {
+                    Panel { SectionNote("No shortcuts. Apps publish these, and only the active home app may read them.") }
+                }
 
-                        else -> state.shortcutGroups.forEachIndexed { index, group ->
-                            // **A rule between blocks, not under every row.** One app's shortcuts are a unit; what
-                            // needs separating is where one app ends and the next begins. A divider per row would
-                            // draw the panel as a grid of equals and lose the grouping the header just made.
-                            if (index > 0) BlockDivider()
-                            GroupHeader(group.app)
-                            group.shortcuts.forEach { shortcut ->
-                                ShortcutChoiceRow(
-                                    shortcut = shortcut,
-                                    selected = state.assigned.isThis(shortcut),
-                                    onClick = { viewModel.chooseShortcut(shortcut); onChosen() },
-                                )
-                            }
-                        }
-                    }
+                // **One lazy item per app**, where the section used to be a single item holding every row: a card
+                // opening changes only its own height, and the cards below it are composed as they scroll in.
+                else -> items(state.shortcutGroups, key = { "shortcuts:${it.app.componentKey.packageName}" }) { group ->
+                    ShortcutGroupCard(
+                        group = group,
+                        assigned = state.assigned,
+                        searching = state.query.isNotBlank(),
+                        onChoose = { shortcut -> viewModel.chooseShortcut(shortcut); onChosen() },
+                    )
                 }
             }
         }
@@ -193,16 +176,24 @@ internal fun GestureActionScreen(
     BackHandler(onBack = onBack)
 }
 
-/** The System section: its header and the system panel's one row — the two list items `appsAt` counts past. */
-private fun LazyListScope.systemSection(selected: Boolean, onClick: () -> Unit) {
+/** The System section: its header and one panel of system actions — the two list items `appsHeaderAt` counts past. */
+private fun LazyListScope.systemSection(
+    assigned: GestureAction?,
+    offersLockScreen: Boolean,
+    onChoose: (GestureAction) -> Unit,
+) {
     item(key = "system-header") { SectionHeader("SYSTEM") }
     item(key = "system") {
         Panel {
-            ChoiceRow(
-                label = describeGestureAction(GestureAction.OpenSystemPanel, emptyMap()),
-                selected = selected,
-                onClick = onClick,
-            )
+            val actions = ShadePanel.entries.map { GestureAction.OpenSystemPanel(it) } +
+                listOfNotNull(GestureAction.LockScreen.takeIf { offersLockScreen })
+            actions.forEach { action ->
+                    ChoiceRow(
+                        label = describeGestureAction(action, emptyMap()),
+                        selected = assigned == action,
+                        onClick = { onChoose(action) },
+                    )
+                }
         }
     }
 }
@@ -243,48 +234,6 @@ private fun AppChoiceRow(app: AppInfo, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** One of an app's shortcuts: the icon the app rasterized for it, and its own name. */
-@Composable
-private fun ShortcutChoiceRow(shortcut: AppShortcut, selected: Boolean, onClick: () -> Unit) {
-    val colors = LocalMorphicColors.current
-    val content = if (selected) colors.onAccent else colors.content
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(if (selected) colors.accent else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(start = 40.dp, end = 8.dp)
-            .padding(vertical = 4.dp),
-    ) {
-        // **Drawn as the app rasterized it, not run through `core:icon`.** A shortcut icon is the app's own
-        // badge-and-glyph composition, which `AppShortcut` says in as many words — restyling it into one of our
-        // layer stacks would produce something the app never published.
-        val icon = shortcut.icon
-        if (icon != null) {
-            Image(
-                bitmap = icon.asImageBitmap(),
-                contentDescription = null,
-                modifier = Modifier.size(24.dp),
-            )
-        } else {
-            // A shortcut the platform gave us no icon for still needs its row to line up with the others.
-            Box(Modifier.size(24.dp))
-        }
-        Text(
-            text = shortcut.label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = content,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = 8.dp),
-        )
-        if (selected) SelectedMark()
-    }
-}
-
 /** The plain choice — no icon, because "None" is the absence of one. */
 @Composable
 private fun ChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
@@ -316,7 +265,7 @@ private fun ChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
  * picker is scrolled through, and a row that scrolls past half-visible reads by its mark before its color.
  */
 @Composable
-private fun SelectedMark() {
+internal fun SelectedMark() {
     val colors = LocalMorphicColors.current
     Box(
         Modifier
@@ -324,53 +273,6 @@ private fun SelectedMark() {
             .size(8.dp)
             .clip(RoundedCornerShape(50))
             .background(colors.onAccent),
-    )
-}
-
-/**
- * A group of one app's shortcuts, headed by the app that publishes them — its icon beside its name.
- *
- * **The icon is the launcher's own**, through [AppIcon], so an app is recognized here exactly as it is on home. A
- * shortcut's own icon is the app's to draw; the *app* is ours, and the two sitting in one column is what makes the
- * indent read as "these belong to that".
- */
-@Composable
-private fun GroupHeader(app: AppInfo) {
-    val colors = LocalMorphicColors.current
-    val sizePx = with(LocalDensity.current) { 28.dp.roundToPx() }
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
-    ) {
-        AppIcon(
-            component = app.componentKey,
-            contentDescription = null,
-            sizePx = sizePx,
-            modifier = Modifier.size(28.dp),
-        )
-        Text(
-            text = app.label,
-            style = MaterialTheme.typography.labelLarge,
-            color = colors.contentMuted,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 8.dp),
-        )
-    }
-}
-
-/** The hairline between two apps' blocks — the palette's own divider, not a faded content color. */
-@Composable
-private fun BlockDivider() {
-    val colors = LocalMorphicColors.current
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp)
-            .height(1.dp)
-            .background(colors.divider),
     )
 }
 
@@ -415,14 +317,6 @@ private fun GestureActionSearch(query: String, onQuery: (String) -> Unit, modifi
     MorphicTextField(state = state, placeholder = "Search", modifier = modifier.fillMaxWidth())
 }
 
-/** Whether this stored action is the given live shortcut — the three fields that identify one, never the label. */
-private fun GestureAction?.isThis(shortcut: AppShortcut): Boolean {
-    val stored = this as? GestureAction.LaunchShortcut ?: return false
-    return stored.id == shortcut.id &&
-        stored.packageName == shortcut.packageName &&
-        stored.userSerial == shortcut.userSerial
-}
-
 /** A jump-to-section chip. It scrolls; it does not filter — see this screen's own note. */
 @Composable
 private fun SectionChip(label: String, onClick: () -> Unit) {
@@ -445,6 +339,7 @@ private val GestureTarget.gestureLabel: String
     get() = when (this) {
         is GestureTarget.Item -> gesture.label
         is GestureTarget.HomeSwipe -> direction.asItemGesture().label
+        GestureTarget.HomeDoubleTap -> ItemGesture.DOUBLE_TAP.label
     }
 
 private val ItemGesture.label: String

@@ -1,5 +1,6 @@
 package inkspire.morphic.feature.shell.di
 
+import inkspire.morphic.feature.shell.GestureServicePromptViewModel
 import inkspire.morphic.feature.shell.ShellViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
@@ -13,4 +14,5 @@ import org.koin.dsl.module
  */
 val shellModule = module {
     viewModel { ShellViewModel(get(), get(), get(), get(), get(), get(), get()) }
+    viewModel { GestureServicePromptViewModel(get()) }
 }

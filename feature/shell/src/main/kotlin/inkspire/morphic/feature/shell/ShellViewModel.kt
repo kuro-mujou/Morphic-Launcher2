@@ -9,7 +9,6 @@ import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.Orientation
-import inkspire.morphic.core.model.ShadeRequest
 import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.arrangementKey
 import inkspire.morphic.core.model.on
@@ -198,15 +197,12 @@ class ShellViewModel(
     /**
      * Runs what a swipe in [direction] on HOME is set to. **Read as it fires**, like an item's gesture, so a swipe
      * reassigned a moment ago does the new thing.
-     *
-     * @param startX where the swipe began, as a fraction of the screen's width — which side of a separate shade a
-     *   system-panel action opens.
      */
-    fun runHomeSwipe(direction: SwipeDirection, startX: Float) {
+    fun runHomeSwipe(direction: SwipeDirection) {
         viewModelScope.launch {
             val gestures = settingsRepository.homeGestures.first()
             val action = gestures.swipes[direction] ?: return@launch
-            gestureActionRunner.run(action, ShadeRequest(gestures.shadeStyle, startX))
+            gestureActionRunner.run(action, gestures.shadeStyle)
         }
     }
 

@@ -37,4 +37,9 @@ sealed interface GestureActionRoute : NavKey {
     @Serializable
     @SerialName("gesture_action_home_swipe")
     data class HomeSwipe(val direction: SwipeDirection) : GestureActionRoute
+
+    /** A double tap on HOME's empty space, chosen from the Gestures section in settings. */
+    @Serializable
+    @SerialName("gesture_action_home_double_tap")
+    data object HomeDoubleTap : GestureActionRoute
 }

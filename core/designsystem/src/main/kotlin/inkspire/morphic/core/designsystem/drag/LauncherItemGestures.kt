@@ -250,10 +250,10 @@ fun Modifier.launcherItemGestures(
                     // canceled `pointerInput` coroutine (the node leaving the tree mid-drag) takes none of them, and
                     // a leaked claim would lock the surface swipe for the rest of the session.
                     try {
-                        // Only while this item has something to take. Publishing an empty set would still be
-                        // correct — the pan asks about one direction — but it would make every press overwrite
-                        // whatever a previous one left, and the release below already handles that.
-                        if (edgeActions.isNotEmpty()) swipeClaim?.claim(edgeActions)
+                        // Every item publishes, even one that takes no swipe: the claim also says an item is pressed
+                        // at all, which is what a double tap on the surface's empty space asks. Last down wins, as the
+                        // claim's own KDoc says.
+                        swipeClaim?.claim(edgeActions)
                         // **Where the press is, reported before it can become anything else.** Every verb below
                         // acts on what the finger came down on rather than on wherever it has since travelled.
                         currentOnPress(rootOf(local))
@@ -360,7 +360,7 @@ fun Modifier.launcherItemGestures(
                             }
                         }
                     } finally {
-                        if (edgeActions.isNotEmpty()) swipeClaim?.release()
+                        swipeClaim?.release()
                         releaseSurface()
                     }
                 }

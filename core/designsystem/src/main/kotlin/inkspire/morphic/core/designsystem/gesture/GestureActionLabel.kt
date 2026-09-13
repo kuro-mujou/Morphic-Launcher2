@@ -3,6 +3,7 @@ package inkspire.morphic.core.designsystem.gesture
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.GestureAction
+import inkspire.morphic.core.model.ShadePanel
 
 /**
  * What an assigned [GestureAction] is called wherever one is listed — an item's gesture sheet on home, and the
@@ -17,7 +18,11 @@ fun describeGestureAction(action: GestureAction, catalog: Map<ComponentKey, AppI
     when (action) {
         is GestureAction.LaunchApp -> catalog[action.component]?.label ?: MissingApp
         is GestureAction.LaunchShortcut -> action.label
-        GestureAction.OpenSystemPanel -> "System panel"
+        is GestureAction.OpenSystemPanel -> when (action.panel) {
+            ShadePanel.NOTIFICATIONS -> "Notifications"
+            ShadePanel.QUICK_SETTINGS -> "Quick settings"
+        }
+        GestureAction.LockScreen -> "Lock screen"
     }
 
 /** An assignment whose app is no longer installed. Named so, rather than left blank, which reads as a bug. */

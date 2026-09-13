@@ -25,7 +25,8 @@ import inkspire.morphic.feature.settings.component.SettingsValueRow
 import org.koin.androidx.compose.koinViewModel
 
 /**
- * **Gestures**: what a swipe on HOME itself does, in each direction.
+ * **Gestures**: what a swipe or a double tap on HOME itself does, how the phone's panels are arranged, and whether the
+ * service some actions need is on.
  *
  * **A swipe with an action takes one finger, and the screen on that edge moves to two.** The line under the rows says
  * so, because nothing else in settings would: assigning here changes how the Screen manager's edges are reached.
@@ -33,13 +34,20 @@ import org.koin.androidx.compose.koinViewModel
  * Each row opens the action picker — the destination an item's gesture uses too — rather than a picker drawn here, so
  * there is one list of apps and shortcuts with one search box.
  *
- * **The panel style is absent until a swipe opens the system panel**, the standing rule: before that it changes nothing.
+ * **Each part below the rows is absent until something needs it**, the standing rule: the panel style until a gesture
+ * opens a panel, the Morphic gestures card until a gesture needs the service. The card is always last, in one place,
+ * whichever action asked for it.
+ *
+ * **Status, never a prompt.** An action that needs the service is saved whether or not it is on; the gesture asks for it
+ * as it fires — `GestureServiceDialog`, in the shell.
  *
  * @param onAssignSwipe opens the action picker for a direction. A destination `feature:home` declares, so `app` maps it.
+ * @param onAssignDoubleTap the same, for a double tap on HOME's empty space.
  */
 @Composable
 internal fun GesturesDetail(
     onAssignSwipe: (SwipeDirection) -> Unit,
+    onAssignDoubleTap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val viewModel = koinViewModel<GesturesViewModel>()
@@ -47,7 +55,7 @@ internal fun GesturesDetail(
 
     // Re-read on every return, since the gesture service is switched on in the system's settings and says nothing back.
     LifecycleResumeEffect(viewModel) {
-        viewModel.refreshSwipeService()
+        viewModel.refreshService()
         onPauseOrDispose { }
     }
 
@@ -57,55 +65,52 @@ internal fun GesturesDetail(
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
     ) {
-        SettingsSectionHeader("Swipe on home", spaceAbove = false)
+        SettingsSectionHeader("On home", spaceAbove = false)
         MorphicGroupPanel {
             SwipeDirection.entries.forEach { direction ->
                 SettingsValueRow(
                     label = direction.label,
-                    value = state.actions[direction] ?: "None",
+                    value = state.swipes[direction] ?: "None",
                     onClick = { onAssignSwipe(direction) },
                 )
             }
+            SettingsValueRow(
+                label = "Double tap",
+                value = state.doubleTap ?: "None",
+                onClick = onAssignDoubleTap,
+            )
         }
         Note("A swipe with an action uses one finger. The screen on that edge then opens with two.")
 
         AnimatedVisibility(visible = state.showsShadeStyle) {
-            PanelStyleSettings(
-                state = state,
-                onStyle = viewModel::setShadeStyle,
-                onOpenSwipeService = viewModel::openSwipeServiceSettings,
-            )
+            PanelStyleSettings(style = state.shadeStyle, onStyle = viewModel::setShadeStyle)
+        }
+        AnimatedVisibility(visible = state.needsService) {
+            GestureServiceCard(on = state.serviceOn, onOpen = viewModel::openServiceSettings)
         }
     }
 }
 
 /**
- * The panel style, a picture of it, and — under Separate — the gesture service that makes the notification side
- * reachable on skins whose own API will not open it.
+ * The panel style and a picture of it.
  *
- * **Under Separate the picture waits for the service.** With the service off, the split it draws is exactly what some
- * firmware will not deliver, so the note saying so stands in its place until the service is on.
- *
- * **The service row is absent under Combined**, where a replayed swipe is never used and so switching it on would
- * change nothing.
+ * **The picture is what the user matches**, not the word: the style decides how a panel action opens — a touch on that
+ * panel's side under Separate — so a wrong answer opens the other panel, and a drawing of the phone's own arrangement is
+ * easier to recognize than "Combined".
  */
 @Composable
-private fun PanelStyleSettings(
-    state: GesturesState,
-    onStyle: (ShadeStyle) -> Unit,
-    onOpenSwipeService: () -> Unit,
-) {
+private fun PanelStyleSettings(style: ShadeStyle, onStyle: (ShadeStyle) -> Unit) {
     Column {
-        SettingsSectionHeader("Notification panel")
+        SettingsSectionHeader("System panels")
         val styles = ShadeStyle.entries
         MorphicSegmentedButtons(
-            options = styles.map { style ->
-                when (style) {
+            options = styles.map {
+                when (it) {
                     ShadeStyle.COMBINED -> "Combined"
                     ShadeStyle.SEPARATE -> "Separate"
                 }
             },
-            selectedIndex = styles.indexOf(state.shadeStyle),
+            selectedIndex = styles.indexOf(style),
             onSelect = { onStyle(styles[it]) },
             modifier = Modifier.fillMaxWidth(),
         )
@@ -115,29 +120,34 @@ private fun PanelStyleSettings(
             "Match your phone's own notification panel setting. Changing it here doesn't change how your phone shows " +
                 "notifications.",
         )
-
-        AnimatedVisibility(visible = state.shadeStyle == ShadeStyle.COMBINED) {
+        AnimatedVisibility(visible = style == ShadeStyle.COMBINED) {
             ShadeStylePreview(ShadeStyle.COMBINED)
         }
-        AnimatedVisibility(visible = state.shadeStyle == ShadeStyle.SEPARATE) {
-            Column {
-                MorphicGroupPanel(modifier = Modifier.padding(top = 4.dp)) {
-                    SettingsValueRow(
-                        label = "Morphic gestures",
-                        value = if (state.swipeServiceOn) "On" else "Off",
-                        onClick = onOpenSwipeService,
-                    )
-                }
-                if (state.swipeServiceOn) {
-                    ShadeStylePreview(ShadeStyle.SEPARATE)
-                } else {
-                    Note(
-                        "Depending on your phone's firmware, this gesture may not open notifications. Turn on Morphic " +
-                            "gestures to fix it.",
-                    )
-                }
-            }
+        AnimatedVisibility(visible = style == ShadeStyle.SEPARATE) {
+            ShadeStylePreview(ShadeStyle.SEPARATE)
         }
+    }
+}
+
+/** The gesture service: whether it is on, a tap through to where it is switched, and what it is for. */
+@Composable
+private fun GestureServiceCard(on: Boolean, onOpen: () -> Unit) {
+    Column {
+        SettingsSectionHeader("Accessibility")
+        MorphicGroupPanel {
+            SettingsValueRow(
+                label = "Morphic gestures",
+                value = if (on) "On" else "Off",
+                onClick = onOpen,
+            )
+        }
+        Note(
+            if (on) {
+                "Opens the system panels and turns the screen off for your gestures."
+            } else {
+                "Gestures that open a system panel or lock the screen need this. Until it's on, they ask for it instead."
+            },
+        )
     }
 }
 

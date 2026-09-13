@@ -358,7 +358,7 @@ fun Modifier.surfacePagerGesture(
                             // infinite content on this axis, which has no edge to hand off from at all.
                             if (!twoFinger && !open.allows(state.centerScroll.edges()[target])) break
                             // An action claims with no axis, so the drags below move nothing while the finger stays ours.
-                            action?.perform(down.position.x / size.width)
+                            action?.perform()
                             if (action == null) axis = if (horizontal) PanAxis.HORIZONTAL else PanAxis.VERTICAL
                             claimed = true
                         }

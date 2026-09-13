@@ -144,9 +144,9 @@ class SurfaceBinding(
  *
  * @param oneFinger when one finger may run it — HOME's content on the swipe's axis, the same rule a surface's open
  *   policy follows, so a list HOME scrolls first and runs the action only from its top.
- * @param perform runs the action, given where the swipe started as a fraction of the pager's width.
+ * @param perform runs the action.
  */
 class SwipeAction(
     val oneFinger: OneFingerSwipe,
-    val perform: (startX: Float) -> Unit,
+    val perform: () -> Unit,
 )

@@ -8,6 +8,7 @@ import inkspire.morphic.core.model.GestureAction
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.apps.AppShortcut
 import inkspire.morphic.data.apps.AppShortcuts
+import inkspire.morphic.data.apps.ScreenLock
 import inkspire.morphic.data.settings.SettingsRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,6 +38,8 @@ data class ShortcutGroup(val app: AppInfo, val shortcuts: List<AppShortcut>)
  *
  * @property assigned what this gesture does today, so the picker can mark the current choice. Null when the gesture
  *   is unassigned, which is what makes the "None" row the selected one.
+ * @property offersLockScreen whether the System section lists Lock screen — on HOME's own gestures, on a device that has
+ *   the action at all.
  * @property loadingShortcuts true until the platform has answered. Shortcuts arrive later than apps — one query
  *   across every profile — and a section that appeared without warning halfway through a scroll would move the
  *   list under the finger.
@@ -47,6 +50,7 @@ data class GestureActionState(
     val assigned: GestureAction? = null,
     val query: String = "",
     val loadingShortcuts: Boolean = true,
+    val offersLockScreen: Boolean = false,
 )
 
 /**
@@ -66,7 +70,10 @@ class GestureActionViewModel(
     private val settingsRepository: SettingsRepository,
     private val appShortcuts: AppShortcuts,
     appRepository: AppRepository,
+    screenLock: ScreenLock,
 ) : ViewModel() {
+
+    private val offersLockScreen = screenLock.isSupported && target !is GestureTarget.Item
 
     private val query = MutableStateFlow("")
     private val shortcuts = MutableStateFlow<List<AppShortcut>?>(null)
@@ -100,6 +107,7 @@ class GestureActionViewModel(
                 assigned = assigned,
                 query = text,
                 loadingShortcuts = loaded == null,
+                offersLockScreen = offersLockScreen,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), GestureActionState())
 
@@ -114,6 +122,7 @@ class GestureActionViewModel(
             when (target) {
                 is GestureTarget.Item -> settingsRepository.setItemGesture(target.item, target.gesture, action)
                 is GestureTarget.HomeSwipe -> settingsRepository.setHomeSwipe(target.direction, action)
+                GestureTarget.HomeDoubleTap -> settingsRepository.setHomeDoubleTap(action)
             }
         }
     }
@@ -122,6 +131,7 @@ class GestureActionViewModel(
     private fun assigned(): Flow<GestureAction?> = when (target) {
         is GestureTarget.Item -> settingsRepository.homeItemGestures.map { it.actionsOn(target.item)[target.gesture] }
         is GestureTarget.HomeSwipe -> settingsRepository.homeGestures.map { it.swipes[target.direction] }
+        GestureTarget.HomeDoubleTap -> settingsRepository.homeGestures.map { it.doubleTap }
     }
 
     /** Assigns an app by the key the picker row carries. */

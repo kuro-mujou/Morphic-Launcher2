@@ -31,6 +31,7 @@ fun GestureActionDestination(
 
         is GestureActionRoute.Folder -> GestureTarget.Item(GridItem.Folder(route.folderId), route.gesture)
         is GestureActionRoute.HomeSwipe -> GestureTarget.HomeSwipe(route.direction)
+        GestureActionRoute.HomeDoubleTap -> GestureTarget.HomeDoubleTap
     }
     if (target == null) {
         onBack()

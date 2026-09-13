@@ -56,6 +56,7 @@ import inkspire.morphic.core.designsystem.pager.rememberLauncherPagerState
 import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
 import inkspire.morphic.core.designsystem.surface.ScrollEdges
+import inkspire.morphic.core.designsystem.surface.surfaceDoubleTap
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.DropIntent
@@ -724,7 +725,10 @@ internal fun HomePagerSurface(
                     // against the grid a widget would land on, and only the surface drawing that grid knows it.
                     surfaceActions = listOf(MenuAction("Widgets") { widgetPickerOpen = true }),
                 )
-            },
+            }
+            // **Double tap on empty space → HOME's own double-tap action**, beside the long-press and gated the same
+            // way; `surfaceDoubleTap` owns why a double tap on an icon does not reach it.
+            .surfaceDoubleTap(gestureConfig, enabled = presented, onDoubleTap = viewModel::runHomeDoubleTap),
     ) {
         // **The two zones, stacked along the dock's own axis** — see [HomeZoneScaffold], which owns the
         // arrangement, the `uiInsets` padding on the pair, and each zone's own horizontal margin (S4g). The margins

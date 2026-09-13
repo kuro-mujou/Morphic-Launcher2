@@ -38,6 +38,10 @@ data class HomeItemGestures(val items: List<ItemGestures> = emptyList()) {
     fun actionsOn(item: GridItem): Map<ItemGesture, GestureAction> =
         items.firstOrNull { it.item == item }?.actions.orEmpty()
 
+    /** Every action assigned on any item — the items' half of "does anything on home need X", beside `HomeGestures`'. */
+    val actions: List<GestureAction>
+        get() = items.flatMap { it.actions.values }
+
     /** The gestures [item] has taken, whatever they do. */
     fun gesturesOn(item: GridItem): Set<ItemGesture> = actionsOn(item).keys
 

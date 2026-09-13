@@ -96,11 +96,13 @@ private val SettingsSection?.paneDepth: Int
  *   place, so back should leave it before leaving the surface.
  * @param onAssignHomeSwipe opens the action picker for a swipe on HOME — a destination `feature:home` declares, which
  *   is why it arrives from `app` rather than through the navigator here.
+ * @param onAssignHomeDoubleTap the same, for a double tap on HOME's empty space.
  */
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
     onAssignHomeSwipe: (SwipeDirection) -> Unit,
+    onAssignHomeDoubleTap: () -> Unit,
     modifier: Modifier = Modifier,
     initialSection: SettingsSection? = null,
     initialLayout: AppsLayout? = null,
@@ -126,7 +128,7 @@ fun SettingsScreen(
     // **The pane for a section, built once here** and handed to whichever layout is showing. The two layouts differ in
     // where a pane sits and which sides it insets, and in nothing about what it holds or where it can lead.
     val detail: @Composable (SettingsSection, WindowInsetsSides) -> Unit = { section, insetSides ->
-        SettingsDetail(section, insetSides, homeLayout, appsLayout, openSection, onAssignHomeSwipe)
+        SettingsDetail(section, insetSides, homeLayout, appsLayout, openSection, onAssignHomeSwipe, onAssignHomeDoubleTap)
     }
 
     LauncherTheme(darkTheme = isSystemInDarkTheme()) {
@@ -317,8 +319,9 @@ private fun SettingsDetail(
     appsLayout: AppsLayout?,
     onOpenSection: (SettingsSection, AppsLayout?) -> Unit,
     onAssignHomeSwipe: (SwipeDirection) -> Unit,
+    onAssignHomeDoubleTap: () -> Unit,
 ) = PunchThroughPane(insetSides) {
-    SectionPane(section, homeLayout, appsLayout, onOpenSection, onAssignHomeSwipe)
+    SectionPane(section, homeLayout, appsLayout, onOpenSection, onAssignHomeSwipe, onAssignHomeDoubleTap)
 }
 
 /**
@@ -337,13 +340,17 @@ private fun SectionPane(
     appsLayout: AppsLayout?,
     onOpenSection: (SettingsSection, AppsLayout?) -> Unit,
     onAssignHomeSwipe: (SwipeDirection) -> Unit,
+    onAssignHomeDoubleTap: () -> Unit,
 ) {
     when (section) {
         SettingsSection.WALLPAPER -> WallpaperDetail()
         SettingsSection.EFFECTS -> EffectsDetail()
         SettingsSection.ICONS -> IconsDetail()
         SettingsSection.SURFACE_REGISTER -> SurfaceRegisterDetail(onOpenSection = onOpenSection)
-        SettingsSection.GESTURES -> GesturesDetail(onAssignSwipe = onAssignHomeSwipe)
+        SettingsSection.GESTURES -> GesturesDetail(
+            onAssignSwipe = onAssignHomeSwipe,
+            onAssignDoubleTap = onAssignHomeDoubleTap,
+        )
         SettingsSection.ORIENTATION -> OrientationDetail()
         SettingsSection.HOME -> HomeDetail(onOpenSection = onOpenSection)
         SettingsSection.HOME_GRID -> GridSizeDetail()

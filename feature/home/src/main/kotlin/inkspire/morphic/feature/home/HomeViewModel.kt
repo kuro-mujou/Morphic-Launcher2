@@ -19,7 +19,6 @@ import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.ItemGesture
 import inkspire.morphic.core.model.PlacementPlan
-import inkspire.morphic.core.model.ShadeRequest
 import inkspire.morphic.core.model.SyncMode
 import inkspire.morphic.core.model.WidgetContainer
 import inkspire.morphic.core.model.WidgetContainerAxis
@@ -442,9 +441,16 @@ class HomeViewModel(
     fun runGesture(item: GridItem, gesture: ItemGesture) {
         viewModelScope.launch {
             val action = settingsRepository.homeItemGestures.first().actionsOn(item)[gesture] ?: return@launch
-            // An item has no side of the screen to pick a panel by, so a system panel here is the whole shade. The picker
-            // does not offer one on an item; this is what a stored one would do rather than nothing.
-            gestureActionRunner.run(action, ShadeRequest.WholeShade)
+            gestureActionRunner.run(action, settingsRepository.homeGestures.first().shadeStyle)
+        }
+    }
+
+    /** Performs HOME's own double-tap action, and nothing when none is assigned — read as it fires, like [runGesture]. */
+    fun runHomeDoubleTap() {
+        viewModelScope.launch {
+            val gestures = settingsRepository.homeGestures.first()
+            val action = gestures.doubleTap ?: return@launch
+            gestureActionRunner.run(action, gestures.shadeStyle)
         }
     }
 

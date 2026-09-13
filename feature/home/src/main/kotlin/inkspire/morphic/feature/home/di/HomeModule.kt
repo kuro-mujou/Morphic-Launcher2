@@ -29,7 +29,7 @@ val homeModule = module {
 
     // **A per-instance parameter**, unlike every other ViewModel here: the picker is opened for one gesture target,
     // which is exactly the case the `NavEntry` ViewModel-store decorator exists to keep separate.
-    viewModel { (target: GestureTarget) -> GestureActionViewModel(target, get(), get(), get()) }
+    viewModel { (target: GestureTarget) -> GestureActionViewModel(target, get(), get(), get(), get()) }
     viewModel { WidgetPickerViewModel(get()) }
     viewModel { (route: ContainerSettingsRoute) -> ContainerSettingsViewModel(route, get(), get(), get(), get()) }
 }

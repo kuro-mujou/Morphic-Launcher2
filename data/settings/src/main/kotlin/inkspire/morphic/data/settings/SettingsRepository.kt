@@ -134,6 +134,9 @@ interface SettingsRepository {
     /** Sets how the user's phone arranges its system panels. */
     suspend fun setShadeStyle(style: ShadeStyle)
 
+    /** Sets what a double tap on HOME's empty space does; a null [action] makes it do nothing. */
+    suspend fun setHomeDoubleTap(action: GestureAction?)
+
     /** Sets which edge the category pager's tab bar sits on. */
     suspend fun setCategoryTabEdge(edge: VerticalEdge)
 

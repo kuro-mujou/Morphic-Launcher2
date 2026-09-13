@@ -1862,6 +1862,54 @@ The report is **one answer for a whole surface**, so a vertical swipe starting i
 treated as if it were over the main area — L1's own simplification, and refining it would mean a per-region answer to
 a question decided once, at slop.
 
+**HOME has gestures of its own, and a swipe can pull down the system panels.** A **Gestures** settings section assigns
+an action per swipe direction on HOME — the system panel, an app, or a shortcut — stored in `HomeGestures`
+(`home_gestures`), a slice of its own. What makes it cost nothing: **a direction with an action takes the one-finger
+swipe, and the surface on the edge it reveals moves to two fingers** (`OneFingerSwipe.NEVER`); a direction with none
+behaves exactly as before. `SwipeAction` is the pager's half — claimed by the same rules as a surface (the system bands,
+the pressed item's own swipes, HOME's scroll edge), fired once at the claim, and the rest of the gesture kept so HOME
+does not scroll behind what is opening.
+- **The shade was an edge binding first, and that was reversed.** `SideBinding.Shade` made an edge hold the shade *or*
+  APPS, never both.
+- **One derivation per promise.** `SwipeDirection.revealedEdge` maps a finger to an edge for the pan and the shell;
+  `HomeGestures.twoFingerEdges` is read by the shell (to set `NEVER`) and by the Screen manager card, which says "Two
+  fingers" on such an edge; `ShellState.homeOneFinger` is one expression for a surface's open policy and an action's,
+  so a list HOME scrolls to its top before either fires.
+- **`GestureActionRunner` (`data:apps`) performs every `GestureAction`** for both callers — an item's gesture in
+  `HomeViewModel`, a HOME swipe in `ShellViewModel` — since two `when`s over one sealed type would each need the next
+  member and the missed one would do nothing silently. `describeGestureAction` moved to `core:designsystem/gesture` on
+  its second consumer. The action picker is shared through `GestureTarget` (an item's gesture or a HOME swipe), and
+  settings reaches it through `app` (`GestureActionRoute.HomeSwipe`), because a feature cannot import another's route.
+- **A panel action names its panel.** `GestureAction.OpenSystemPanel(panel)` is Notifications or Quick settings, picked
+  in the action picker. The first version stored a panel-less `system_panel` and chose the panel from where the gesture
+  started (`ShadeRequest`, `panelAt`), which made a double tap's result depend on where the thumb landed and left quick
+  settings unreachable under Combined; naming the panel also lets an item's gesture open one. The retired discriminator
+  no longer decodes, so a `home_gestures` blob holding it falls back to the defaults once — deliberately, rather than
+  guessing a panel.
+- **Every panel action runs through the accessibility service**, under either style: its global actions for a combined
+  shade, a replayed swipe on the panel's side for a separate one. The reflection over `StatusBarManager`'s hidden
+  `expandNotificationsPanel`/`expandSettingsPanel` (and `EXPAND_STATUS_BAR`) went with the start X: it needed no service
+  on stock Android, but as a fallback it opened RedMagic's control center whichever panel was asked for, silently.
+- **Combined or separate is the user's to say** (`ShadeStyle`), because nothing exposes it: One UI, HyperOS and stock
+  each keep it in a private setting. It decides *how* a panel opens, never which.
+- **A gesture that needs the service asks for it as it fires** — Smart Launcher's model. `GestureActionRunner` checks
+  `GestureAction.needsGestureService` (one derivation, also read by the settings card) and, with the service off, reports
+  the action to `GestureServiceAccess.blocked` instead of running it; the shell turns that into `GestureServiceDialog`,
+  above every surface, since HOME's swipes fire in the shell and an item's in home. The picker saves regardless: an
+  assignment-time check cannot see the service switched off later, which some skins do after an update.
+- **RedMagic OS sends every programmatic expand to its control center while its split is on.** Traced in its SystemUI:
+  `CentralSurfacesCommandQueueCallbacksAdapt.handleExpandToNotifications` opens the control center unless CTS is
+  running, and only a real touch on the left half of the status bar (`ControlPanelWindowManager.dispatchToControlPanel`)
+  reaches notifications — so no call, no `cmd statusbar` and no `GLOBAL_ACTION_NOTIFICATIONS` can. `MorphicGestureService`
+  ("Morphic gestures") replays that touch under a separate style; it performs gestures and global actions only, with no
+  window content and no events. **A Play release needs the accessibility-use declaration** for it.
+- **The section says what the style is not**: it mirrors the phone and changes nothing about it. `ShadeStylePreview`
+  draws each arrangement — one phone for combined, two phones (notifications, control center) for separate. The
+  Morphic gestures card is status only, in one place, shown whenever any gesture on home — an item's included — needs
+  the service.
+- Verified on an API 36 emulator and a RedMagic NX809J (Android 16). Two-finger opening was checked by hand, since
+  `adb input` drives one finger.
+
 **Known gaps, deliberate:** the item context menu offers **nothing for a folder on the APPS pager** and nothing for
 a category card — rename and dissolve have no ops on the APPS order store, and category management is a
 `feature:settings` concern, so those long-presses show no menu at all rather than a menu of disabled rows. The

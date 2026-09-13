@@ -1,12 +1,6 @@
 package inkspire.morphic.data.apps
 
-import android.annotation.SuppressLint
-import android.content.ActivityNotFoundException
-import android.content.Context
-import android.content.Intent
-import android.provider.Settings
 import inkspire.morphic.core.model.ShadePanel
-import inkspire.morphic.core.model.ShadeRequest
 import inkspire.morphic.core.model.ShadeStyle
 import timber.log.Timber
 
@@ -18,72 +12,30 @@ import timber.log.Timber
  */
 interface SystemShade {
 
-    /** Opens the panel [request] asks for. A platform that refuses is a no-op, logged — never a crash. */
-    fun expand(request: ShadeRequest)
-
-    /**
-     * Whether [ShadeSwipeService] is switched on, so a separate shade's sides can be reached by a replayed swipe.
-     *
-     * Read on demand rather than observed: the user switches it on in the system's settings, which sends nothing back.
-     */
-    val swipeServiceOn: Boolean
-
-    /** Opens the system's accessibility settings, where the user switches [ShadeSwipeService] on. */
-    fun openSwipeServiceSettings()
+    /** Opens [panel] the way a phone arranged as [style] shows it. A refusal is a no-op, logged — never a crash. */
+    fun expand(panel: ShadePanel, style: ShadeStyle)
 }
 
 /**
- * Default [SystemShade]: a replayed swipe for a separate shade while [ShadeSwipeService] is on, and otherwise
- * `StatusBarManager`'s hidden `expandNotificationsPanel` / `expandSettingsPanel`.
+ * Default [SystemShade], entirely through [MorphicGestureService]: its global action for a combined shade, and a
+ * replayed swipe on the panel's side for a separate one — the service's own KDoc says why each.
  *
- * **The swipe only for a separate shade**, because that is the one arrangement decided by where a finger lands. On a
- * combined shade a swipe from either side opens the same panel, so quick settings would be out of its reach, where the
- * call opens either directly.
- *
- * **The call is reflection over `EXPAND_STATUS_BAR`** — a normal permission granted at install, declared in this
- * module's manifest; both methods are hidden but not blocked. **It fails silently in two known ways**: a release that
- * blocks the methods (the lookup throws, and this logs), and a skin that answers both with one panel. RedMagic OS sends
- * every request to its control center while its split is on — which is the case the swipe exists for.
+ * **No platform call behind it.** `StatusBarManager`'s hidden expand methods need no service on stock Android, but as a
+ * fallback they open the control center on RedMagic whichever panel was asked for — so with the service off, the
+ * runner asks for it rather than letting this guess.
  *
  * `internal` so only Koin constructs it — consumers depend on [SystemShade].
  */
-internal class PlatformSystemShade(private val context: Context) : SystemShade {
+internal class PlatformSystemShade : SystemShade {
 
-    override val swipeServiceOn: Boolean get() = ShadeSwipeService.connected != null
-
-    override fun expand(request: ShadeRequest) {
-        val service = ShadeSwipeService.connected
-        if (request.style == ShadeStyle.SEPARATE && service != null) {
-            service.swipeDownFromTop(if (request.panel == ShadePanel.NOTIFICATIONS) LEFT_SIDE else RIGHT_SIDE)
-        } else {
-            expandByCall(request.panel)
+    override fun expand(panel: ShadePanel, style: ShadeStyle) {
+        val service = MorphicGestureService.connected
+        val opened = when {
+            service == null -> false
+            style == ShadeStyle.COMBINED -> service.openPanel(panel)
+            else -> service.swipeDownFromTop(if (panel == ShadePanel.NOTIFICATIONS) LEFT_SIDE else RIGHT_SIDE)
         }
-    }
-
-    override fun openSwipeServiceSettings() {
-        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        try {
-            context.startActivity(intent)
-        } catch (e: ActivityNotFoundException) {
-            Timber.w(e, "No accessibility settings screen to open")
-        }
-    }
-
-    private fun expandByCall(panel: ShadePanel) {
-        val method = when (panel) {
-            ShadePanel.NOTIFICATIONS -> "expandNotificationsPanel"
-            ShadePanel.QUICK_SETTINGS -> "expandSettingsPanel"
-        }
-        try {
-            // `Context.STATUS_BAR_SERVICE`, which is only public API from 33; the name has not changed below that.
-            @SuppressLint("WrongConstant")
-            val manager = context.getSystemService("statusbar") ?: return
-            Class.forName("android.app.StatusBarManager").getMethod(method).invoke(manager)
-        } catch (e: ReflectiveOperationException) {
-            Timber.w(e, "Could not open the system %s panel", panel)
-        } catch (e: SecurityException) {
-            Timber.w(e, "Could not open the system %s panel", panel)
-        }
+        if (!opened) Timber.w("Could not open the system %s panel", panel)
     }
 
     private companion object {

@@ -12,10 +12,6 @@ import kotlinx.serialization.Serializable
  *
  * **Short [SerialName]s**, because these reach a user's stored blob: without them the discriminator is the
  * fully-qualified class name, so moving or renaming a member would orphan every gesture using it.
- *
- * Screen off and recents are deliberately absent. Both need an `AccessibilityService` on modern Android, which is a
- * feature of its own with its own permission flow; adding members for them here before that exists would be a model
- * with nothing able to perform it.
  */
 @Serializable
 sealed interface GestureAction {
@@ -49,12 +45,34 @@ sealed interface GestureAction {
     ) : GestureAction
 
     /**
-     * Pulls down one of the system's panels. **Which one is decided as it fires**, from the user's [ShadeStyle] and
-     * where the swipe started — so the stored action names no panel.
+     * Pulls down [panel]. **The assignment names it**, never where the gesture started, so the action does the same
+     * thing from every gesture — a double tap and an item's swipe included.
      *
-     * Offered on HOME's own swipes only: an item's gesture has no side of the screen to choose a panel by.
+     * **Performed by the launcher's accessibility service** under either [ShadeStyle], which only decides how.
      */
     @Serializable
-    @SerialName("system_panel")
-    data object OpenSystemPanel : GestureAction
+    @SerialName("panel")
+    data class OpenSystemPanel(val panel: ShadePanel) : GestureAction
+
+    /**
+     * Turns the screen off and locks it, as the power button does.
+     *
+     * **Performed by the launcher's accessibility service**, since an app has no other way short of device admin; it does
+     * not exist below API 28. Offered on HOME's own gestures only.
+     */
+    @Serializable
+    @SerialName("lock_screen")
+    data object LockScreen : GestureAction
 }
+
+/**
+ * Whether [this] is performed by the launcher's accessibility service, and so cannot run while it is off.
+ *
+ * One answer for the runner that asks for the service in place of running, and the settings card that shows whether it
+ * is on — so the two cannot disagree about which gestures depend on it.
+ */
+val GestureAction.needsGestureService: Boolean
+    get() = when (this) {
+        is GestureAction.LaunchApp, is GestureAction.LaunchShortcut -> false
+        is GestureAction.OpenSystemPanel, GestureAction.LockScreen -> true
+    }

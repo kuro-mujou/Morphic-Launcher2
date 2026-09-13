@@ -69,6 +69,7 @@ import inkspire.morphic.core.designsystem.ordered.movingGapDisplayOrder
 import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
 import inkspire.morphic.core.designsystem.surface.ScrollEdges
+import inkspire.morphic.core.designsystem.surface.surfaceDoubleTap
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
@@ -410,7 +411,10 @@ internal fun HomeListSurface(
                     // differs between the two.
                     surfaceActions = listOf(MenuAction("Widgets") { widgetPickerOpen = true }),
                 )
-            },
+            }
+            // **Double tap on empty space → HOME's own double-tap action**, beside the long-press and gated the same
+            // way; `surfaceDoubleTap` owns why a double tap on an icon does not reach it.
+            .surfaceDoubleTap(gestureConfig, enabled = presented, onDoubleTap = viewModel::runHomeDoubleTap),
     ) {
         HomeZoneScaffold(
             edge = edge,
