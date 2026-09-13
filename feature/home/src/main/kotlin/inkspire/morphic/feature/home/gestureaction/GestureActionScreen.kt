@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.rememberTextFieldState
@@ -41,11 +42,13 @@ import inkspire.morphic.core.designsystem.cell.AppIcon
 import inkspire.morphic.core.designsystem.cell.AppRowCell
 import inkspire.morphic.core.designsystem.component.MorphicGroupPanel
 import inkspire.morphic.core.designsystem.component.field.MorphicTextField
+import inkspire.morphic.core.designsystem.gesture.describeGestureAction
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.GestureAction
 import inkspire.morphic.core.model.ItemGesture
+import inkspire.morphic.core.model.asItemGesture
 import inkspire.morphic.data.apps.AppShortcut
 import kotlinx.coroutines.launch
 
@@ -57,10 +60,11 @@ import kotlinx.coroutines.launch
  * asking which tab the query applies to. As filters they would look identical in a mockup and read as four separate
  * screens in the hand.
  *
- * **The sections here are the ones we can actually perform.** System actions — screen off, notification shade,
- * recents — each need an `AccessibilityService`, which is a feature with its own permission flow; the section is
- * absent until that exists rather than present and inert, which is this codebase's standing rule for a verb with no
- * op behind it. Navigation actions are the same story one step behind.
+ * **The sections here are the ones we can actually perform.** Screen off and recents need an `AccessibilityService`,
+ * which is a feature with its own permission flow, so they are absent until that exists rather than present and inert
+ * — this codebase's standing rule for a verb with no op behind it. Navigation actions are the same story one step
+ * behind. The system panel is offered for HOME's swipes only: an item's gesture has no side of the screen to pick a
+ * panel by.
  *
  * @param onBack returns to the sheet the gesture was chosen from.
  * @param onChosen called after a choice is written, so the caller can close this destination — the screen does not
@@ -68,7 +72,7 @@ import kotlinx.coroutines.launch
  */
 @Composable
 internal fun GestureActionScreen(
-    gesture: ItemGesture,
+    target: GestureTarget,
     viewModel: GestureActionViewModel,
     onBack: () -> Unit,
     onChosen: () -> Unit,
@@ -81,7 +85,8 @@ internal fun GestureActionScreen(
 
     // Where each section starts, rebuilt whenever the list does — a chip cannot scroll to an index it computed
     // against a different list, and the search box changes the list on every keystroke.
-    val appsAt = 2
+    val offersSystemPanel = target is GestureTarget.HomeSwipe
+    val appsAt = if (offersSystemPanel) 4 else 2
     val shortcutsAt by remember(state.apps.size) { derivedStateOf { appsAt + state.apps.size + 1 } }
 
     Column(
@@ -95,7 +100,7 @@ internal fun GestureActionScreen(
             .uiInsetsPadding(),
     ) {
         Text(
-            text = "Assign action to ${gesture.label}",
+            text = "Assign action to ${target.gestureLabel}",
             style = MaterialTheme.typography.headlineSmall,
             color = colors.content,
             modifier = Modifier
@@ -130,6 +135,13 @@ internal fun GestureActionScreen(
                         selected = state.assigned == null,
                         onClick = { viewModel.choose(null); onChosen() },
                     )
+                }
+            }
+
+            if (offersSystemPanel) {
+                systemSection(selected = state.assigned == GestureAction.OpenSystemPanel) {
+                    viewModel.choose(GestureAction.OpenSystemPanel)
+                    onChosen()
                 }
             }
 
@@ -179,6 +191,20 @@ internal fun GestureActionScreen(
     }
 
     BackHandler(onBack = onBack)
+}
+
+/** The System section: its header and the system panel's one row — the two list items `appsAt` counts past. */
+private fun LazyListScope.systemSection(selected: Boolean, onClick: () -> Unit) {
+    item(key = "system-header") { SectionHeader("SYSTEM") }
+    item(key = "system") {
+        Panel {
+            ChoiceRow(
+                label = describeGestureAction(GestureAction.OpenSystemPanel, emptyMap()),
+                selected = selected,
+                onClick = onClick,
+            )
+        }
+    }
 }
 
 /** A group of rows on one rounded panel, inset from the screen edges — the launcher's grouped-list container. */
@@ -414,6 +440,13 @@ private fun SectionChip(label: String, onClick: () -> Unit) {
 }
 
 /** Named for the way the finger travels, matching the sheet that opened this. */
+/** The gesture being assigned, as the title names it. A HOME swipe reads as the item swipe it looks like. */
+private val GestureTarget.gestureLabel: String
+    get() = when (this) {
+        is GestureTarget.Item -> gesture.label
+        is GestureTarget.HomeSwipe -> direction.asItemGesture().label
+    }
+
 private val ItemGesture.label: String
     get() = when (this) {
         ItemGesture.SWIPE_UP -> "swipe up"

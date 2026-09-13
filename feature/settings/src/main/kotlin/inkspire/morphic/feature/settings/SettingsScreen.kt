@@ -48,6 +48,7 @@ import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.HomeLayout
+import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.feature.settings.about.AboutDetail
 import inkspire.morphic.feature.settings.about.LicensesDetail
 import inkspire.morphic.feature.settings.about.PermissionsDetail
@@ -57,6 +58,7 @@ import inkspire.morphic.feature.settings.dock.DockDetail
 import inkspire.morphic.feature.settings.effects.EffectsDetail
 import inkspire.morphic.feature.settings.extras.ExtrasDetail
 import inkspire.morphic.feature.settings.folder.FolderDetail
+import inkspire.morphic.feature.settings.gestures.GesturesDetail
 import inkspire.morphic.feature.settings.grid.GridSizeDetail
 import inkspire.morphic.feature.settings.home.HomeDetail
 import inkspire.morphic.feature.settings.iconstudio.IconsDetail
@@ -92,10 +94,13 @@ private val SettingsSection?.paneDepth: Int
  *
  * @param onBack leaves settings entirely. In single-pane, system back first closes an open detail: the detail is a
  *   place, so back should leave it before leaving the surface.
+ * @param onAssignHomeSwipe opens the action picker for a swipe on HOME — a destination `feature:home` declares, which
+ *   is why it arrives from `app` rather than through the navigator here.
  */
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
+    onAssignHomeSwipe: (SwipeDirection) -> Unit,
     modifier: Modifier = Modifier,
     initialSection: SettingsSection? = null,
     initialLayout: AppsLayout? = null,
@@ -118,6 +123,11 @@ fun SettingsScreen(
     // and the title over their panes. Read here rather than in `SettingsList`, so the list and the app bar cannot
     // disagree about what a section is called.
     val homeLayout by koinViewModel<SettingsShellViewModel>().homeLayout.collectAsStateWithLifecycle()
+    // **The pane for a section, built once here** and handed to whichever layout is showing. The two layouts differ in
+    // where a pane sits and which sides it insets, and in nothing about what it holds or where it can lead.
+    val detail: @Composable (SettingsSection, WindowInsetsSides) -> Unit = { section, insetSides ->
+        SettingsDetail(section, insetSides, homeLayout, appsLayout, openSection, onAssignHomeSwipe)
+    }
 
     LauncherTheme(darkTheme = isSystemInDarkTheme()) {
         if (twoPane) {
@@ -131,8 +141,7 @@ fun SettingsScreen(
                 // that is a list row, which is the old behavior exactly.
                 onCloseChild = shown.parent?.let { parent -> { selected = parent } },
                 onSelect = { selected = it; appsLayout = null },
-                appsLayout = appsLayout,
-                onOpenSection = openSection,
+                detail = detail,
                 onBack = onBack,
                 modifier = modifier,
             )
@@ -142,8 +151,7 @@ fun SettingsScreen(
                 selected = selected,
                 onSelect = { selected = it; appsLayout = null },
                 onCloseDetail = { selected = selected?.parent },
-                appsLayout = appsLayout,
-                onOpenSection = openSection,
+                detail = detail,
                 onBack = onBack,
                 modifier = modifier,
             )
@@ -165,8 +173,7 @@ private fun SettingsSinglePane(
     onSelect: (SettingsSection) -> Unit,
     onCloseDetail: () -> Unit,
     onBack: () -> Unit,
-    appsLayout: AppsLayout?,
-    onOpenSection: (SettingsSection, AppsLayout?) -> Unit,
+    detail: @Composable (SettingsSection, WindowInsetsSides) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalMorphicColors.current
@@ -220,13 +227,7 @@ private fun SettingsSinglePane(
                         .background(colors.background),
                 )
             } else {
-                SettingsDetail(
-                    section = target,
-                    insetSides = WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
-                    homeLayout = homeLayout,
-                    appsLayout = appsLayout,
-                    onOpenSection = onOpenSection,
-                )
+                detail(target, WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
             }
         }
     }
@@ -241,8 +242,7 @@ private fun SettingsTwoPane(
     onSelect: (SettingsSection) -> Unit,
     onCloseChild: (() -> Unit)?,
     onBack: () -> Unit,
-    appsLayout: AppsLayout?,
-    onOpenSection: (SettingsSection, AppsLayout?) -> Unit,
+    detail: @Composable (SettingsSection, WindowInsetsSides) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalMorphicColors.current
@@ -290,13 +290,7 @@ private fun SettingsTwoPane(
                 transitionSpec = { fadeIn(tween(DETAIL_FADE_MS)) togetherWith fadeOut(tween(DETAIL_FADE_MS)) },
                 label = "settings-detail",
             ) { section ->
-                SettingsDetail(
-                    section = section,
-                    insetSides = WindowInsetsSides.End + WindowInsetsSides.Bottom,
-                    homeLayout = homeLayout,
-                    appsLayout = appsLayout,
-                    onOpenSection = onOpenSection,
-                )
+                detail(section, WindowInsetsSides.End + WindowInsetsSides.Bottom)
             }
         }
     }
@@ -322,8 +316,9 @@ private fun SettingsDetail(
     homeLayout: HomeLayout,
     appsLayout: AppsLayout?,
     onOpenSection: (SettingsSection, AppsLayout?) -> Unit,
+    onAssignHomeSwipe: (SwipeDirection) -> Unit,
 ) = PunchThroughPane(insetSides) {
-    SectionPane(section, homeLayout, appsLayout, onOpenSection)
+    SectionPane(section, homeLayout, appsLayout, onOpenSection, onAssignHomeSwipe)
 }
 
 /**
@@ -341,12 +336,14 @@ private fun SectionPane(
     homeLayout: HomeLayout,
     appsLayout: AppsLayout?,
     onOpenSection: (SettingsSection, AppsLayout?) -> Unit,
+    onAssignHomeSwipe: (SwipeDirection) -> Unit,
 ) {
     when (section) {
         SettingsSection.WALLPAPER -> WallpaperDetail()
         SettingsSection.EFFECTS -> EffectsDetail()
         SettingsSection.ICONS -> IconsDetail()
         SettingsSection.SURFACE_REGISTER -> SurfaceRegisterDetail(onOpenSection = onOpenSection)
+        SettingsSection.GESTURES -> GesturesDetail(onAssignSwipe = onAssignHomeSwipe)
         SettingsSection.ORIENTATION -> OrientationDetail()
         SettingsSection.HOME -> HomeDetail(onOpenSection = onOpenSection)
         SettingsSection.HOME_GRID -> GridSizeDetail()

@@ -12,5 +12,5 @@ import org.koin.dsl.module
  * which belong to the shell because both span every surface (see [ShellViewModel.removeFromHome]).
  */
 val shellModule = module {
-    viewModel { ShellViewModel(get(), get(), get(), get(), get(), get()) }
+    viewModel { ShellViewModel(get(), get(), get(), get(), get(), get(), get()) }
 }

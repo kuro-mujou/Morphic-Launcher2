@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  `ShadeSwipeService`'s capabilities, and nothing past them: it performs gestures, and it reads no window content and
+  subscribes to no events — which is why `accessibilityEventTypes` is absent rather than narrowed.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:canPerformGestures="true"
+    android:canRetrieveWindowContent="false"
+    android:description="@string/shade_swipe_service_description"
+    android:notificationTimeout="0" />

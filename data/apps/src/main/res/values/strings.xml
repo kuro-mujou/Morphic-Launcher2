@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- What the system's accessibility settings list the service as. The Gestures section names the same thing. -->
+    <string name="shade_swipe_service_label">Morphic gestures</string>
+    <string name="shade_swipe_service_description">Lets a swipe on the Morphic home screen open the notification side of a split notification panel, by swiping down the status bar for you. It does not read anything on your screen.</string>
+</resources>

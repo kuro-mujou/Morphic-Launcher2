@@ -1,37 +1,26 @@
 package inkspire.morphic.feature.settings.register
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.component.MorphicGroupPanel
-import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.HomeEdge
-import inkspire.morphic.core.model.SurfaceTransition
 import inkspire.morphic.data.settings.SideBinding
 import inkspire.morphic.feature.settings.SettingsSection
+import inkspire.morphic.feature.settings.component.SettingsValueRow
 import inkspire.morphic.feature.settings.label
 import org.koin.androidx.compose.koinViewModel
 
@@ -85,6 +74,7 @@ internal fun SurfaceRegisterDetail(
         SurfaceRegisterCross(
             homeLayout = state.register.homeLayout,
             bindings = state.register.sides,
+            twoFingerEdges = state.twoFingerEdges,
             onPick = { picking = it },
             onOpenSettings = onOpenSection,
         )
@@ -94,8 +84,9 @@ internal fun SurfaceRegisterDetail(
         // The one setting that belongs to the crossing itself rather than to an edge — so it sits under the cross,
         // not on it. A row that opens a modal, like the edges do, since six motions each want a line describing them.
         MorphicGroupPanel {
-            TransitionRow(
-                transition = state.register.transition,
+            SettingsValueRow(
+                label = "Switch animation",
+                value = state.register.transition.label,
                 onClick = { pickingTransition = true },
             )
         }
@@ -122,39 +113,6 @@ internal fun SurfaceRegisterDetail(
                 pickingTransition = false
             },
             onDismiss = { pickingTransition = false },
-        )
-    }
-}
-
-/**
- * The row that opens the [SurfaceTransitionPicker]: names the setting and shows the [transition] in force, with a
- * chevron because a tap opens a modal.
- *
- * Inline here rather than through `SettingsNavRow`, which is keyed to a `SettingsSection` and resolves its title from
- * `meta` — this row names a *setting within* a section, not a section, and carries a live value rather than a glyph.
- */
-@Composable
-private fun TransitionRow(transition: SurfaceTransition, onClick: () -> Unit) {
-    val colors = LocalMorphicColors.current
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-    ) {
-        Text(
-            text = "Switch animation",
-            style = MaterialTheme.typography.bodyLarge,
-            color = colors.content,
-            modifier = Modifier.weight(1f),
-        )
-        Text(text = transition.label, style = MaterialTheme.typography.bodyMedium, color = colors.contentMuted)
-        Spacer(Modifier.width(8.dp))
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = null,
-            tint = colors.contentMuted,
         )
     }
 }

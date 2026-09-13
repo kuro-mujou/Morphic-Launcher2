@@ -46,11 +46,13 @@ import inkspire.morphic.core.designsystem.surface.ItemSwipeClaim
 import inkspire.morphic.core.designsystem.surface.LocalEjectToHome
 import inkspire.morphic.core.designsystem.surface.LocalItemSwipeClaim
 import inkspire.morphic.core.designsystem.surface.LocalSurfaceGestureLock
+import inkspire.morphic.core.designsystem.surface.OneFingerSwipe
 import inkspire.morphic.core.designsystem.surface.ScrollAxes
 import inkspire.morphic.core.designsystem.surface.SurfaceBinding
 import inkspire.morphic.core.designsystem.surface.SurfaceGestureLock
 import inkspire.morphic.core.designsystem.surface.SurfacePager
 import inkspire.morphic.core.designsystem.surface.SurfacePagerState
+import inkspire.morphic.core.designsystem.surface.SwipeAction
 import inkspire.morphic.core.designsystem.surface.rememberSurfacePagerState
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
@@ -69,6 +71,7 @@ import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.ItemGesture
 import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.PlacementPlan
+import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.pagerSlot
 import inkspire.morphic.data.settings.SideBinding
 import inkspire.morphic.data.widgets.AppWidgetHostController
@@ -267,14 +270,8 @@ fun LauncherShell(
                     // The user's chosen crossing animation, live from the register — the settings picker writes it and
                     // this reads the same flow, so a change takes on the next swipe with nothing to apply.
                     transition = state.register.transition,
-                    sideContent = state.register.sides.mapValues { (edge, binding) ->
-                        binding.toSurfaceBinding(
-                            edge = edge,
-                            homeLayout = state.register.homeLayout,
-                            wraps = state::wraps,
-                            onOpenAppsSettings = onOpenAppsSettings,
-                        )
-                    },
+                    sideContent = state.surfaceBindings(onOpenAppsSettings),
+                    swipeActions = state.swipeActions(viewModel::runHomeSwipe),
                     // A swipe switches surfaces only when nothing on screen has claimed the finger. Read as a lambda, so
                     // the gesture asks at the two moments it can still hand the swipe back rather than at composition.
                     enabled = { !gestureLock.isLocked },
@@ -478,19 +475,19 @@ private fun TopActionOverlay(
  * policy comes out `OneFingerSwipe.NEVER`. Turn wrapping on for HOME's pager and a LEFT- or RIGHT-bound surface
  * becomes two-finger-only; turn it on for the APPS pager and getting *back* does. Both settings sections say so.
  *
- * @param homeLayout HOME's pairing, which decides the *open* half. Passed in because it is the other side of the
- *   edge: a binding knows what swiping to it shows, not what swiping away from HOME has to cross first.
+ * @param openSwipe how one finger may open this edge, which is HOME's side of it and so the caller's to decide — HOME's
+ *   content ([homeOneFinger]), unless HOME keeps that swipe for an action of its own.
  * @param wraps whether the pager behind a given slot loops. A lookup rather than two booleans, because the two sides
  *   of an edge ask about different grids and only [HomeLayout.pagerSlot] / [AppsLayout.pagerSlot] know which.
  */
 private fun SideBinding.toSurfaceBinding(
     edge: HomeEdge,
-    homeLayout: HomeLayout,
+    openSwipe: OneFingerSwipe,
     wraps: (GridSlot?) -> Boolean,
     onOpenAppsSettings: (AppsLayout) -> Unit,
 ): SurfaceBinding = when (this) {
     is SideBinding.Apps -> SurfaceBinding(
-        openSwipe = homeLayout.scrollAxes(wraps(homeLayout.pagerSlot)).oneFingerSwipe(edge),
+        openSwipe = openSwipe,
         closeSwipe = layout.scrollAxes(wraps(layout.pagerSlot)).oneFingerSwipe(edge),
     ) {
         // The binding is what knows which arrangement this edge shows, so it is what closes over it — the surface
@@ -508,6 +505,38 @@ private fun SideBinding.toSurfaceBinding(
  * `AxisScroll.BOUNDED`-or-better — a layout with no pager is not gated on that axis at all.
  */
 private fun ShellState.wraps(slot: GridSlot?): Boolean = slot != null && pagerWraps[slot] == true
+
+/**
+ * What HOME's own content lets one finger do toward [edge] — both the open policy of a surface bound there and the
+ * policy of HOME's action for the swipe that reveals it.
+ *
+ * One expression for the two, because they must agree: a list HOME whose action fired mid-scroll while a surface on
+ * the same edge waited for the top would be treating one swipe two ways.
+ */
+private fun ShellState.homeOneFinger(edge: HomeEdge): OneFingerSwipe =
+    register.homeLayout.scrollAxes(wraps(register.homeLayout.pagerSlot)).oneFingerSwipe(edge)
+
+/**
+ * The pager's side surfaces, from the register — each opened by the one-finger policy HOME's side of its edge allows.
+ *
+ * **Two fingers only, when HOME keeps the swipe that reveals an edge for an action of its own**: the one finger is the
+ * action's. See `SwipeAction`.
+ */
+private fun ShellState.surfaceBindings(onOpenAppsSettings: (AppsLayout) -> Unit): Map<HomeEdge, SurfaceBinding> =
+    register.sides.mapValues { (edge, binding) ->
+        binding.toSurfaceBinding(
+            edge = edge,
+            openSwipe = if (edge in homeGestures.twoFingerEdges) OneFingerSwipe.NEVER else homeOneFinger(edge),
+            wraps = { slot -> wraps(slot) },
+            onOpenAppsSettings = onOpenAppsSettings,
+        )
+    }
+
+/** HOME's own swipe actions, each handed to [run] with its direction and where the swipe started. */
+private fun ShellState.swipeActions(run: (SwipeDirection, Float) -> Unit): Map<SwipeDirection, SwipeAction> =
+    homeGestures.swipes.keys.associateWith { direction ->
+        SwipeAction(homeOneFinger(direction.revealedEdge)) { startX -> run(direction, startX) }
+    }
 
 /**
  * The launcher's [Film], read from [ShellState] — the shell's half of a resolution `core:designsystem` owns.

@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import inkspire.morphic.core.model.HomeEdge
+import inkspire.morphic.core.model.SwipeDirection
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -46,6 +47,13 @@ class SurfacePagerState {
      */
     var edgeSwipes: Map<HomeEdge, EdgeSwipe> by mutableStateOf(emptyMap())
         internal set
+
+    /**
+     * HOME's own action for a one-finger swipe in each direction that has one. Set by [SurfacePager].
+     *
+     * A plain field rather than snapshot state: only the gesture reads it, outside composition, at the moment it claims.
+     */
+    internal var swipeActions: Map<SwipeDirection, SwipeAction> = emptyMap()
 
     /** Measured viewport width in px; set by [SurfacePager] on size change. Converts a pixel drag to page units. */
     var viewportWidth: Int by mutableIntStateOf(0)

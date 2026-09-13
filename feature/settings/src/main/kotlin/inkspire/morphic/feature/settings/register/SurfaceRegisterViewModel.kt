@@ -10,7 +10,7 @@ import inkspire.morphic.data.settings.SideBinding
 import inkspire.morphic.data.settings.SurfaceRegister
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -19,9 +19,12 @@ import kotlinx.coroutines.launch
  *
  * @property register the stored register. [SurfaceRegister.Default] until the store's first emission — which binds
  *   nothing, and is exactly what a fresh install looks like.
+ * @property twoFingerEdges edges whose surface now opens with two fingers, because a HOME swipe action keeps the one —
+ *   see `HomeGestures.twoFingerEdges`. Read here because this screen is where a user looks for how an edge is reached.
  */
 data class SurfaceRegisterState(
     val register: SurfaceRegister = SurfaceRegister.Default,
+    val twoFingerEdges: Set<HomeEdge> = emptySet(),
 )
 
 /**
@@ -41,9 +44,10 @@ class SurfaceRegisterViewModel(
     private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
-    val state: StateFlow<SurfaceRegisterState> = settingsRepository.surfaceRegister
-        .map(::SurfaceRegisterState)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), SurfaceRegisterState())
+    val state: StateFlow<SurfaceRegisterState> =
+        combine(settingsRepository.surfaceRegister, settingsRepository.homeGestures) { register, gestures ->
+            SurfaceRegisterState(register, gestures.twoFingerEdges)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), SurfaceRegisterState())
 
     /**
      * Binds [edge] to the APPS surface rendered in [layout], or **unbinds** it when [layout] is null.

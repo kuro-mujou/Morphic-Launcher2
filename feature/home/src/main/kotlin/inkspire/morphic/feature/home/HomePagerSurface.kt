@@ -40,6 +40,7 @@ import inkspire.morphic.core.designsystem.drag.GrabCenter
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
+import inkspire.morphic.core.designsystem.gesture.describeGestureAction
 import inkspire.morphic.core.designsystem.grid.CoordinateDragGrid
 import inkspire.morphic.core.designsystem.grid.CoordinateDragPager
 import inkspire.morphic.core.designsystem.grid.GridGeometry

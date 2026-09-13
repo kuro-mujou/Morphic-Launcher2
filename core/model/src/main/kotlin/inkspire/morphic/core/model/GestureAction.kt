@@ -13,9 +13,9 @@ import kotlinx.serialization.Serializable
  * **Short [SerialName]s**, because these reach a user's stored blob: without them the discriminator is the
  * fully-qualified class name, so moving or renaming a member would orphan every gesture using it.
  *
- * The system actions of the eventual picker — screen off, notification shade, recents — are deliberately absent.
- * Every one of them needs an `AccessibilityService` on modern Android, which is a feature of its own with its own
- * permission flow; adding members for them here before that exists would be a model with nothing able to perform it.
+ * Screen off and recents are deliberately absent. Both need an `AccessibilityService` on modern Android, which is a
+ * feature of its own with its own permission flow; adding members for them here before that exists would be a model
+ * with nothing able to perform it.
  */
 @Serializable
 sealed interface GestureAction {
@@ -47,4 +47,14 @@ sealed interface GestureAction {
         val userSerial: Long,
         val label: String,
     ) : GestureAction
+
+    /**
+     * Pulls down one of the system's panels. **Which one is decided as it fires**, from the user's [ShadeStyle] and
+     * where the swipe started — so the stored action names no panel.
+     *
+     * Offered on HOME's own swipes only: an item's gesture has no side of the screen to choose a panel by.
+     */
+    @Serializable
+    @SerialName("system_panel")
+    data object OpenSystemPanel : GestureAction
 }

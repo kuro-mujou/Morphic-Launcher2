@@ -4,6 +4,7 @@ import inkspire.morphic.feature.home.HomeViewModel
 import inkspire.morphic.feature.home.containersettings.ContainerSettingsRoute
 import inkspire.morphic.feature.home.containersettings.ContainerSettingsViewModel
 import inkspire.morphic.feature.home.gestureaction.GestureActionViewModel
+import inkspire.morphic.feature.home.gestureaction.GestureTarget
 import inkspire.morphic.feature.home.widgetpicker.WidgetPickerViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
@@ -26,9 +27,9 @@ import org.koin.dsl.module
 val homeModule = module {
     viewModel { HomeViewModel(get(), get(), get(), get(), get(), get(), get()) }
 
-    // **Per-instance parameters**, unlike every other ViewModel here: the picker is opened for one item and one
-    // gesture, which is exactly the case the `NavEntry` ViewModel-store decorator exists to keep separate.
-    viewModel { parameters -> GestureActionViewModel(parameters.get(), parameters.get(), get(), get(), get()) }
+    // **A per-instance parameter**, unlike every other ViewModel here: the picker is opened for one gesture target,
+    // which is exactly the case the `NavEntry` ViewModel-store decorator exists to keep separate.
+    viewModel { (target: GestureTarget) -> GestureActionViewModel(target, get(), get(), get()) }
     viewModel { WidgetPickerViewModel(get()) }
     viewModel { (route: ContainerSettingsRoute) -> ContainerSettingsViewModel(route, get(), get(), get(), get()) }
 }

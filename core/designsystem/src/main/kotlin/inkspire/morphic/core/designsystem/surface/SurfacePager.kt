@@ -17,6 +17,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.SurfaceTransition
+import inkspire.morphic.core.model.SwipeDirection
 import kotlin.math.roundToInt
 
 /**
@@ -52,6 +53,8 @@ import kotlin.math.roundToInt
  * @param transition how HOME and a side surface animate past each other. A single global choice, applied to every
  *   slot; the caller reads it from settings. Defaults to [SurfaceTransition.SLIDE], which is what the harness wants.
  * @param sideContent the binding for each swipeable edge. Absent edge = not swipeable.
+ * @param swipeActions what a one-finger swipe on HOME does in each direction that has an action, instead of opening
+ *   the edge it reveals. Absent direction = the swipe behaves as [sideContent] says.
  * @param retainedEdges edges to keep composed regardless of the pan. **The drag toolkit's "keep a source surface
  *   composed while a drag from it is in flight" rule, which the caller owns because only it knows about drags:** an
  *   app lifted in the drawer and ejected onto HOME is still tracked by the lifted cell's own pointer stream, so
@@ -71,6 +74,7 @@ fun SurfacePager(
     modifier: Modifier = Modifier,
     transition: SurfaceTransition = SurfaceTransition.SLIDE,
     sideContent: Map<HomeEdge, SurfaceBinding> = emptyMap(),
+    swipeActions: Map<SwipeDirection, SwipeAction> = emptyMap(),
     enabled: () -> Boolean = { true },
     overlay: @Composable () -> Unit = {},
     retainedEdges: Set<HomeEdge> = emptySet(),
@@ -81,7 +85,10 @@ fun SurfacePager(
     // Mapping down to the value type keeps the published map structurally stable across recompositions.
     // SideEffect runs after a successful composition — the safe place to publish composition inputs into
     // snapshot state.
-    SideEffect { state.edgeSwipes = sideContent.mapValues { EdgeSwipe(it.value.openSwipe, it.value.closeSwipe) } }
+    SideEffect {
+        state.edgeSwipes = sideContent.mapValues { EdgeSwipe(it.value.openSwipe, it.value.closeSwipe) }
+        state.swipeActions = swipeActions
+    }
 
     Box(
         modifier = modifier

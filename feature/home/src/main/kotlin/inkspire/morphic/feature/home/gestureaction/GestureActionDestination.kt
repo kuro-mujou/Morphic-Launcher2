@@ -8,7 +8,8 @@ import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
 /**
- * The picker's destination: turns a [GestureActionRoute] back into the item it names and hands it to the screen.
+ * The picker's destination: turns a [GestureActionRoute] back into the [GestureTarget] it names and hands it to the
+ * screen.
  *
  * **The unflattening lives here rather than in `app`**, which only maps keys to composables: reconstructing a
  * `GridItem` is `feature:home`'s vocabulary, and doing it in the entry provider would put home's model in the
@@ -24,17 +25,20 @@ fun GestureActionDestination(
     onChosen: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val item: GridItem? = when (route) {
-        is GestureActionRoute.App -> ComponentKey.parse(route.component)?.let(GridItem::App)
-        is GestureActionRoute.Folder -> GridItem.Folder(route.folderId)
+    val target: GestureTarget? = when (route) {
+        is GestureActionRoute.App ->
+            ComponentKey.parse(route.component)?.let { GestureTarget.Item(GridItem.App(it), route.gesture) }
+
+        is GestureActionRoute.Folder -> GestureTarget.Item(GridItem.Folder(route.folderId), route.gesture)
+        is GestureActionRoute.HomeSwipe -> GestureTarget.HomeSwipe(route.direction)
     }
-    if (item == null) {
+    if (target == null) {
         onBack()
         return
     }
     GestureActionScreen(
-        gesture = route.gesture,
-        viewModel = koinViewModel { parametersOf(item, route.gesture) },
+        target = target,
+        viewModel = koinViewModel { parametersOf(target) },
         onBack = onBack,
         onChosen = onChosen,
         modifier = modifier,

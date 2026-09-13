@@ -8,6 +8,7 @@ import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Dock
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Gesture
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Info
@@ -50,6 +51,12 @@ enum class SettingsSection {
 
     /** Which surface each HOME edge opens, in which layout. */
     SURFACE_REGISTER,
+
+    /**
+     * What a swipe on HOME itself does, per direction. Beside [SURFACE_REGISTER] because an action here moves that
+     * section's edge to two fingers.
+     */
+    GESTURES,
 
     /**
      * What the launcher does when the device turns or folds.
@@ -174,6 +181,10 @@ internal fun SettingsSection.meta(homeLayout: HomeLayout): SettingsSectionMeta =
             "Screen manager", Icons.Outlined.Dashboard,
         )
 
+        SettingsSection.GESTURES -> SettingsSectionMeta(
+            "Gestures", Icons.Outlined.Gesture,
+        )
+
         SettingsSection.ORIENTATION -> SettingsSectionMeta(
             "Orientation", Icons.Outlined.ScreenRotation,
         )
@@ -267,6 +278,7 @@ internal val SettingsSection.parent: SettingsSection?
         SettingsSection.EFFECTS,
         SettingsSection.ICONS,
         SettingsSection.SURFACE_REGISTER,
+        SettingsSection.GESTURES,
         SettingsSection.ORIENTATION,
         SettingsSection.HOME,
         SettingsSection.APPS,
@@ -302,6 +314,7 @@ internal val settingsGroups: List<SettingsGroup> = listOf(
         "Layout",
         listOf(
             SettingsSection.SURFACE_REGISTER,
+            SettingsSection.GESTURES,
             SettingsSection.ORIENTATION,
             // **One row per surface.** `HOME_GRID` and `DOCK` sat here until the hub existed, which made the list
             // split HOME by *zone* while it split APPS not at all — and forced two of its rows to rename themselves

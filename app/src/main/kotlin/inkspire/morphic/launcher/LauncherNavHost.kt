@@ -87,9 +87,17 @@ fun LauncherNavHost(homePresses: Flow<Unit>, modifier: Modifier = Modifier) {
                         onChosen = { navigator.goBack() },
                     )
                 }
+                entry<GestureActionRoute.HomeSwipe> { route ->
+                    GestureActionDestination(
+                        route = route,
+                        onBack = { navigator.goBack() },
+                        onChosen = { navigator.goBack() },
+                    )
+                }
                 entry<SettingsRoute> { route ->
                     SettingsScreen(
                         onBack = { navigator.goBack() },
+                        onAssignHomeSwipe = { direction -> navigator.goTo(GestureActionRoute.HomeSwipe(direction)) },
                         initialSection = route.section,
                         initialLayout = route.layout,
                     )

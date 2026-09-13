@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
@@ -78,6 +79,8 @@ private const val MAX_RATIO = 2.4f
  *
  * @param homeLayout HOME's current pairing; the center card is named for it.
  * @param bindings the register's current per-edge bindings; a missing edge is unbound.
+ * @param twoFingerEdges edges whose surface opens with two fingers only, because a HOME swipe action keeps the one.
+ *   Said on the card, since the Gestures section is where that was set and this is where an edge is looked up.
  * @param onPick opens the slot picker for an edge. The picker itself is hoisted to the section, so at most one is ever
  *   composed whatever the cross is doing.
  * @param onOpenSettings jumps to a section — and, for a side, to the layout bound there: place a surface, then size
@@ -88,6 +91,7 @@ private const val MAX_RATIO = 2.4f
 internal fun SurfaceRegisterCross(
     homeLayout: HomeLayout,
     bindings: Map<HomeEdge, SideBinding>,
+    twoFingerEdges: Set<HomeEdge>,
     onPick: (HomeEdge) -> Unit,
     onOpenSettings: (SettingsSection, AppsLayout?) -> Unit,
     modifier: Modifier = Modifier,
@@ -111,47 +115,54 @@ internal fun SurfaceRegisterCross(
         cardHeight = (longSide * ratio).coerceAtLeast(if (short) 92.dp else 120.dp)
     }
 
+    val cardSize = DpSize(cardWidth, cardHeight)
+
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        SideSlot(HomeEdge.TOP, homeLayout, bindings, cardWidth, cardHeight, onPick, onOpenSettings)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SideSlot(HomeEdge.LEFT, homeLayout, bindings, cardWidth, cardHeight, onPick, onOpenSettings)
-            HomeSlot(homeLayout, cardWidth, cardHeight, onOpenSettings)
-            SideSlot(HomeEdge.RIGHT, homeLayout, bindings, cardWidth, cardHeight, onPick, onOpenSettings)
+        val side: @Composable (HomeEdge) -> Unit = { edge ->
+            SideSlot(edge, homeLayout, bindings[edge], edge in twoFingerEdges, cardSize, onPick, onOpenSettings)
         }
-        SideSlot(HomeEdge.BOTTOM, homeLayout, bindings, cardWidth, cardHeight, onPick, onOpenSettings)
+        side(HomeEdge.TOP)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            side(HomeEdge.LEFT)
+            HomeSlot(homeLayout, cardSize, onOpenSettings)
+            side(HomeEdge.RIGHT)
+        }
+        side(HomeEdge.BOTTOM)
     }
 }
 
-/** One edge: the layout bound to it, or an empty slot inviting one. */
+/**
+ * One edge: the layout bound to it, or an empty slot inviting one.
+ *
+ * @param twoFinger whether the surface here opens with two fingers only. Said only on a bound card — an empty edge has
+ *   nothing to open, so there is no finger count to state.
+ */
 @Composable
 private fun SideSlot(
     edge: HomeEdge,
     homeLayout: HomeLayout,
-    bindings: Map<HomeEdge, SideBinding>,
-    width: Dp,
-    height: Dp,
+    binding: SideBinding?,
+    twoFinger: Boolean,
+    size: DpSize,
     onPick: (HomeEdge) -> Unit,
     onOpenSettings: (SettingsSection, AppsLayout?) -> Unit,
 ) {
-    val colors = LocalMorphicColors.current
-    val bound = bindings[edge] as? SideBinding.Apps
+    val bound = binding as? SideBinding.Apps
 
     if (bound == null) {
-        EmptySlot(width, height) { onPick(edge) }
+        EmptySlot(size) { onPick(edge) }
     } else {
         // The same glyph for every layout, because every binding is the same *surface* — the label carries which
         // arrangement of it — the surface taxonomy showing up in the picker.
         FilledSlot(
-            width = width,
-            height = height,
+            size = size,
             label = bound.layout.label,
+            hint = if (twoFinger) "Two fingers" else null,
             icon = SettingsSection.APPS.meta(homeLayout).icon,
-            container = colors.surface,
-            content = colors.content,
             onClick = { onPick(edge) },
             // **No gear where there is nothing to open.**
             //
@@ -180,18 +191,14 @@ private fun SideSlot(
 @Composable
 private fun HomeSlot(
     layout: HomeLayout,
-    width: Dp,
-    height: Dp,
+    size: DpSize,
     onOpenSettings: (SettingsSection, AppsLayout?) -> Unit,
 ) {
-    val colors = LocalMorphicColors.current
     FilledSlot(
-        width = width,
-        height = height,
+        size = size,
         label = layout.label,
         icon = SettingsSection.HOME.meta(layout).icon,
-        container = colors.accent,
-        content = colors.onAccent,
+        accent = true,
         // **No body target, so no ripple and no second way to change the pairing.** The card had one briefly: HOME
         // became a choice when the second pairing landed, and this is where the choice went. It moved to the head of
         // the Home section — a segmented control over the two zones it decides — because that is the screen a user
@@ -212,18 +219,24 @@ private fun HomeSlot(
  * bound already — the rule the APPS category card follows too: a container with two jobs marks the boundary rather
  * than leaving the user to discover it. The body is clipped and clickable in its own right,
  * so the ripple stops at the divider instead of flashing under the gear.
+ *
+ * @param accent the center's fill, where every side card is plain — HOME is the fixed point the others are arranged
+ *   around. A flag rather than two colors, so a card cannot be given a fill and a content color that do not pair.
+ * @param hint a second, quieter line under [label] — how the edge is reached, when that is not the ordinary way.
  */
 @Composable
 private fun FilledSlot(
-    width: Dp,
-    height: Dp,
+    size: DpSize,
     label: String,
     icon: ImageVector,
-    container: Color,
-    content: Color,
     onClick: (() -> Unit)?,
     onSettings: (() -> Unit)?,
+    accent: Boolean = false,
+    hint: String? = null,
 ) {
+    val colors = LocalMorphicColors.current
+    val container = if (accent) colors.accent else colors.surface
+    val content = if (accent) colors.onAccent else colors.content
     // **The chrome gives way with the card, or the body does instead.** The body takes what the divider and the gear
     // row leave, so on a short card it is the *label* that runs out of room and prints over the divider — the two
     // targets this card exists to separate, drawn on top of each other. Shrinking the parts that are chrome keeps the
@@ -231,7 +244,7 @@ private fun FilledSlot(
     val short = currentDeviceConfiguration().isShortWindow
     Column(
         modifier = Modifier
-            .size(width, height)
+            .size(size)
             .clip(RoundedCornerShape(16.dp))
             .background(container)
             .padding(8.dp),
@@ -259,6 +272,15 @@ private fun FilledSlot(
                 textAlign = TextAlign.Center,
                 maxLines = 2,
             )
+            if (hint != null) {
+                Text(
+                    text = hint,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = content.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                )
+            }
         }
         if (onSettings != null) {
             HorizontalDivider(color = content.copy(alpha = 0.2f))
@@ -278,11 +300,11 @@ private fun FilledSlot(
 
 /** An unbound edge — L1's dashed outline and `+`, which say "nothing here yet" without a caption having to. */
 @Composable
-private fun EmptySlot(width: Dp, height: Dp, onClick: () -> Unit) {
+private fun EmptySlot(size: DpSize, onClick: () -> Unit) {
     val colors = LocalMorphicColors.current
     Box(
         modifier = Modifier
-            .size(width, height)
+            .size(size)
             .clip(RoundedCornerShape(16.dp))
             .dashedBorder(colors.contentMuted.copy(alpha = 0.5f), 16.dp)
             .clickable(onClick = onClick),

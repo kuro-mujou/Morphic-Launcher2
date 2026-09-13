@@ -343,14 +343,13 @@ fun Modifier.surfacePagerGesture(
                             axis = activeAxis
                             claimed = true
                         } else {
-                            // Resting on HOME: which edge does this swipe point at, and does it have a surface?
+                            // Resting on HOME: which edge does this swipe point at, and what does it do there?
                             if (fromSystemBand) break // the system is reading this same finger — see the KDoc
-                            val target = if (horizontal) {
-                                if (accX > 0f) HomeEdge.LEFT else HomeEdge.RIGHT
-                            } else {
-                                if (accY > 0f) HomeEdge.TOP else HomeEdge.BOTTOM
-                            }
-                            val open = state.edgeSwipes[target]?.open ?: break // no surface — hand it back
+                            val direction = swipeDirectionOf(accX, accY)
+                            val target = direction.revealedEdge
+                            // One finger runs HOME's own action for this direction, when it has one — see SwipeAction.
+                            val action = state.swipeActions[direction].takeUnless { twoFinger }
+                            val open = action?.oneFinger ?: state.edgeSwipes[target]?.open ?: break // nothing here
                             // The nested-scroll hand-off, opening half. The content crossed is HOME's, and the edge
                             // it must have reached is the one the swipe points at: opening the LEFT surface drags
                             // HOME rightward, so HOME's pager has to be on its first page.
@@ -358,7 +357,9 @@ fun Modifier.surfacePagerGesture(
                             // A NEVER edge fails this whatever the content says: that finger belongs to HOME's
                             // infinite content on this axis, which has no edge to hand off from at all.
                             if (!twoFinger && !open.allows(state.centerScroll.edges()[target])) break
-                            axis = if (horizontal) PanAxis.HORIZONTAL else PanAxis.VERTICAL
+                            // An action claims with no axis, so the drags below move nothing while the finger stays ours.
+                            action?.perform(down.position.x / size.width)
+                            if (action == null) axis = if (horizontal) PanAxis.HORIZONTAL else PanAxis.VERTICAL
                             claimed = true
                         }
                         justClaimed = claimed

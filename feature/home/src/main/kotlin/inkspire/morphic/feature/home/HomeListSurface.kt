@@ -50,6 +50,7 @@ import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.RegisterDropZone
 import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
+import inkspire.morphic.core.designsystem.gesture.describeGestureAction
 import inkspire.morphic.core.designsystem.grid.CoordinateDragGrid
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.GridSpan
@@ -73,7 +74,6 @@ import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.DropIntent
-import inkspire.morphic.core.model.GestureAction
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.GridSlot
@@ -763,23 +763,6 @@ private fun ListZone(
         }
     }
 }
-
-/**
- * What an assigned action is called on the sheet.
- *
- * **Resolved through the app catalog rather than stored**, for the reason home items resolve the same way: a label
- * copied at assignment time goes stale when the app is renamed, and an app that has been uninstalled has no label
- * at all — which is exactly the state worth showing, since a gesture pointing at nothing is otherwise invisible.
- * A shortcut is the exception and carries its own, because resolving one costs a platform query per row.
- */
-internal fun describeGestureAction(action: GestureAction, catalog: Map<ComponentKey, AppInfo>): String =
-    when (action) {
-        is GestureAction.LaunchApp -> catalog[action.component]?.label ?: MissingApp
-        is GestureAction.LaunchShortcut -> action.label
-    }
-
-/** An assignment whose app is no longer installed. Named so, rather than left blank, which reads as a bug. */
-private const val MissingApp = "App not installed"
 
 /**
  * The **Add apps** row that opens this surface's picker.

@@ -133,3 +133,20 @@ class SurfaceBinding(
     val closeSwipe: OneFingerSwipe = OneFingerSwipe.ALWAYS,
     val content: @Composable () -> Unit,
 )
+
+/**
+ * What HOME does for a **one-finger** swipe in one direction, in place of opening the surface on the edge that swipe
+ * reveals — which then takes two fingers, because the shell gives it [OneFingerSwipe.NEVER].
+ *
+ * It fires once, at the claim, and keeps the rest of the gesture. At the claim because what it opens (a system panel,
+ * an app) does not follow the finger, so waiting for the release would only add delay; kept so HOME's content does not
+ * scroll behind whatever is opening.
+ *
+ * @param oneFinger when one finger may run it — HOME's content on the swipe's axis, the same rule a surface's open
+ *   policy follows, so a list HOME scrolls first and runs the action only from its top.
+ * @param perform runs the action, given where the swipe started as a fraction of the pager's width.
+ */
+class SwipeAction(
+    val oneFinger: OneFingerSwipe,
+    val perform: (startX: Float) -> Unit,
+)

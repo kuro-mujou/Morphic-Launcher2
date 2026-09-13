@@ -7,7 +7,6 @@ import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.Folder
-import inkspire.morphic.core.model.GestureAction
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
@@ -20,6 +19,7 @@ import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.ItemGesture
 import inkspire.morphic.core.model.PlacementPlan
+import inkspire.morphic.core.model.ShadeRequest
 import inkspire.morphic.core.model.SyncMode
 import inkspire.morphic.core.model.WidgetContainer
 import inkspire.morphic.core.model.WidgetContainerAxis
@@ -34,7 +34,7 @@ import inkspire.morphic.core.model.portraitOfPair
 import inkspire.morphic.core.model.sideSlot
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
-import inkspire.morphic.data.apps.AppShortcuts
+import inkspire.morphic.data.apps.GestureActionRunner
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.GridOccupancy
 import inkspire.morphic.data.layout.GridReflow
@@ -106,9 +106,9 @@ class HomeViewModel(
     private val homeListRepository: HomeListRepository,
     private val appRepository: AppRepository,
     private val appLauncher: AppLauncher,
-    private val appShortcuts: AppShortcuts,
     private val settingsRepository: SettingsRepository,
     private val widgetHost: AppWidgetHostController,
+    private val gestureActionRunner: GestureActionRunner,
 ) : ViewModel() {
     private val placements = MutableStateFlow<Map<GridItem, PlacedItem>>(emptyMap())
 
@@ -441,12 +441,10 @@ class HomeViewModel(
      */
     fun runGesture(item: GridItem, gesture: ItemGesture) {
         viewModelScope.launch {
-            when (val action = settingsRepository.homeItemGestures.first().actionsOn(item)[gesture]) {
-                null -> Unit
-                is GestureAction.LaunchApp -> appLauncher.launch(action.component)
-                is GestureAction.LaunchShortcut ->
-                    appShortcuts.start(action.id, action.packageName, action.userSerial)
-            }
+            val action = settingsRepository.homeItemGestures.first().actionsOn(item)[gesture] ?: return@launch
+            // An item has no side of the screen to pick a panel by, so a system panel here is the whole shade. The picker
+            // does not offer one on an item; this is what a stored one would do rather than nothing.
+            gestureActionRunner.run(action, ShadeRequest.WholeShade)
         }
     }
 

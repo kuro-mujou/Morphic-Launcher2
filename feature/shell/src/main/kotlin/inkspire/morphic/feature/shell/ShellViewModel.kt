@@ -9,15 +9,19 @@ import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.Orientation
+import inkspire.morphic.core.model.ShadeRequest
+import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.arrangementKey
 import inkspire.morphic.core.model.on
 import inkspire.morphic.data.apps.AppInfoOpener
 import inkspire.morphic.data.apps.AppShortcut
 import inkspire.morphic.data.apps.AppShortcuts
 import inkspire.morphic.data.apps.AppUninstaller
+import inkspire.morphic.data.apps.GestureActionRunner
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.layout.writeBackToReference
+import inkspire.morphic.data.settings.HomeGestures
 import inkspire.morphic.data.settings.OrientationSettings
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.settings.SurfaceRegister
@@ -61,6 +65,8 @@ import kotlinx.coroutines.launch
  * @property backdropAccent the wallpaper's representative color as ARGB, which every frosted wash is blended toward.
  *   Null when unreadable, which makes the washes plain white and black. Separate from [backdropImages] because it has a
  *   separate source — the system usually answers it without any image being read at all.
+ * @property homeGestures HOME's own swipe actions. Read for which directions have one — each takes the one-finger swipe
+ *   from the edge it reveals — while what an action *does* is read again as it fires, in [ShellViewModel.runHomeSwipe].
  */
 data class ShellState(
     val register: SurfaceRegister = SurfaceRegister.Default,
@@ -69,6 +75,7 @@ data class ShellState(
     val backdropEffect: BackdropEffect = BackdropEffect.Default,
     val backdropImages: BackdropImages = BackdropImages(),
     val backdropAccent: Int? = null,
+    val homeGestures: HomeGestures = HomeGestures.Default,
 )
 
 /**
@@ -111,6 +118,7 @@ class ShellViewModel(
     private val appUninstaller: AppUninstaller,
     private val appInfoOpener: AppInfoOpener,
     private val appShortcuts: AppShortcuts,
+    private val gestureActionRunner: GestureActionRunner,
 ) : ViewModel() {
 
     /**
@@ -188,6 +196,21 @@ class ShellViewModel(
     fun startShortcut(shortcut: AppShortcut) = appShortcuts.start(shortcut)
 
     /**
+     * Runs what a swipe in [direction] on HOME is set to. **Read as it fires**, like an item's gesture, so a swipe
+     * reassigned a moment ago does the new thing.
+     *
+     * @param startX where the swipe began, as a fraction of the screen's width — which side of a separate shade a
+     *   system-panel action opens.
+     */
+    fun runHomeSwipe(direction: SwipeDirection, startX: Float) {
+        viewModelScope.launch {
+            val gestures = settingsRepository.homeGestures.first()
+            val action = gestures.swipes[direction] ?: return@launch
+            gestureActionRunner.run(action, ShadeRequest(gestures.shadeStyle, startX))
+        }
+    }
+
+    /**
      * Which way the device is held, reported by the shell.
      *
      * The backdrop needs it and cannot derive it: a **rotating** wallpaper is two different pictures, so "the
@@ -208,16 +231,22 @@ class ShellViewModel(
     private val device = MutableStateFlow<DeviceConfiguration?>(null)
 
     val state: StateFlow<ShellState> =
-    // Six sources against `combine`'s five, so the two that come from the same store and answer the same
-        // question — what is bound to each edge, and how the pagers behind those bindings page — are grouped first.
+    // Seven sources against `combine`'s five, so the three that come from the same store and answer the same
+        // question — how HOME's edges are crossed: what is bound to each, how the pagers behind them page, and which
+        // swipes HOME keeps for its own actions — are grouped first.
         combine(
-            combine(settingsRepository.surfaceRegister, settingsRepository.pagerWraps, ::Pair),
+            combine(
+                settingsRepository.surfaceRegister,
+                settingsRepository.pagerWraps,
+                settingsRepository.homeGestures,
+                ::Triple,
+            ),
             wallpaperRepository.luminance,
             settingsRepository.backdropEffect,
             backdropImages(settingsRepository),
             wallpaperRepository.accentColor,
-        ) { (register, wraps), luminance, effect, images, accent ->
-            ShellState(register, wraps, luminance, effect, images, accent)
+        ) { (register, wraps, gestures), luminance, effect, images, accent ->
+            ShellState(register, wraps, luminance, effect, images, accent, gestures)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), ShellState())
 
     /** Reports the orientation the shell is being drawn in, so the rotating pair's right half is sampled. */

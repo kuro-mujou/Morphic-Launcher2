@@ -8,6 +8,7 @@ import inkspire.morphic.feature.settings.dock.DockViewModel
 import inkspire.morphic.feature.settings.effects.EffectsViewModel
 import inkspire.morphic.feature.settings.extras.ExtrasViewModel
 import inkspire.morphic.feature.settings.folder.FolderViewModel
+import inkspire.morphic.feature.settings.gestures.GesturesViewModel
 import inkspire.morphic.feature.settings.grid.GridSizeViewModel
 import inkspire.morphic.feature.settings.home.HomeHubViewModel
 import inkspire.morphic.feature.settings.iconstudio.IconStudioRoute
@@ -45,6 +46,7 @@ val settingsSurfaceModule = module {
     viewModel { AppsSectionViewModel(get(), get()) }
     viewModel { FolderViewModel(get(), get()) }
     viewModel { ExtrasViewModel(get()) }
+    viewModel { GesturesViewModel(get(), get(), get()) }
     viewModel { OrientationViewModel(get()) }
     viewModel { EffectsViewModel(get(), get()) }
     viewModel { IconsViewModel(get(), get()) }

@@ -5,12 +5,11 @@ import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.GestureAction
-import inkspire.morphic.core.model.GridItem
-import inkspire.morphic.core.model.ItemGesture
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.apps.AppShortcut
 import inkspire.morphic.data.apps.AppShortcuts
 import inkspire.morphic.data.settings.SettingsRepository
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -58,13 +57,12 @@ data class GestureActionState(
  * An app installed while this screen is open therefore shows in Apps (that list *is* observed) but its shortcuts
  * appear on the next visit, which is a trade this screen can afford and a watcher would not pay for.
  *
- * **The gesture and the item come from the route**, so this is the first ViewModel here that takes per-instance
- * parameters — which is why the `NavEntry` ViewModel-store decorator matters: without it every route would be
+ * **The target comes from the route**, so this is the first ViewModel here that takes a per-instance
+ * parameter — which is why the `NavEntry` ViewModel-store decorator matters: without it every route would be
  * handed the first instance ever created, whatever item it was built for.
  */
 class GestureActionViewModel(
-    private val item: GridItem,
-    private val gesture: ItemGesture,
+    private val target: GestureTarget,
     private val settingsRepository: SettingsRepository,
     private val appShortcuts: AppShortcuts,
     appRepository: AppRepository,
@@ -82,7 +80,7 @@ class GestureActionViewModel(
             appRepository.observeApps(),
             shortcuts,
             query,
-            settingsRepository.homeItemGestures.map { it.actionsOn(item)[gesture] },
+            assigned(),
         ) { apps, loaded, text, assigned ->
             val matching = apps.filter { it.label.matches(text) }
             GestureActionState(
@@ -112,7 +110,18 @@ class GestureActionViewModel(
 
     /** Assigns [action], or clears the gesture when it is null — which is what the "None" row writes. */
     fun choose(action: GestureAction?) {
-        viewModelScope.launch { settingsRepository.setItemGesture(item, gesture, action) }
+        viewModelScope.launch {
+            when (target) {
+                is GestureTarget.Item -> settingsRepository.setItemGesture(target.item, target.gesture, action)
+                is GestureTarget.HomeSwipe -> settingsRepository.setHomeSwipe(target.direction, action)
+            }
+        }
+    }
+
+    /** What [target] is set to now, from whichever store holds it. */
+    private fun assigned(): Flow<GestureAction?> = when (target) {
+        is GestureTarget.Item -> settingsRepository.homeItemGestures.map { it.actionsOn(target.item)[target.gesture] }
+        is GestureTarget.HomeSwipe -> settingsRepository.homeGestures.map { it.swipes[target.direction] }
     }
 
     /** Assigns an app by the key the picker row carries. */

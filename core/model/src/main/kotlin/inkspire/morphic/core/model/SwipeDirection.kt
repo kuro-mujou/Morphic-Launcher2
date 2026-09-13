@@ -28,6 +28,21 @@ enum class SwipeDirection {
      * vertically, so a row may take a horizontal swipe and must not take a vertical one.
      */
     val isHorizontal: Boolean get() = this == LEFT || this == RIGHT
+
+    /**
+     * The edge of HOME a swipe this way uncovers — named the opposite way, since a finger travelling down drags HOME
+     * down and reveals what is parked above it.
+     *
+     * Read by the surface pan and by the shell, which decides which edge a HOME swipe action has taken the one-finger
+     * swipe from. If the two disagreed, one finger would still open the surface the action was meant to cover.
+     */
+    val revealedEdge: HomeEdge
+        get() = when (this) {
+            UP -> HomeEdge.BOTTOM
+            DOWN -> HomeEdge.TOP
+            LEFT -> HomeEdge.RIGHT
+            RIGHT -> HomeEdge.LEFT
+        }
 }
 
 /**

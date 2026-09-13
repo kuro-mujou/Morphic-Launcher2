@@ -23,7 +23,9 @@ import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.ItemGesture
 import inkspire.morphic.core.model.RotationMode
 import inkspire.morphic.core.model.SearchPlacement
+import inkspire.morphic.core.model.ShadeStyle
 import inkspire.morphic.core.model.SurfaceTransition
+import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.SyncMode
 import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.blueprint
@@ -35,6 +37,7 @@ import inkspire.morphic.data.settings.AlphabetStrip
 import inkspire.morphic.data.settings.AppsChrome
 import inkspire.morphic.data.settings.CardOverride
 import inkspire.morphic.data.settings.GridOverride
+import inkspire.morphic.data.settings.HomeGestures
 import inkspire.morphic.data.settings.HomeItemGestures
 import inkspire.morphic.data.settings.IconOverride
 import inkspire.morphic.data.settings.IconPreset
@@ -209,6 +212,13 @@ private val HomeItemGesturesSlice = SettingsSlice(
 )
 
 /** How the launcher's three pagers page: one key, one blob, sparse inside. */
+/** HOME's own swipe actions and the panel style — see [HomeGestures]. */
+private val HomeGesturesSlice = SettingsSlice(
+    name = "home_gestures",
+    serializer = serializer<HomeGestures>(),
+    default = HomeGestures.Default,
+)
+
 private val SurfacePagingSlice = SettingsSlice(
     name = "surface_paging",
     serializer = serializer<SurfacePaging>(),
@@ -305,6 +315,13 @@ internal class SettingsRepositoryImpl(
 
     override suspend fun setItemGesture(item: GridItem, gesture: ItemGesture, action: GestureAction?) =
         update(HomeItemGesturesSlice) { withAction(item, gesture, action) }
+
+    override val homeGestures: Flow<HomeGestures> = dataStore.read(HomeGesturesSlice) { it }
+
+    override suspend fun setHomeSwipe(direction: SwipeDirection, action: GestureAction?) =
+        update(HomeGesturesSlice) { withSwipe(direction, action) }
+
+    override suspend fun setShadeStyle(style: ShadeStyle) = update(HomeGesturesSlice) { copy(shadeStyle = style) }
 
     override suspend fun setCategoryTabEdge(edge: VerticalEdge) =
         update(AppsChromeSlice) { copy(categoryTabEdge = edge) }
