@@ -53,7 +53,7 @@ internal fun ExtrasDetail(modifier: Modifier = Modifier) {
             // Warns rather than describes, which is the bar this pane's one supporting line has to clear: the switch
             // turns on *two* affordances that look nothing alike, and which one a layout gets is not guessable from
             // here or discoverable without trying all five of them.
-            supportingText = "A strip beside the list and grid; a letter picker on the category pager.",
+            supportingText = "A strip beside the app list and grid, and home's list; a letter picker on the category pager.",
             checked = strip.enabled,
             onCheckedChange = viewModel::setAlphabetStripEnabled,
         )

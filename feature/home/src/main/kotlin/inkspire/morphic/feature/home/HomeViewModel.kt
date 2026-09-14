@@ -126,6 +126,26 @@ class HomeViewModel(
      */
     private val listOrder = MutableStateFlow<List<ComponentKey>>(emptyList())
 
+    /**
+     * **The whole installed collection in A–Z order, with its letter runs** — what HOME's index rail draws and
+     * filters by, or [HomeAlphabet.Off] while the user has A–Z navigation switched off.
+     *
+     * **Every app, not the ones on the list.** The rail is how a short HOME list reaches the rest of the phone
+     * without opening APPS, which is the whole of Niagara's arrangement and what it is modeled on. Indexing the list
+     * itself would offer four or five letters and reach nothing new.
+     *
+     * Sorted, bucketed and threaded by `data:apps` rather than here — `AppRepository.observeIndexed` carries why
+     * both halves belong on that side of the boundary.
+     *
+     * Recomputed when the collection or the setting changes and never otherwise; a finger running down the rail
+     * reads this and writes nothing.
+     */
+    private val alphabet: Flow<HomeAlphabet> =
+        combine(appRepository.observeIndexed(), settingsRepository.alphabetStrip) { indexed, strip ->
+            val style = strip.style.takeIf { strip.enabled } ?: return@combine HomeAlphabet.Off
+            HomeAlphabet(style = style, apps = indexed.apps, letters = indexed.letters)
+        }
+
     /** The device the surface reports, or null until it does. Null keeps [iconSizings] empty rather than guessing. */
     private val device = MutableStateFlow<DeviceConfiguration?>(null)
 
@@ -427,6 +447,10 @@ class HomeViewModel(
             // every rotation and every pairing change. The same shape `AppsSectionViewModel` uses for its bound
             // layouts.
             .combine(settingsRepository.homeItemGestures) { base, gestures -> base.copy(itemGestures = gestures) }
+            // Joined out here for `itemGestures`' reason, and one further: it is keyed by neither the device nor the
+            // layout, and it is the *whole* collection rather than what is placed, so nesting it inside would
+            // re-sort every app on every rotation.
+            .combine(alphabet) { base, index -> base.copy(alphabet = index) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), HomeState(emptyList()))
 
     /**

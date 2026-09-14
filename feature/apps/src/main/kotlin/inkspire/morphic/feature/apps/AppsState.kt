@@ -12,7 +12,7 @@ import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.VerticalEdge
-import inkspire.morphic.feature.apps.layout.alphabet.LetterBucket
+import inkspire.morphic.data.apps.LetterBucket
 import inkspire.morphic.core.model.Folder as FolderModel
 
 /**

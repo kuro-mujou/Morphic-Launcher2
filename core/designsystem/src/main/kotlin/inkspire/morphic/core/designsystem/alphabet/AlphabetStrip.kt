@@ -34,14 +34,16 @@ import kotlin.math.exp
 import kotlin.math.roundToInt
 
 /**
- * The **A–Z index strip**: the letters a surface's content is ordered by, down its trailing edge, scrubbed with a
- * finger.
+ * The **A–Z rail**: an alphabet down a surface's trailing edge, scrubbed with a finger.
  *
- * **It scrolls; it does not filter.** Running a finger down it takes the content to that letter and dims everything
- * outside its run, and lifting leaves the content where it arrived — so the gesture is for *finding a place*, and
- * what was found is still there once the finger is gone. Niagara Launcher's behavior, and deliberately not L1's:
- * L1's strip replaced the surface with the letter's apps and put the surface back on release, which makes the whole
- * gesture a preview nobody can act on.
+ * **It reports a letter and draws nothing else; what a letter *means* is the caller's.** The two surfaces that host
+ * it answer differently, and the difference is a property of the surface rather than a preference: APPS is already in
+ * label order, so a letter scrolls it there and dims what falls outside the run, while HOME's list is the order the
+ * user put their apps in, where the only thing "go to M" can mean is *show me M*.
+ *
+ * **Either way what the letter found survives the finger lifting**, which is the one thing both callers owe it.
+ * Niagara Launcher's behavior, and deliberately not L1's: L1's strip replaced the surface with the letter's apps and
+ * put the surface back on release, which makes the whole gesture a preview nobody can act on.
  *
  * **Only letters that lead somewhere.** [labels] is the caller's, and comes from the same buckets it scrolls by, so
  * the strip never offers one that nothing starts with. The finger cannot land on a dead letter, and a shorter list

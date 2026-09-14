@@ -17,6 +17,18 @@ interface AppRepository {
     fun observeApps(): Flow<List<AppInfo>>
 
     /**
+     * The same collection in A–Z order, with each letter's run in it — for a surface that indexes or filters by
+     * letter.
+     *
+     * **Here rather than assembled by each reader, because the sort is the expensive half and the ordering is the
+     * part that must not vary.** A locale-aware collator over a few hundred labels is jank on the frame an install
+     * lands, so it is hopped off the main thread once, on this side of the boundary, where the cache already is —
+     * a reader that did it itself would need a dispatcher of its own to do it correctly. What makes the ranges
+     * meaningful is that they were built against *this* ordering; see [letterBuckets].
+     */
+    fun observeIndexed(): Flow<IndexedApps>
+
+    /**
      * Re-queries `LauncherApps` across all profiles and **replaces** the cache with the result.
      *
      * A replace, not an upsert: the cache is a mirror of what is installed, so an app that has been uninstalled

@@ -1,9 +1,14 @@
 package inkspire.morphic.feature.home
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -14,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -28,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -35,6 +42,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.alphabet.AlphabetStrip
+import inkspire.morphic.core.designsystem.backdrop.SurfaceBackdropLayer
 import inkspire.morphic.core.designsystem.cell.ActionRowCell
 import inkspire.morphic.core.designsystem.cell.AppRowCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
@@ -67,6 +76,7 @@ import inkspire.morphic.core.designsystem.ordered.cellFractionY
 import inkspire.morphic.core.designsystem.ordered.movingGap
 import inkspire.morphic.core.designsystem.ordered.movingGapDisplayOrder
 import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
+import inkspire.morphic.core.designsystem.surface.LockSurfaceGesture
 import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
 import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.designsystem.surface.surfaceDoubleTap
@@ -89,6 +99,7 @@ import inkspire.morphic.core.model.WidgetInfo
 import inkspire.morphic.core.model.asItemGesture
 import inkspire.morphic.core.model.sideZoneEdge
 import inkspire.morphic.core.model.toGridConfig
+import inkspire.morphic.data.apps.LetterBucket
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.WidgetSpan
 import inkspire.morphic.data.widgets.AppWidgetHostController
@@ -392,6 +403,24 @@ internal fun HomeListSurface(
         },
     )
 
+    // **The A–Z rail, and the letter it is filtering to.** Held by the surface rather than by the rail, exactly as
+    // APPS holds its own: it is the *content* that answers for a letter, and the rail is only where the finger is.
+    val alphabet = state.alphabet
+    val letters = rememberHomeLetterFilter(presented)
+    // Bounds-checked rather than trusted: the collection can change under a held letter — an install adds a bucket,
+    // an uninstall takes one away — and a position that no longer exists has to read as nothing shown rather than
+    // throw on the next frame.
+    val shown = letters.shown?.takeIf { it in alphabet.letters.indices }
+    // The frost's fade, read at draw time so a scrub does not recompose the surface behind it. An `Animatable` seeded
+    // at zero rather than `animateFloatAsState`, so the first letter fades *in* instead of arriving whole.
+    val filterPresence = remember { Animatable(0f) }
+    val filterSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
+    LaunchedEffect(shown != null) { filterPresence.animateTo(if (shown != null) 1f else 0f, filterSpec) }
+    // A swipe must not pan HOME out from under an open filter, and back closes the filter before it closes anything
+    // else — the order the user opened them in.
+    LockSurfaceGesture(shown != null)
+    BackHandler(enabled = shown != null, onBack = letters::clear)
+
     Box(
         modifier
             .fillMaxSize()
@@ -417,6 +446,11 @@ internal fun HomeListSurface(
             // way; `surfaceDoubleTap` owns why a double tap on an icon does not reach it.
             .surfaceDoubleTap(gestureConfig, enabled = presented, onDoubleTap = viewModel::runHomeDoubleTap),
     ) {
+        // **The full-screen frost, under HOME rather than over it**, which is what lets the rail and the letter's
+        // apps sit on it without either being covered. It fades in as a letter is held and out as one is dropped;
+        // what HOME draws above it simply stops being composed meanwhile, so the blur is what is left.
+        SurfaceBackdropLayer(alpha = filterPresence::value, scrimColor = LocalMorphicColors.current.background)
+
         HomeZoneScaffold(
             edge = edge,
             extent = extent,
@@ -426,6 +460,15 @@ internal fun HomeListSurface(
             // a zone that refuses the dragged item is skipped by the hit test, so
             // an app carried over it falls through to the list beneath instead of being rejected at drop time.
             side = { zoneModifier ->
+                // **While a letter is held the widgets are not composed at all**, rather than faded to nothing. A
+                // node at zero alpha still takes every touch that lands on it, so a fade would leave the blurred half
+                // of the screen swallowing the tap that is meant to close the filter. What is left is the frost, and
+                // a catcher over it — which is also the affordance: the space HOME's widgets were in is the obvious
+                // place to tap to get them back.
+                if (shown != null) {
+                    Box(zoneModifier.pointerInput(Unit) { detectTapGestures { letters.clear() } })
+                    return@HomeZoneScaffold
+                }
                 CoordinateDragGrid(
                     items = state.inZone(HomeZone.WIDGET_AREA),
                     config = areaConfig,
@@ -486,49 +529,85 @@ internal fun HomeListSurface(
                 }
             },
             main = { zoneModifier ->
-                // **The Add apps row is pinned above the scroller, not the first item in it.** It is the one control
-                // on this surface that is not an app, and a control that scrolls away is one a user has to hunt for
-                // — the list is as long as their app drawer. Inside the main zone rather than beside the widget area,
-                // because it belongs to the *list*: it adds rows to this, not widgets to that.
-                Column(modifier = zoneModifier) {
-                    AddAppsRow(
-                        height = rowHeight,
-                        metrics = listMetrics,
-                        onClick = { appPickerOpen = true },
-                    )
-                    ListZone(
-                        apps = displayedApps,
-                        rowHeight = rowHeight,
-                        scrollState = scrollState,
-                        dragging = coordinator.isDragging,
-                        onViewportChange = { bounds -> viewport = bounds },
-                        coordinator = coordinator,
-                        gestureConfig = gestureConfig,
-                        // A release here only ends the drag; the landing is committed by whichever zone it fell in —
-                        // this list's, or one of the pager pairing's if the user has switched layouts mid-gesture.
-                        onRelease = { coordinator.drop() },
-                        onLaunch = { viewModel.launch(it) },
-                        // **"Remove" here is the list's own verb**, and it is neither `RemoveFromGrid` nor a reorder:
-                        // this list is an order store of its own, not a view of the pager's placements, so taking an
-                        // app off it is a *membership* write. Writing the order without that app looks equivalent and
-                        // is not — the store reconciles a reported order against real membership and would put the app
-                        // straight back at the end. See [HomeViewModel.removeFromList].
-                        onShowMenu = { app, anchor ->
-                            menuHost?.showApp(
-                                component = app.componentKey,
-                                label = app.label,
-                                anchor = anchor,
-                                surfaceActions = listOf(
-                                    MenuAction("Gestures") { gesturesFor = app },
-                                    MenuAction("Remove") { viewModel.removeFromList(app.componentKey) },
-                                ),
+                // **The rail takes a column out of the list's zone, never out of the widget area's.** A `Row` rather
+                // than an inset, for the reason `AppsWithIndexStrip` states: the content measures the slot it is
+                // given, so the rail's width is reserved by the rail rather than written down a second time beside
+                // it. Inside the main zone, so the rail begins under the widget area and not beside it.
+                Row(modifier = zoneModifier) {
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                    ) {
+                        if (shown != null) {
+                            HomeAlphabetFilter(
+                                apps = alphabet.appsAt(shown),
+                                label = alphabet.letters[shown].label,
+                                alpha = filterPresence::value,
+                                rowHeight = rowHeight,
+                                metrics = listMetrics,
+                                onLaunch = { viewModel.launch(it) },
+                                onDismiss = letters::clear,
                             )
-                        },
-                        gesturesOn = { state.itemGestures.gesturesOn(it) },
-                        onGesture = { item, gesture -> viewModel.runGesture(item, gesture) },
-                            metrics = listMetrics,
-                        modifier = Modifier.weight(1f),
-                    )
+                        } else {
+                            // **The Add apps row is pinned above the scroller, not the first item in it.** It is
+                            // the one control on this surface that is not an app, and a control that scrolls away is
+                            // one a user has to hunt for — the list is as long as their app drawer. Inside the main
+                            // zone rather than beside the widget area, because it belongs to the *list*: it adds
+                            // rows to this, not widgets to that.
+                            Column(Modifier.fillMaxSize()) {
+                                AddAppsRow(
+                                    height = rowHeight,
+                                    metrics = listMetrics,
+                                    onClick = { appPickerOpen = true },
+                                )
+                                ListZone(
+                                    apps = displayedApps,
+                                    rowHeight = rowHeight,
+                                    scrollState = scrollState,
+                                    dragging = coordinator.isDragging,
+                                    onViewportChange = { bounds -> viewport = bounds },
+                                    coordinator = coordinator,
+                                    gestureConfig = gestureConfig,
+                                    // A release here only ends the drag; the landing is committed by whichever zone it fell in
+                                    // — this list's, or one of the pager pairing's if the user has switched layouts
+                                    // mid-gesture.
+                                    onRelease = { coordinator.drop() },
+                                    onLaunch = { viewModel.launch(it) },
+                                    // **"Remove" here is the list's own verb**, and it is neither `RemoveFromGrid` nor a
+                                    // reorder: this list is an order store of its own, not a view of the pager's placements,
+                                    // so taking an app off it is a *membership* write. Writing the order without that app
+                                    // looks equivalent and is not — the store reconciles a reported order against real
+                                    // membership and would put the app straight back at the end. See
+                                    // [HomeViewModel.removeFromList].
+                                    onShowMenu = { app, anchor ->
+                                        menuHost?.showApp(
+                                            component = app.componentKey,
+                                            label = app.label,
+                                            anchor = anchor,
+                                            surfaceActions = listOf(
+                                                MenuAction("Gestures") { gesturesFor = app },
+                                                MenuAction("Remove") { viewModel.removeFromList(app.componentKey) },
+                                            ),
+                                        )
+                                    },
+                                    gesturesOn = { state.itemGestures.gesturesOn(it) },
+                                    onGesture = { item, gesture -> viewModel.runGesture(item, gesture) },
+                                    metrics = listMetrics,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                        }
+                    }
+                    // The rail itself, drawn second so the curved style's letters and its badge swing out *over* the
+                    // column beside it rather than under it. Absent, not disabled, while A-Z navigation is off.
+                    alphabet.drawn?.let { style ->
+                        AlphabetStrip(
+                            labels = alphabet.letters.map(LetterBucket::label),
+                            style = style,
+                            onLetter = letters::onLetter,
+                        )
+                    }
                 }
             },
         )

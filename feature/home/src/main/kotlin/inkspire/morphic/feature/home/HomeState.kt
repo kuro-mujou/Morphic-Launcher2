@@ -1,5 +1,6 @@
 package inkspire.morphic.feature.home
 
+import inkspire.morphic.core.model.AlphabetStripStyle
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.GridConfig
@@ -11,6 +12,7 @@ import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.WidgetInfo
+import inkspire.morphic.data.apps.LetterBucket
 import inkspire.morphic.data.settings.HomeItemGestures
 import inkspire.morphic.core.model.Folder as FolderModel
 import inkspire.morphic.core.model.IconContainer as IconContainerModel
@@ -265,7 +267,41 @@ data class HomeState(
     val side: SideZoneSizing? = null,
     val horizontalPaddingDp: Map<GridSlot, Int> = emptyMap(),
     val itemGestures: HomeItemGestures = HomeItemGestures.Default,
+    val alphabet: HomeAlphabet = HomeAlphabet.Off,
 )
+
+/**
+ * The A–Z rail on HOME's list, and the collection it reaches: the whole phone in label order, with each letter's run
+ * in it.
+ *
+ * **The three travel together because they are one fact.** [letters] are positions *in* [apps]; paired with a
+ * differently ordered list they name the wrong apps, and that is silent — the wrong letter simply shows the wrong
+ * apps. [style] being null is what says there is no rail at all, so a reader cannot draw one and then find it has
+ * nothing to index.
+ *
+ * **It is the installed collection, not HOME's list.** The rail exists so a short list of the apps you chose can
+ * still reach the rest of the phone without opening APPS; see [HomeViewModel]'s `alphabet`.
+ *
+ * @property style which rail to draw, or null while the user has A–Z navigation switched off.
+ */
+data class HomeAlphabet(
+    val style: AlphabetStripStyle? = null,
+    val apps: List<AppInfo> = emptyList(),
+    val letters: List<LetterBucket> = emptyList(),
+) {
+
+    /** The rail, drawable — null when the setting is off or nothing could be indexed. */
+    val drawn: AlphabetStripStyle? get() = style?.takeIf { letters.isNotEmpty() }
+
+    /** The apps filed under [letters]`[`[bucket]`]`, or empty for a position no longer in range. */
+    fun appsAt(bucket: Int): List<AppInfo> =
+        letters.getOrNull(bucket)?.range?.let { apps.subList(it.first, it.last + 1) }.orEmpty()
+
+    companion object {
+        /** No rail: what HOME shows while A–Z navigation is off, and what the state starts as. */
+        val Off = HomeAlphabet()
+    }
+}
 
 /**
  * The blank margin at [slot]'s left and right edges, in dp — zero until the store answers.

@@ -72,11 +72,11 @@ import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.colsFor
 import inkspire.morphic.core.model.toGridConfig
+import inkspire.morphic.data.apps.LetterBucket
 import inkspire.morphic.feature.apps.layout.AppsVerticalGrid
 import inkspire.morphic.feature.apps.layout.AppsVerticalList
 import inkspire.morphic.feature.apps.layout.alphabet.AlphabetFilterBar
 import inkspire.morphic.feature.apps.layout.alphabet.AlphabetPicker
-import inkspire.morphic.feature.apps.layout.alphabet.LetterBucket
 import inkspire.morphic.feature.apps.layout.categorycard.AppsCategoryCard
 import inkspire.morphic.feature.apps.layout.categorypager.AppsCategoryPager
 import inkspire.morphic.feature.apps.layout.pager.AppsPager

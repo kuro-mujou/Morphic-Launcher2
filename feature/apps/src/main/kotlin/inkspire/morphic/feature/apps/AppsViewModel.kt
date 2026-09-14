@@ -16,7 +16,6 @@ import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.arrangementKey
-import inkspire.morphic.core.model.indexRanges
 import inkspire.morphic.core.model.isLinked
 import inkspire.morphic.core.model.labelCollator
 import inkspire.morphic.core.model.linkedCounterpart
@@ -24,7 +23,10 @@ import inkspire.morphic.core.model.matchesLabel
 import inkspire.morphic.core.model.portraitOfPair
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
+import inkspire.morphic.data.apps.LabelOrder
+import inkspire.morphic.data.apps.LetterBucket
 import inkspire.morphic.data.apps.category.AppCategorizer
+import inkspire.morphic.data.apps.letterBuckets
 import inkspire.morphic.data.layout.AppsCategoryChange
 import inkspire.morphic.data.layout.AppsOrderRepository
 import inkspire.morphic.data.layout.AppsPagerChange
@@ -32,8 +34,6 @@ import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.layout.reconcileReportedOrder
 import inkspire.morphic.data.settings.OrientationSettings
 import inkspire.morphic.data.settings.SettingsRepository
-import inkspire.morphic.feature.apps.layout.alphabet.LetterBucket
-import inkspire.morphic.feature.apps.layout.alphabet.LetterIndex
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,8 +48,6 @@ import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.text.Collator
-import java.util.Locale
 
 /**
  * The settings-resolved half of [AppsState], assembled before it joins the content half.
@@ -219,17 +217,7 @@ class AppsViewModel(
      */
     private val indexed: Flow<Indexed> =
         sortedApps
-            .map { apps ->
-                // Rebuilt per emission rather than held, because the locale can change under a running launcher and
-                // an index built for the old one would file letters the list no longer sorts that way. It is a few
-                // hundred microseconds beside the sort that just ran.
-                val index = LetterIndex(Locale.getDefault())
-                val ranges = apps.indexRanges { index.bucketOf(it.label) }
-                Indexed(
-                    apps = apps,
-                    letters = ranges.map { (bucket, range) -> LetterBucket(index.labels[bucket], range) },
-                )
-            }
+            .map { apps -> Indexed(apps = apps, letters = apps.letterBuckets()) }
             .flowOn(dispatchers.default)
 
     /**
@@ -913,24 +901,5 @@ class AppsViewModel(
         private const val STOP_TIMEOUT_MS = 5_000L
         private const val DEFAULT_FOLDER_LABEL = "Folder"
 
-        /**
-         * A–Z by label, **locale-aware**, then by component as a tie-break.
-         *
-         * A [Collator] rather than `sortedBy { label.lowercase() }`: lowercasing compares raw UTF-16, which
-         * puts every accented letter after `Z` (so a Vietnamese or French app list breaks into two alphabets) and
-         * gets Turkish dotless-i wrong. The collator sorts by the *current locale's* rules, which is what a user
-         * scanning an alphabetical list expects. Default (tertiary) strength on purpose — a primary-strength
-         * collator treats `a` and `ă` as equal, which is right for *searching* and wrong for *ordering*.
-         *
-         * The component tie-break makes the order total: two apps can share a label (a work-profile clone of a
-         * personal app is the common one), and without it their relative order would depend on the cache's
-         * emission order and could visibly swap between refreshes — including, now, changing where a newly
-         * installed app lands on the pager.
-         */
-        private val LabelOrder: Comparator<AppInfo> = run {
-            val collator = Collator.getInstance()
-            Comparator<AppInfo> { a, b -> collator.compare(a.label, b.label) }
-                .thenBy { it.componentKey.flatten() }
-        }
     }
 }

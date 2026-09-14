@@ -8,6 +8,7 @@ import inkspire.morphic.data.apps.mapper.toEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -54,6 +55,12 @@ internal class AppRepositoryImpl(
 
     override fun observeApps(): Flow<List<AppInfo>> =
         appInfoDao.observeAll().map { entities -> entities.map { it.toAppInfo() } }
+
+    override fun observeIndexed(): Flow<IndexedApps> =
+        observeApps()
+            .map { apps -> apps.sortedWith(LabelOrder) }
+            .map { sorted -> IndexedApps(apps = sorted, letters = sorted.letterBuckets()) }
+            .flowOn(dispatchers.default)
 
     override suspend fun refresh() {
         // LauncherApps queries are blocking binder calls → do the query + mapping off the main thread.

@@ -177,19 +177,6 @@ nothing, and the surface's single verdict (`OnFilm`) takes over. This reverses "
 own spot" in `docs/DESIGN_SYSTEM.md` → "Adaptive content color", and `InkSurface`'s KDoc says two surfaces exist.
 Both change with it.
 
-### A–Z strip
-
-#### R3. Put the strip on HOME, as Niagara does
-
-Wanted: the index strip on HOME, not only on APPS. `ExtrasDetail`'s KDoc already names "HOME's vertical list" as next.
-Open question: the HOME **pager** too, or only the **list**? The strip scrolls to a letter, so it needs content ordered
-by letter. `HomeListRepository`'s order is the user's own, not A–Z, and the pager's is a coordinate. On a
-hand-arranged surface the strip can only *filter*, as the category pager's letter picker does. Settle that before
-building.
-
-The swipe conflict comes with it — HOME's edges carry bindings too — but it arrives settled: `AlphabetStrip` claims
-`SurfaceGestureLock` while a finger is on it, and the claim is the strip's own rather than the APPS call site's.
-
 ### Context menu
 
 #### R6. Redesign the context menu
