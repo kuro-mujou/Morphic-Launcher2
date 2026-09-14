@@ -5,7 +5,6 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
 import inkspire.morphic.core.model.AlphabetStripStyle
 import inkspire.morphic.core.model.AppsLayout
@@ -57,14 +56,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.serializer
-
-/**
- * The single DataStore backing every settings slice.
- *
- * A `Context` extension because that is the only shape `preferencesDataStore` offers, and it must be declared once at
- * file scope — creating two stores over one file throws at runtime.
- */
-private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "launcher_settings")
 
 /** The surface register's slice: one key, one blob. */
 private val SurfaceRegisterSlice = SettingsSlice(
@@ -239,6 +230,31 @@ private val SurfacePagingSlice = SettingsSlice(
     serializer = serializer<SurfacePaging>(),
     default = SurfacePaging.Default,
 )
+
+/**
+ * Every slice, by name — what a look is written against, and what [LookScope] must classify in full.
+ *
+ * **A slice left off this map fails at startup rather than quietly**: `read` refuses a slice it does not hold. Without
+ * that, a new slice would simply never be carried by a look, and nothing would say so.
+ */
+internal val SettingsSlices: Map<String, SettingsSlice<*>> = listOf(
+    SurfaceRegisterSlice,
+    SurfaceMetricsSlice,
+    BackdropEffectSlice,
+    IconAppearanceSlice,
+    IconPresetsSlice,
+    AppliedIconPresetSlice,
+    IconStudioBackgroundSlice,
+    IconStudioWorkspaceSlice,
+    AppsChromeSlice,
+    AlphabetStripSlice,
+    OrientationSettingsSlice,
+    HomeItemGesturesSlice,
+    HomeGesturesSlice,
+    DefaultLauncherAskSlice,
+    OnboardingSlice,
+    SurfacePagingSlice,
+).associateBy { it.name }
 
 /**
  * The grids whose paging is the user's to configure, with the blueprint default each falls back to.
@@ -616,6 +632,7 @@ internal class SettingsRepositoryImpl(
      * Both the decode and the comparison run on `io`, since `flowOn` applies to everything upstream of it.
      */
     private fun <T, R> DataStore<Preferences>.read(slice: SettingsSlice<T>, project: (T) -> R): Flow<R> {
+        check(SettingsSlices[slice.name] === slice) { "Slice '${slice.name}' is missing from SettingsSlices" }
         val key = stringPreferencesKey(slice.name)
         return data
             .map { project(slice.decode(it[key])) }

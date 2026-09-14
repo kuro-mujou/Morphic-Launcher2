@@ -1531,6 +1531,28 @@ which `O4`'s picker replaces.
 - **Known, and owed to `O4b`:** on the first home after the gate closes, `DefaultLauncherPrompt` appears at once. That
   is the collision the plan's A3 names; it covers nothing until the edge hint exists.
 
+**A look is a file, applied in one transaction and captured from a configured device.** `O2` of the plan. `Look`
+(`data:settings`) is a name and a map of settings slices exactly as the store holds them, opaque outside the module;
+`LookRepository` applies one in a single `edit` and captures the one in force. `LookScope` is the one place that decides
+which slices a look carries, and `LookScopeTest` holds it to every slice in `SettingsSlices` — a registry `read` checks
+at startup, so a new slice cannot be left off it quietly.
+
+- **Applying is sparse, capturing is explicit.** A look writes only the carried slices it holds, drops a value that
+  would not read back, and re-stamps `icon_applied_preset` exactly when it writes the recipe. A capture spells out every
+  carried slice, defaults included, so it reproduces its device wherever it lands.
+- **Excluded beyond the plan's table:** `home_gestures`, whose actions name this device's apps, and
+  `orientation_settings`, whose independent-layout flag needs `data:layout`'s placement writes alongside it.
+- **Applying is safe only before HOME is arranged.** A shrunk grid needs its displaced items re-homed, which the write
+  does not do. First run applies before anything is placed; a later apply-from-settings owes that companion write.
+- **Capture is `LookCaptureHarness`, an instrumentation test in `app`**, run through `am instrument`, because the
+  Gradle task uninstalls the launcher — and its data — when it finishes.
+- **Verified:** the unit tests, and on the emulator the harness captured the current setup as exactly the eight carried
+  slices, with nothing excluded in the file, and the launcher restarted cleanly past the registry check. Not verified
+  on a device: an apply, which nothing calls until `O4`.
+- **Found, not fixed:** `SideBinding` has no `@SerialName`, so a look stores its edges under the discriminator
+  `inkspire.morphic.data.settings.SideBinding.Apps`, and a package move would make every shipped or shared look drop
+  them. The fix changes what `surface_register` stores as well, so it needs the key-rename seam.
+
 **The home button works from everywhere, which it did not.** `MainActivity` had no `onNewIntent`, and that is the
 whole of the signal: the launcher is `launchMode="singleTask"` and declares `category.HOME`, so pressing home starts
 nothing — the system hands the live instance a fresh HOME intent, and an Activity ignoring it leaves whatever was on

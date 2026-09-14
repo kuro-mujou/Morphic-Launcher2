@@ -1,6 +1,6 @@
 # Onboarding Plan — a look in one tap, the rest when it is asked for
 
-**Status:** design locked (2026-09-08, author-confirmed); **O1 built** (2026-09-14), the rest not. This is the *what and in what order*;
+**Status:** design locked (2026-09-08, author-confirmed); **O1–O2 built** (2026-09-14), the rest not. This is the *what and in what order*;
 the open questions at the end are real.
 
 **Amended 2026-09-14 by a survey of four shipping launchers** — see "What shipping launchers do". The locked
@@ -177,9 +177,11 @@ A look writes **the slices that describe an arrangement**, and never the slices 
 | `default_launcher_ask` | no | When this install last asked to be the home app — about the device, not the look |
 | `home_item_gestures` | no | Keyed by `GridItem`, i.e. by *this device's* installed apps. A shared look would carry gestures for apps the recipient does not have |
 | `onboarding` | no | A look that could mark setup complete could also un-mark it |
+| `home_gestures` | no | HOME's swipe actions name this device's apps and shortcuts, as `home_item_gestures` does |
+| `orientation_settings` | no | Its independent-layout flag is only correct changed together with placement writes `data:layout` owns |
 
-**Built-ins are captured, not hand-written.** A dev-harness action serializes the current device's in-list slices to
-a look file; the four shipped looks are made by configuring a device and pressing it. Hand-writing JSON for a format
+**Built-ins are captured, not hand-written.** `LookCaptureHarness` (`app`'s instrumentation tests) serializes the current device's in-list
+slices to a look file; the four shipped looks are made by configuring a device and running it. Hand-writing JSON for a format
 whose defaults are deliberately *not encoded* would produce blobs that silently disagree with the settings screen.
 
 **Applying is one transaction over the in-list keys**, and it writes only the keys the look carries: a look that
@@ -287,6 +289,20 @@ the default-launcher ask).
 place, and the capture action in the dev harness. Tests: an unknown slice name in a look is ignored; no out-list key
 is ever written; a look carrying `icon_appearance` re-stamps `icon_applied_preset`; a look absent a key leaves the
 stored value untouched.
+
+> **Built 2026-09-14.** `Look` is opaque outside `data:settings` — read from a file or captured, never assembled — and
+> `LookScope` is the in/out list, held to every slice by `LookScopeTest`; a slice left out of `SettingsSlices` fails at
+> startup. Four decisions the paragraph above did not make:
+> - **Capture is an instrumentation harness, `LookCaptureHarness` in `app`**, because the in-app dev harness is gone and
+>   only a process of the launcher can read its store. It runs through `am instrument`: `connectedDebugAndroidTest`
+>   uninstalls the app when it ends, and with it the arrangement being captured.
+> - **A capture spells out every carried slice, defaults included.** A sparse capture would land differently on every
+>   device, leaving whatever the receiver held in each slice the capturing device never touched. Applying stays
+>   sparse, so a curated look can still say less.
+> - **`home_gestures` and `orientation_settings` are excluded** — the two rows added to the table above.
+> - **Applying is safe only before HOME is arranged.** `surface_metrics` can shrink a grid, and a shrink needs
+>   `data:layout` to re-home what it displaces. First run applies before anything is placed; open question 4's
+>   apply-from-settings owes that companion write.
 
 **O3 — the preview lift.** The settings previews the tiles need move to `core:designsystem` on their **second
 consumer**, which is the rule rather than a convenience: a mockup drawn independently in onboarding would be the

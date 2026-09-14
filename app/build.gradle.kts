@@ -55,6 +55,8 @@ android {
 
     defaultConfig {
         applicationId = "inkspire.morphic.launcher"
+        // `LookCaptureHarness`: only a process of the launcher can read the launcher's settings store.
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -126,4 +128,9 @@ dependencies {
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+    // The look capture harness. Run through `am instrument` — see its KDoc for why never the Gradle task.
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.junit)
 }

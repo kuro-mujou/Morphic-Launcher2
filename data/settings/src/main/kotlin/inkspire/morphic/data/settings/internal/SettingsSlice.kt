@@ -57,4 +57,23 @@ internal class SettingsSlice<T>(
             .onFailure { Timber.w(it, "Settings slice '%s' is unreadable; falling back to defaults", name) }
             .getOrDefault(default)
     }
+
+    /**
+     * [stored] as this slice would write it back: decoded, falling back as [decode] does, then encoded again.
+     *
+     * An absent slice comes out as its default spelled out, which is what lets a captured look say everything about the
+     * slices it carries rather than only what the capturing device had changed.
+     */
+    fun canonical(stored: String?): String = encode(decode(stored))
+
+    /**
+     * [stored] re-encoded if it reads as this slice, or null if it does not — [decode] without the fallback.
+     *
+     * For a value that came from outside the store: one that fails here would read back as the default, so writing it
+     * would silently reset the setting rather than change it.
+     */
+    fun reencodeOrNull(stored: String): String? =
+        runCatching { encode(SettingsJson.decodeFromString(serializer, stored)) }
+            .onFailure { Timber.w(it, "A value for settings slice '%s' is unreadable; not writing it", name) }
+            .getOrNull()
 }
