@@ -21,7 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
-import inkspire.morphic.core.designsystem.backdrop.OnWallpaper
+import inkspire.morphic.core.designsystem.backdrop.SpotTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.IconSizingRanges
@@ -259,8 +259,8 @@ fun AppRowCell(
                 // text still measures against the width the outer row leaves it, so a long label ellipsises at
                 // exactly the same place it always did; only a *short* one now stops where it stops.
                 // On HOME's list the label sits on the wallpaper, so it is themed by the spot under it; on a film or a
-                // sheet `OnWallpaper` does nothing and the surface's own theme stands.
-                OnWallpaper {
+                // sheet `SpotTheme` does nothing and the surface's own theme stands.
+                SpotTheme {
                     Text(
                         text = app.label,
                         style = labelStyle,
@@ -318,10 +318,10 @@ fun ActionRowCell(
             // The mark and the label each read their own spot: they are a row's width apart, and a caller's mark
             // tinted from `LocalMorphicColors` inside the slot takes the ink of the spot it is drawn on.
             if (metrics.showIcon) {
-                OnWallpaper { mark(iconSize) }
+                SpotTheme { mark(iconSize) }
                 Spacer(modifier = Modifier.width(16.dp))
             }
-            OnWallpaper {
+            SpotTheme {
                 Text(
                     text = label,
                     style = rowLabelStyle(metrics),

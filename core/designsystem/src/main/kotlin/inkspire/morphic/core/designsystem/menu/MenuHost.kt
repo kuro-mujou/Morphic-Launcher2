@@ -15,7 +15,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import inkspire.morphic.core.designsystem.backdrop.LocalInkSurface
 import inkspire.morphic.core.designsystem.backdrop.LocalOverFrost
+import inkspire.morphic.core.designsystem.backdrop.filmInkSurface
 import inkspire.morphic.core.designsystem.backdrop.filmIsDark
 import inkspire.morphic.core.designsystem.surface.LocalSurfaceGestureLock
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
@@ -183,13 +185,20 @@ fun MenuOverlay(host: LauncherMenuHost) {
         // Over HOME the panel frosts, and with `filmBackdrop`: the material is the film's, so the text on it has to
         // be the film's too, even though the wallpaper directly around the menu may be the opposite brightness. That
         // is the case a single global wallpaper reading gets wrong every time — a black menu over a bright wallpaper.
+        //
+        // **And the rows read their own spot of that material**, which is what the film's single verdict could not do:
+        // a menu over dark water on a bright wallpaper is a dark panel, whatever the film is on average. Over the film
+        // the panel is flat, so there is no picture under the rows and no surface to read.
         if (request.overFrost) {
-            CompositionLocalProvider(LocalOverFrost provides true) {
+            CompositionLocalProvider(LocalOverFrost provides true, LocalInkSurface provides null) {
                 RequestedMenu(request = request, onDismiss = host::dismiss)
             }
         } else {
+            val film = filmInkSurface()
             LauncherTheme(darkTheme = filmIsDark()) {
-                RequestedMenu(request = request, onDismiss = host::dismiss)
+                CompositionLocalProvider(LocalInkSurface provides film) {
+                    RequestedMenu(request = request, onDismiss = host::dismiss)
+                }
             }
         }
     }

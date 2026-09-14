@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.graphics.Bitmap
 import android.net.Uri
 import inkspire.morphic.core.model.Orientation
+import inkspire.morphic.core.model.wallpaper.LuminanceMap
 import inkspire.morphic.core.model.wallpaper.WallpaperBrightness
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
@@ -211,6 +212,16 @@ interface WallpaperRepository {
      * @param orientation which half of the rotating pair is displayed, for [backdrop]'s reason.
      */
     fun brightness(orientation: Flow<Orientation>): Flow<WallpaperBrightness>
+
+    /**
+     * [picture]'s luminance map, measured off the main thread — for a picture this module handed out, such as the
+     * blurred film [backdrop] emits.
+     *
+     * **The film is measured as the film, not as the wallpaper it was blurred from.** A blur spreads a bright sky into
+     * the water beside it, so the picture text on the film actually sits over is this one; reading the sharp map instead
+     * would judge it against contrast that no longer exists.
+     */
+    suspend fun luminanceOf(picture: Bitmap): LuminanceMap
 
     /**
      * The wallpaper's **representative color** as ARGB, or null when it cannot be read — what

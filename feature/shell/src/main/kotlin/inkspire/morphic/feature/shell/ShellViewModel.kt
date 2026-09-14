@@ -12,6 +12,7 @@ import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.arrangementKey
 import inkspire.morphic.core.model.on
+import inkspire.morphic.core.model.wallpaper.LuminanceMap
 import inkspire.morphic.core.model.wallpaper.WallpaperBrightness
 import inkspire.morphic.data.apps.AppInfoOpener
 import inkspire.morphic.data.apps.AppShortcut
@@ -37,6 +38,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -92,6 +94,7 @@ data class ShellState(
 data class BackdropImages(
     val panel: Bitmap? = null,
     val film: Bitmap? = null,
+    val filmLuminance: LuminanceMap? = null,
 )
 
 /**
@@ -290,11 +293,13 @@ class ShellViewModel(
      * "no blur" means and the only strength that reaches full resolution (`blurBackdrop` halves anything it blurs at
      * all). The film's is an eighth of the screen and rounds to nothing beside it.
      */
+    @OptIn(ExperimentalCoroutinesApi::class)
     private fun backdropImages(settingsRepository: SettingsRepository): Flow<BackdropImages> = combine(
         blurredWallpaper(settingsRepository.backdropEffect.map { it.blurStrength }),
-        blurredWallpaper(settingsRepository.backdropEffect.map { it.fullScreenFilm.blurStrength }),
-        ::BackdropImages,
-    )
+        // The film is measured as it comes, so the map text on it reads is the blurred picture it is drawn over.
+        blurredWallpaper(settingsRepository.backdropEffect.map { it.fullScreenFilm.blurStrength })
+            .mapLatest { film -> film to film?.let { wallpaperRepository.luminanceOf(it) } },
+    ) { panel, (film, filmLuminance) -> BackdropImages(panel, film, filmLuminance) }
 
     /**
      * The wallpaper blurred at [strength], re-read only when that strength actually moves.

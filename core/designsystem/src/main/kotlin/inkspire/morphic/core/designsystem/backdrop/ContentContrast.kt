@@ -2,6 +2,7 @@ package inkspire.morphic.core.designsystem.backdrop
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -9,6 +10,7 @@ import androidx.compose.ui.util.lerp
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.BackdropEffect
+import inkspire.morphic.core.model.wallpaper.LuminanceMap
 
 /**
  * The relative luminance at which dark text starts beating light text on a background.
@@ -36,7 +38,11 @@ fun isDarkBackground(luminance: Float): Boolean = luminance < DarkTextLuminance
  * @param wash the color painted over it, **alpha included**. `Color.Transparent` leaves [picture] untouched, which is
  *   what a tint of `BackdropTint.NONE` resolves to.
  */
-fun washedLuminance(picture: Float, wash: Color): Float = lerp(picture, wash.luminance(), wash.alpha)
+fun washedLuminance(picture: Float, wash: Color): Float = washedLuminance(picture, wash.luminance(), wash.alpha)
+
+/** [washedLuminance] with the wash already reduced to its luminance and alpha — for a caller reading many cells. */
+internal fun washedLuminance(picture: Float, washLuminance: Float, washAlpha: Float): Float =
+    lerp(picture, washLuminance, washAlpha)
 
 /**
  * The **full-screen film** as the chrome needs to know it: the color its wash is struck from, and whether it is dark
@@ -45,7 +51,7 @@ fun washedLuminance(picture: Float, wash: Color): Float = lerp(picture, wash.lum
  * **One type because it is one material described twice**, and the two must be measured together: a wash weighed with
  * one tone and painted with another is exactly the silent disagreement this subsystem keeps rediscovering.
  */
-class Film(val tone: Color, val isDark: Boolean)
+class Film(val tone: Color, val isDark: Boolean, val wash: Color = Color.Transparent)
 
 /**
  * The resolved [Film], or null outside the launcher shell.
@@ -81,25 +87,44 @@ fun filmTone(): Color = LocalFilm.current?.tone ?: Color.Unspecified
  * function just struck rather than reading it again. That is the standing rule for anything two paths must agree on:
  * the color deciding the text and the color behind the text are one derivation, not two that look alike.
  *
- * @param wallpaperLuminance the wallpaper's mean, or **null when there is no picture to sample**. A film with nothing
- *   to sample is its own flat scrim, and a scrim is a theme color — so it already contrasts the enclosing theme's
- *   content, and the honest answer is [fallback] rather than a number invented for the occasion.
+ * **Its darkness is the worst-patch rule over the whole washed film, not its mean against a crossover.** A film is the
+ * wallpaper blurred, and a blurred sky over water is still bright above and dark below; a mean put dark text over the
+ * water on four of the six effects. Text that reads its own spot ([SpotTheme]) does better than either — this is the
+ * answer for everything on the film that does not.
+ *
+ * @param filmLuminance the film picture's own luminance map, or **null when there is no picture to sample**. A film
+ *   with nothing to sample is its own flat scrim, and a scrim is a theme color — so it already contrasts the enclosing
+ *   theme's content, and the honest answer is [fallback] rather than a number invented for the occasion.
  * @param fallback what to answer with nothing to measure: the enclosing theme's own darkness.
  * @param accent the wallpaper's representative color. Passed rather than read from `LocalBackdrop`, since the shell
  *   resolves this in the same call that provides it.
  */
 @Composable
-fun resolveFilm(effect: BackdropEffect, wallpaperLuminance: Float?, fallback: Boolean, accent: Color?): Film {
+fun resolveFilm(effect: BackdropEffect, filmLuminance: LuminanceMap?, fallback: Boolean, accent: Color?): Film {
     val tone = wallpaperTone(accent)
     val wash = backdropTint(effect.fullScreenFilm, tone)
-    return Film(
-        tone = tone,
-        isDark = if (wallpaperLuminance == null) {
+    val isDark = remember(filmLuminance, wash, fallback) {
+        if (filmLuminance == null) {
             fallback
         } else {
-            isDarkBackground(washedLuminance(wallpaperLuminance, wash))
-        },
-    )
+            val washLuminance = wash.luminance()
+            val cells = filmLuminance.toFloatArray()
+            for (i in cells.indices) cells[i] = washedLuminance(cells[i], washLuminance, wash.alpha)
+            inkOver(cells).light
+        }
+    }
+    return Film(tone = tone, isDark = isDark, wash = wash)
+}
+
+/**
+ * The film as an [InkSurface], or null outside the shell or with no measured film — for a surface drawn *on* the film
+ * whose text should read its own spot of it.
+ */
+@Composable
+fun filmInkSurface(): InkSurface? {
+    val brightness = LocalBackdrop.current?.film?.brightness
+    val wash = LocalFilm.current?.wash ?: Color.Transparent
+    return remember(brightness, wash) { brightness?.let { InkSurface(it, wash) } }
 }
 
 /**
@@ -117,10 +142,14 @@ fun resolveFilm(effect: BackdropEffect, wallpaperLuminance: Float?, fallback: Bo
  */
 @Composable
 fun OnFilm(content: @Composable () -> Unit) {
+    // Already over a frost, this is either a sheet that fills flat or a film compounding another — neither is the one
+    // picture-and-wash the film's surface describes, so text there takes the film's whole-screen verdict.
+    val surface = if (LocalOverFrost.current) null else filmInkSurface()
     LauncherTheme(darkTheme = filmIsDark()) {
         CompositionLocalProvider(
-            value = LocalOverFrost provides true,
-            content = content
+            LocalOverFrost provides true,
+            LocalInkSurface provides surface,
+            content = content,
         )
     }
 }
@@ -153,8 +182,10 @@ fun OnPanel(content: @Composable () -> Unit) {
     }
     LauncherTheme(darkTheme = dark) {
         CompositionLocalProvider(
-            value = LocalOverFrost provides true,
-            content = content
+            LocalOverFrost provides true,
+            // A tile is one washed tone, not the wallpaper around it.
+            LocalInkSurface provides null,
+            content = content,
         )
     }
 }

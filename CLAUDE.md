@@ -283,7 +283,7 @@ Plans: [docs/ICON_STUDIO_PLAN.md](docs/ICON_STUDIO_PLAN.md) (S1–S8),
   `darkTheme = isSystemInDarkTheme()` (our controlled surface); the launcher feeds a reading of **whatever is actually
   behind the text**, which is four different things — the wallpaper on HOME, the film on APPS/collections/sheets/menu,
   a panel inside a container tile, a solid color in settings. Chrome contrasts what it sits on, so the theme is nested
-  per **background**, not only per zone: `OnFilm` and `OnPanel` are those nestings, and `OnWallpaper` is the
+  per **background**, not only per zone: `OnFilm` and `OnPanel` are those nestings, and `SpotTheme` is the
   third: the wallpaper is read as a **per-spot luminance map**, never as one number or the system's `primaryColor`,
   because one reading of a two-toned picture is wrong for half the screen and flips between devices. Full rules — the
   four backgrounds, why the film is resolved once at the shell, and how text on HOME reads its spot — in

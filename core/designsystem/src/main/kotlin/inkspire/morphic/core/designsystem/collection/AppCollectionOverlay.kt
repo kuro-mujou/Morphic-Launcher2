@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.backdrop.OnFilm
+import inkspire.morphic.core.designsystem.backdrop.SpotTheme
 import inkspire.morphic.core.designsystem.backdrop.SurfaceBackdropLayer
 import inkspire.morphic.core.designsystem.cell.AddAppsCell
 import inkspire.morphic.core.designsystem.cell.AppCell
@@ -414,14 +415,15 @@ fun AppCollectionOverlay(
                 ) {
                     val innerSize: DpSize = appCollectionInnerSize(DpSize(maxWidth, maxHeight), device, grid, metrics)
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = label,
-                            style = titleStyle,
-                            color = LocalMorphicColors.current.content,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(bottom = 12.dp),
-                        )
+                        SpotTheme(Modifier.padding(bottom = 12.dp)) {
+                            Text(
+                                text = label,
+                                style = titleStyle,
+                                color = LocalMorphicColors.current.content,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                         // Inner zone: the paged app grid. A tap on its background is consumed so it doesn't dismiss.
                         Box(
                             modifier = Modifier

@@ -60,10 +60,13 @@ import kotlin.math.roundToInt
  *   is close to full resolution because a sharp crop is exactly what it has to be.
  * @property screenToBitmap maps a rectangle in **screen** coordinates onto the matching sub-rectangle of [image] — see
  *   [screenToBitmapMapping] for why it is screen and not window coordinates.
+ * @property brightness this picture's own luminance, spot by spot, or null when it has not been measured. Carried with
+ *   the picture for the mapping's reason: text over a blurred picture has to be judged against *that* picture.
  */
 class BackdropImage(
     val image: ImageBitmap,
     val screenToBitmap: (Rect) -> Rect,
+    val brightness: BackdropBrightness? = null,
 )
 
 /**
@@ -170,26 +173,22 @@ fun rememberBackdropState(
     windowSize: IntSize,
     filmImage: Bitmap? = panelImage,
     luminanceMap: LuminanceMap? = null,
-): BackdropState? = remember(panelImage, filmImage, accentColor, windowSize, luminanceMap) {
+    filmLuminanceMap: LuminanceMap? = null,
+): BackdropState? = remember(panelImage, filmImage, accentColor, windowSize, luminanceMap, filmLuminanceMap) {
     if (panelImage == null || filmImage == null || windowSize.width == 0 || windowSize.height == 0) {
         null
     } else {
         BackdropState(
             panel = panelImage.asBackdropImage(windowSize),
-            film = filmImage.asBackdropImage(windowSize),
+            film = filmImage.asBackdropImage(windowSize, filmLuminanceMap),
             tintColor = accentColor?.let { Color(it) } ?: Color.Unspecified,
-            brightness = luminanceMap?.let { map ->
-                BackdropBrightness(
-                    map = map,
-                    screenToMap = screenToBitmapMapping(map.columns, map.rows, windowSize.width, windowSize.height),
-                )
-            },
+            brightness = luminanceMap?.brightnessFor(windowSize),
         )
     }
 }
 
 /** This bitmap wrapped for Compose, with the screen→bitmap mapping its own dimensions imply. */
-private fun Bitmap.asBackdropImage(windowSize: IntSize): BackdropImage = BackdropImage(
+private fun Bitmap.asBackdropImage(windowSize: IntSize, luminance: LuminanceMap? = null): BackdropImage = BackdropImage(
     image = asImageBitmap(),
     screenToBitmap = screenToBitmapMapping(
         bitmapWidth = width,
@@ -197,6 +196,13 @@ private fun Bitmap.asBackdropImage(windowSize: IntSize): BackdropImage = Backdro
         screenWidth = windowSize.width,
         screenHeight = windowSize.height,
     ),
+    brightness = luminance?.brightnessFor(windowSize),
+)
+
+/** This map with the screen→cell mapping its own dimensions imply — the same center-crop the pictures use. */
+private fun LuminanceMap.brightnessFor(windowSize: IntSize): BackdropBrightness = BackdropBrightness(
+    map = this,
+    screenToMap = screenToBitmapMapping(columns, rows, windowSize.width, windowSize.height),
 )
 
 /**

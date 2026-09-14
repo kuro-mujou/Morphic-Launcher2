@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.backdrop.SpotTheme
 import inkspire.morphic.core.designsystem.backdrop.filmBackdrop
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
@@ -276,7 +277,6 @@ private fun MenuSurface(
  */
 @Composable
 private fun MenuRow(action: MenuAction, onClick: () -> Unit) {
-    val colors = LocalMorphicColors.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -290,13 +290,16 @@ private fun MenuRow(action: MenuAction, onClick: () -> Unit) {
             Image(bitmap = icon, contentDescription = null, modifier = Modifier.size(24.dp))
             Spacer(Modifier.width(12.dp))
         }
-        Text(
-            text = action.label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = if (action.enabled) colors.content else colors.contentDisabled,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        SpotTheme {
+            val colors = LocalMorphicColors.current
+            Text(
+                text = action.label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (action.enabled) colors.content else colors.contentDisabled,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -333,16 +336,19 @@ internal fun MenuHeader(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(start = 16.dp, end = 8.dp),
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            color = colors.content,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+        SpotTheme(
             modifier = Modifier
                 .weight(1f, fill = false)
                 .padding(vertical = 10.dp),
-        )
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                color = LocalMorphicColors.current.content,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         if (stage != null) {
             Box(
                 modifier = Modifier

@@ -478,7 +478,11 @@ internal class WallpaperRepositoryImpl(
         is BrightnessSource.System -> WallpaperBrightness.Reported(source.supportsDarkText)
     }
 
-    /** [bitmap]'s pixels as a [LUMINANCE_MAP_COLUMNS]-wide luminance map. */
+    override suspend fun luminanceOf(picture: Bitmap): LuminanceMap = withContext(dispatchers.io) {
+        measureLuminance(picture)
+    }
+
+    /** [bitmap]'s pixels as a luminance map at most [LUMINANCE_MAP_COLUMNS] wide. */
     private fun measureLuminance(bitmap: Bitmap): LuminanceMap {
         val width = bitmap.width
         val height = bitmap.height

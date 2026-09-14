@@ -24,9 +24,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.backdrop.BackdropState
 import inkspire.morphic.core.designsystem.backdrop.Film
+import inkspire.morphic.core.designsystem.backdrop.InkSurface
 import inkspire.morphic.core.designsystem.backdrop.LocalBackdrop
 import inkspire.morphic.core.designsystem.backdrop.LocalBackdropEffect
 import inkspire.morphic.core.designsystem.backdrop.LocalFilm
+import inkspire.morphic.core.designsystem.backdrop.LocalInkSurface
 import inkspire.morphic.core.designsystem.backdrop.SurfaceBackdropLayer
 import inkspire.morphic.core.designsystem.backdrop.rememberBackdropState
 import inkspire.morphic.core.designsystem.backdrop.resolveFilm
@@ -149,7 +151,7 @@ fun LauncherShell(
     // directly on the picture with nothing between, so what it has to contrast is the picture. Settings is the other
     // half of that rule — its own surface, so its own `isSystemInDarkTheme()`. The two can therefore disagree, and
     // should. **And it is only HOME's starting point**: text on the wallpaper re-themes itself for its own spot
-    // (`OnWallpaper`), and everything drawn on the film re-themes itself against the film (`OnFilm`).
+    // (`SpotTheme`), and everything drawn on the film re-themes itself against the film (`OnFilm`).
     val homeLight = homeWantsLightInk(state)
     LauncherTheme(darkTheme = homeLight) {
         val scope = rememberCoroutineScope()
@@ -253,10 +255,14 @@ fun LauncherShell(
         // different rules (its icon preview punches through to the real window instead). Providing these inside
         // `HomeScreen` is what makes a settings feature need a second provider of its own.
         val film = shellFilm(state)
+        val backdrop = shellBackdrop(state, windowSize)
+        // HOME's text sits on the sharp wallpaper; every surface on a film or a panel replaces this for its subtree.
+        val homeInk = remember(backdrop) { backdrop?.brightness?.let { InkSurface(it) } }
 
         CompositionLocalProvider(
             LocalFilm provides film,
-            LocalBackdrop provides shellBackdrop(state, windowSize),
+            LocalBackdrop provides backdrop,
+            LocalInkSurface provides homeInk,
             LocalBackdropEffect provides state.backdropEffect,
             LocalSurfaceGestureLock provides gestureLock,
             LocalItemSwipeClaim provides itemSwipeClaim,
@@ -563,13 +569,14 @@ private fun shellBackdrop(state: ShellState, windowSize: IntSize): BackdropState
     windowSize = windowSize,
     filmImage = state.backdropImages.film,
     luminanceMap = state.measuredLuminance(),
+    filmLuminanceMap = state.backdropImages.filmLuminance,
 )
 
 @Composable
 private fun shellFilm(state: ShellState): Film = resolveFilm(
     effect = state.backdropEffect,
     // Null when there is no picture to sample, which is what makes the answer fall back to HOME's own.
-    wallpaperLuminance = state.backdropImages.film?.let { state.measuredLuminance()?.mean },
+    filmLuminance = state.backdropImages.film?.let { state.backdropImages.filmLuminance },
     fallback = homeWantsLightInk(state),
     accent = state.backdropAccent?.let(::Color),
 )

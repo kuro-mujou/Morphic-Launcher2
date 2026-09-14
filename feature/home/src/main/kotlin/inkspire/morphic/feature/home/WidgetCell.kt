@@ -24,7 +24,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import inkspire.morphic.core.designsystem.backdrop.OnWallpaper
+import inkspire.morphic.core.designsystem.backdrop.SpotTheme
 import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
 import inkspire.morphic.core.designsystem.menu.LocalMenuHost
 import inkspire.morphic.core.designsystem.surface.EmbeddedViewTouchFrame
@@ -107,7 +107,7 @@ internal fun WidgetCell(
                 .then(itemGestures),
             contentAlignment = Alignment.Center,
         ) {
-            OnWallpaper {
+            SpotTheme {
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelMedium,

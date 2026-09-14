@@ -20,18 +20,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
-import inkspire.morphic.core.designsystem.backdrop.OnWallpaper
+import inkspire.morphic.core.designsystem.backdrop.SpotTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 
 /**
  * A grid-cell label: single line, ellipsized, sized by [IconMetrics.labelScale].
  *
- * **On HOME it is themed against the patch of wallpaper it sits on** ([OnWallpaper]), not against the picture as a
+ * **On HOME it is themed against the patch of wallpaper it sits on** ([SpotTheme]), not against the picture as a
  * whole: a wallpaper is a photograph, and its mean says nothing about the pixels under any one label. On the APPS
  * surface or in an open collection it is whatever the *film* wants, because those subtrees re-theme themselves.
  *
  * The halo takes the resolved theme's background, so it always opposes the ink — a softening for the odd petal under a
- * letter. Where the ink alone cannot reach contrast, [OnWallpaper] adds a backing; the halo is not asked to do that job.
+ * letter. Where the ink alone cannot reach contrast, [SpotTheme] adds a backing; the halo is not asked to do that job.
  */
 @Composable
 internal fun CellLabel(
@@ -46,7 +46,7 @@ internal fun CellLabel(
     } else {
         fontSize * 1.2f
     }
-    OnWallpaper(modifier) {
+    SpotTheme(modifier) {
         val colors = LocalMorphicColors.current
         Text(
             text = label,

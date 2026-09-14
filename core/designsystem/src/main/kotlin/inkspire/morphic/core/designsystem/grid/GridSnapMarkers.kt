@@ -16,10 +16,9 @@ import androidx.compose.ui.layout.onLayoutRectChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import inkspire.morphic.core.designsystem.backdrop.BackdropBrightness
 import inkspire.morphic.core.designsystem.backdrop.InkReader
-import inkspire.morphic.core.designsystem.backdrop.LocalBackdrop
-import inkspire.morphic.core.designsystem.backdrop.LocalOverFrost
+import inkspire.morphic.core.designsystem.backdrop.InkSurface
+import inkspire.morphic.core.designsystem.backdrop.LocalInkSurface
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.designsystem.theme.MorphicColors
 import inkspire.morphic.core.model.GridConfig
@@ -61,7 +60,7 @@ private const val MinVisibleAlpha = 0.05f
  * @param draggedSpan the dragged footprint in logical cells, used to measure distance from the item's *edge*
  *   rather than from the finger — so a wide item lights up the lattice along its whole width.
  * @param color a fixed color for every marker, or null to ink **each marker for the patch of wallpaper under it** —
- *   the same rule and reader `OnWallpaper` gives a label, since a lattice spread over sky and flowers is text's
+ *   the same rule and reader `SpotTheme` gives a label, since a lattice spread over sky and flowers is text's
  *   problem at a smaller size. With nothing measured it is the theme's content.
  */
 @Composable
@@ -73,7 +72,7 @@ fun Modifier.gridSnapMarkers(
 ): Modifier {
     val markerPx = with(LocalDensity.current) { 16.dp.toPx() }
     val themed = LocalMorphicColors.current.content
-    val brightness = LocalBackdrop.current?.brightness?.takeUnless { LocalOverFrost.current }
+    val surface = LocalInkSurface.current
     val reader = remember { InkReader() }
     // State, so a grid that moves without the finger moving still redraws against where it now is.
     var screenOrigin by remember { mutableStateOf(IntOffset.Zero) }
@@ -112,7 +111,7 @@ fun Modifier.gridSnapMarkers(
                 val left = screenOrigin.x + x - markerPx / 2f
                 val top = screenOrigin.y + y - markerPx / 2f
                 val marker = Rect(left, top, left + markerPx, top + markerPx)
-                val ink = color ?: brightness?.let { markerInk(it, reader, marker) } ?: themed
+                val ink = color ?: surface?.let { markerInk(it, reader, marker) } ?: themed
                 drawSnapMarker(Offset(x, y), markerPx, ink.copy(alpha = alpha))
             }
         }
@@ -120,8 +119,8 @@ fun Modifier.gridSnapMarkers(
 }
 
 /** The ink for a marker covering [screen] — a label's rule, without the backing a 16dp mark has no room for. */
-private fun markerInk(brightness: BackdropBrightness, reader: InkReader, screen: Rect): Color =
-    if (reader.read(brightness, screen).light) MorphicColors.Dark.content else MorphicColors.Light.content
+private fun markerInk(surface: InkSurface, reader: InkReader, screen: Rect): Color =
+    if (reader.read(surface, screen).light) MorphicColors.Dark.content else MorphicColors.Light.content
 
 /**
  * A footprint's size in logical cells — what [gridSnapMarkers] measures its falloff against.

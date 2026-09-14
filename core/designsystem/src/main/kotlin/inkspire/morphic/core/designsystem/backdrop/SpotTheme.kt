@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -16,6 +17,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onLayoutRectChanged
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toRect
@@ -26,40 +28,61 @@ import kotlin.math.ceil
 import kotlin.math.floor
 
 /**
- * Declares that [content] is drawn **straight onto the wallpaper**, and themes it against the spot it occupies — the
- * fourth background beside [OnFilm], [OnPanel] and settings' solid color, and the only one that varies across a screen.
+ * **A picture that text sits straight on**, read spot by spot: its luminance map, and the wash painted over it.
+ *
+ * Two of them exist, and which one is behind a piece of text is a fact about where it is composed: the **wallpaper**
+ * on HOME (no wash), and the **film** on APPS, in a collection and in the menu over HOME (the film's blurred picture
+ * and the film's wash). A frosted panel or a flat scrim is neither — there is one tone under the text and the enclosing
+ * theme already answers for it — so it provides none.
+ *
+ * @param wash the color painted over the picture, alpha included; `Color.Transparent` for none.
+ */
+class InkSurface(val brightness: BackdropBrightness, wash: Color = Color.Transparent) {
+    private val washLuminance = wash.luminance()
+    private val washAlpha = wash.alpha
+
+    /** The luminance the eye sees at a cell — the picture composited under the wash, by [washedLuminance]'s formula. */
+    fun luminanceAt(column: Int, row: Int): Float = washedLuminance(brightness.map[column, row], washLuminance, washAlpha)
+}
+
+/**
+ * The [InkSurface] behind content composed here, or null where the background is one flat tone (a frosted panel, a
+ * scrim, settings) and the enclosing theme is the answer.
+ */
+val LocalInkSurface = staticCompositionLocalOf<InkSurface?> { null }
+
+/**
+ * Themes [content] against the patch of [LocalInkSurface] it actually occupies — the one place text on a picture takes
+ * its color from.
  *
  * **The spot is read from where the content is on screen, as it moves.** `onLayoutRectChanged` rather than
- * `onGloballyPositioned`, because the second does not reliably re-fire when a scroller moves a node — and the HOME list
- * scrolls, while a pager swipe carries every label across the picture. The ink is snapshot state read in composition,
- * so a label recomposes only when its ink *flips*; the backing's alpha is read in the draw phase, so a swipe that fades
+ * `onGloballyPositioned`, because the second does not reliably re-fire when a scroller moves a node — and the lists
+ * scroll, while a pager swipe carries every label across the picture. The ink is snapshot state read in composition,
+ * so content recomposes only when its ink *flips*; the backing's alpha is read in the draw phase, so a swipe that fades
  * it costs a redraw and nothing more.
  *
- * **The backing is a pill behind the content, outset past it**, in the ink's own palette's background — the soft lift a
- * label straddling a boundary needs. It is drawn by this node rather than by each caller so that the thing sized by the
- * rule and the thing painted are one.
+ * **The backing is a pill behind the content, outset past it**, in the ink's own palette's background — the soft lift
+ * a spot straddling light and dark needs. Drawn here rather than by callers so the thing [inkOver] sizes and the thing
+ * painted are one.
  *
- * **Does nothing, and themes nothing, where there is no spot to read**: no measured wallpaper (another app's picture, or
- * no backdrop at all — the enclosing theme is then the system's whole-screen verdict), or already on a frost, where
- * what is behind the content is the film or a panel and [OnFilm]/[OnPanel] have answered. A settings preview therefore
- * renders exactly as before.
+ * **With no surface it does nothing and themes nothing**, which is every flat background and every settings preview.
  */
 @Composable
-fun OnWallpaper(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    val brightness = LocalBackdrop.current?.brightness?.takeUnless { LocalOverFrost.current }
-    if (brightness == null) {
+fun SpotTheme(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val surface = LocalInkSurface.current
+    if (surface == null) {
         Box(modifier = modifier, propagateMinConstraints = true) { content() }
         return
     }
-    val spot = remember { WallpaperSpot() }
-    // Until the first layout there is no spot to read, and the enclosing theme is HOME's own verdict — one frame.
+    val spot = remember { InkSpot() }
+    // Until the first layout there is no spot to read, and the enclosing theme is the surface's own verdict — one frame.
     val light = spot.light ?: (LocalMorphicColors.current == MorphicColors.Dark)
     MorphicTheme(darkTheme = light) {
         val backing = LocalMorphicColors.current.background
         Box(
             modifier = modifier
                 .onLayoutRectChanged(throttleMillis = 0, debounceMillis = 0) { bounds ->
-                    spot.read(brightness, bounds.boundsInScreen.toRect())
+                    spot.read(surface, bounds.boundsInScreen.toRect())
                 }
                 .drawBehind { drawBacking(backing, spot.backingAlpha) },
             propagateMinConstraints = true,
@@ -83,24 +106,24 @@ private fun DrawScope.drawBacking(color: Color, alpha: Float) {
     )
 }
 
-/** One [OnWallpaper]'s last reading — split so the ink and the backing invalidate different phases. */
+/** One [SpotTheme]'s last reading — split so the ink and the backing invalidate different phases. */
 @Stable
-private class WallpaperSpot {
+private class InkSpot {
     var light by mutableStateOf<Boolean?>(null)
         private set
     var backingAlpha by mutableFloatStateOf(0f)
         private set
     private val reader = InkReader()
 
-    fun read(brightness: BackdropBrightness, screen: Rect) {
-        val ink = reader.read(brightness, screen)
+    fun read(surface: InkSurface, screen: Rect) {
+        val ink = reader.read(surface, screen)
         light = ink.light
         backingAlpha = ink.backingAlpha
     }
 }
 
 /**
- * Reads the [Ink] of a screen rectangle off a [BackdropBrightness].
+ * Reads the [Ink] of a screen rectangle off an [InkSurface].
  *
  * **One buffer, reused**, so a label being swiped across the picture allocates nothing per frame. A rectangle partly off
  * the picture — a page mid-swipe — is read from the cells along the edge it hangs over, which is the picture it is about
@@ -109,9 +132,9 @@ private class WallpaperSpot {
 internal class InkReader {
     private var scratch = FloatArray(64)
 
-    fun read(brightness: BackdropBrightness, screen: Rect): Ink {
-        val map = brightness.map
-        val cells = brightness.screenToMap(screen)
+    fun read(surface: InkSurface, screen: Rect): Ink {
+        val map = surface.brightness.map
+        val cells = surface.brightness.screenToMap(screen)
         val firstColumn = floor(cells.left).toInt().coerceIn(0, map.columns - 1)
         val lastColumn = (ceil(cells.right).toInt() - 1).coerceIn(firstColumn, map.columns - 1)
         val firstRow = floor(cells.top).toInt().coerceIn(0, map.rows - 1)
@@ -120,7 +143,7 @@ internal class InkReader {
         if (scratch.size < count) scratch = FloatArray(count)
         var i = 0
         for (row in firstRow..lastRow) {
-            for (column in firstColumn..lastColumn) scratch[i++] = map[column, row]
+            for (column in firstColumn..lastColumn) scratch[i++] = surface.luminanceAt(column, row)
         }
         return inkOver(scratch, count)
     }
