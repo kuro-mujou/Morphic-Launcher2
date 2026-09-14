@@ -1549,9 +1549,11 @@ at startup, so a new slice cannot be left off it quietly.
 - **Verified:** the unit tests, and on the emulator the harness captured the current setup as exactly the eight carried
   slices, with nothing excluded in the file, and the launcher restarted cleanly past the registry check. Not verified
   on a device: an apply, which nothing calls until `O4`.
-- **Found, not fixed:** `SideBinding` has no `@SerialName`, so a look stores its edges under the discriminator
-  `inkspire.morphic.data.settings.SideBinding.Apps`, and a package move would make every shipped or shared look drop
-  them. The fix changes what `surface_register` stores as well, so it needs the key-rename seam.
+- **`SideBinding.Apps` is stored as `"apps"`.** It was stored under its class name, which a package move would have
+  broken in every look, silently — `lookWrites` drops a value that does not read. The short name changes what the
+  register stores, so the slice moved to `surface_register_v2` through the key-rename seam, and
+  `SurfaceRegisterKeyMigration`, a DataStore migration, carries an old blob across once before anything reads the store.
+  Being below every reader is why the onboarding flag's check of "a register is stored" needed no second key.
 
 **The first-run screen shows the launcher itself, scaled down, crossing to the app list on its own.** `O3` of the plan,
 built as something other than its paragraph: the settings previews it meant to lift are abstract editing diagrams, and

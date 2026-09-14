@@ -57,9 +57,15 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.serializer
 
-/** The surface register's slice: one key, one blob. */
+/**
+ * The surface register's slice: one key, one blob.
+ *
+ * **Its key moved when its discriminator did.** `SideBinding.Apps` was stored under its class name until it got a
+ * `@SerialName`, and a blob holding the long name does not read as the short one — so the register moved to a new key
+ * rather than being re-read in place, and `SurfaceRegisterKeyMigration` carries an old blob across once.
+ */
 private val SurfaceRegisterSlice = SettingsSlice(
-    name = "surface_register",
+    name = SurfaceRegisterKey,
     serializer = serializer<SurfaceRegister>(),
     default = SurfaceRegister.Default,
 )

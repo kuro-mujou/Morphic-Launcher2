@@ -12,5 +12,11 @@ import androidx.datastore.preferences.preferencesDataStore
  * A `Context` extension because that is the only shape `preferencesDataStore` offers, and declared once at file scope
  * because two stores over one file throw at runtime — which is also why both repositories reach it through this one
  * property rather than each declaring their own.
+ *
+ * Its migrations run before the store serves anything, which is what lets a renamed slice be carried across in one
+ * place rather than behind every reader.
  */
-internal val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "launcher_settings")
+internal val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "launcher_settings",
+    produceMigrations = { listOf(SurfaceRegisterKeyMigration) },
+)

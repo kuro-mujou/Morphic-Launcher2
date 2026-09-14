@@ -21,7 +21,7 @@ import org.junit.Test
 class SettingsSliceTest {
 
     private val slice = SettingsSlice(
-        name = "surface_register",
+        name = SurfaceRegisterKey,
         serializer = serializer<SurfaceRegister>(),
         default = SurfaceRegister.Default,
     )
@@ -59,7 +59,9 @@ class SettingsSliceTest {
     @Test
     fun `a missing field falls back to its default, so a newer build can read an older blob`() {
         // Written before `transition` existed: everything else must still load, and `transition` takes its default.
-        val fromThePast = """{"sides":{"LEFT":{"type":"inkspire.morphic.data.settings.SideBinding.Apps"}}}"""
+        // The binding is spelled as this key stores it. Blobs from that era carried the class name as the discriminator
+        // under the old key, and reach this codec only through the key migration — `SurfaceRegisterSliceTest` covers them.
+        val fromThePast = """{"sides":{"LEFT":{"type":"apps"}}}"""
 
         val decoded = slice.decode(fromThePast)
 

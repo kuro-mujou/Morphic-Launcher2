@@ -19,16 +19,16 @@ class LookPlanTest {
 
     @Test
     fun `a slice the look holds is written`() {
-        val writes = lookWrites(look("surface_register" to listRegister))
+        val writes = lookWrites(look(SurfaceRegisterKey to listRegister))
 
-        assertEquals(mapOf("surface_register" to canonicalOf("surface_register", listRegister)), writes)
+        assertEquals(mapOf(SurfaceRegisterKey to canonicalOf(SurfaceRegisterKey, listRegister)), writes)
     }
 
     @Test
     fun `an unknown slice name is ignored`() {
-        val writes = lookWrites(look("no_such_slice" to "{}", "surface_register" to listRegister))
+        val writes = lookWrites(look("no_such_slice" to "{}", SurfaceRegisterKey to listRegister))
 
-        assertEquals(setOf("surface_register"), writes.keys)
+        assertEquals(setOf(SurfaceRegisterKey), writes.keys)
     }
 
     @Test
@@ -40,14 +40,14 @@ class LookPlanTest {
 
     @Test
     fun `a carried slice the look does not hold is left alone`() {
-        val writes = lookWrites(look("surface_register" to listRegister))
+        val writes = lookWrites(look(SurfaceRegisterKey to listRegister))
 
         assertEquals(false, "backdrop_effect" in writes)
     }
 
     @Test
     fun `a value that does not read as its slice is not written`() {
-        val writes = lookWrites(look("surface_register" to """{"homeLayout":"SIDEWAYS"}"""))
+        val writes = lookWrites(look(SurfaceRegisterKey to """{"homeLayout":"SIDEWAYS"}"""))
 
         assertEquals(emptyMap<String, String>(), writes)
     }
@@ -82,18 +82,18 @@ class LookPlanTest {
 
     @Test
     fun `a capture applied back writes what was stored, and every other carried slice at its default`() {
-        val stored = mapOf("surface_register" to listRegister, "onboarding" to """{"completed":true}""")
+        val stored = mapOf(SurfaceRegisterKey to listRegister, "onboarding" to """{"completed":true}""")
 
         val writes = lookWrites(captureLook(name = "Mine", stored = stored::get))
 
         assertEquals(LookScope.carried, writes.keys)
-        assertEquals(canonicalOf("surface_register", listRegister), writes["surface_register"])
+        assertEquals(canonicalOf(SurfaceRegisterKey, listRegister), writes[SurfaceRegisterKey])
         assertEquals(defaultOf("backdrop_effect"), writes["backdrop_effect"])
     }
 
     @Test
     fun `a look survives being a file`() {
-        val captured = captureLook(name = "Mine", stored = mapOf("surface_register" to listRegister)::get)
+        val captured = captureLook(name = "Mine", stored = mapOf(SurfaceRegisterKey to listRegister)::get)
 
         val read = Look.parse(captured.toJson())
 

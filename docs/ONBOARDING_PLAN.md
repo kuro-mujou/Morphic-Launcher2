@@ -163,7 +163,7 @@ A look writes **the slices that describe an arrangement**, and never the slices 
 
 | Slice | In a look? | Why |
 |---|---|---|
-| `surface_register` | yes | The whole point — HOME's pairing, which edge opens APPS, in which layout |
+| `surface_register_v2` | yes | The whole point — HOME's pairing, which edge opens APPS, in which layout |
 | `surface_metrics` | yes | Grid counts, icon sizing, extents, padding — what makes "dense" differ from "airy" |
 | `apps_chrome` | yes | Search placement and the category tab edge |
 | `alphabet_strip` | yes | On/off and style; part of how a list-shaped look reads |

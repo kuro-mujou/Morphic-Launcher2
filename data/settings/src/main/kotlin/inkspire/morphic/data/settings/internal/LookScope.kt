@@ -24,7 +24,7 @@ internal object LookScope {
 
     /** Written when a look is applied, and captured. */
     val carried: Set<String> = setOf(
-        "surface_register",
+        SurfaceRegisterKey,
         "surface_metrics",
         "apps_chrome",
         "alphabet_strip",

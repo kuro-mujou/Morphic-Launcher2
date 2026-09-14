@@ -4,6 +4,7 @@ import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.SurfaceTransition
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
@@ -22,12 +23,17 @@ import kotlinx.serialization.Serializable
  * **Why the layout is per binding, not per surface.** The same surface can be reached from different edges, and the
  * arrangement is deliberately allowed to differ — swipe left for an A–Z list, swipe up for the paged grid, over one
  * app collection. `AppsScreen` already takes `layout` as a parameter for exactly this reason.
+ *
+ * **Each variant is stored under a short `@SerialName`**, as `BackdropEffect`'s are. The discriminator lands in the
+ * stored register and in every look file captured from it, where the default — the fully-qualified class name — would
+ * stop reading after the first package move, and a look that does not read applies with no edges bound.
  */
 @Serializable
 sealed interface SideBinding {
 
     /** The APPS surface, rendered in [layout]. */
     @Serializable
+    @SerialName("apps")
     data class Apps(val layout: AppsLayout = AppsLayout.VERTICAL_LIST) : SideBinding
 }
 
