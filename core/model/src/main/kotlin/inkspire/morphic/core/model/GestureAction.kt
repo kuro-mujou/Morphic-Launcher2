@@ -45,14 +45,16 @@ sealed interface GestureAction {
     ) : GestureAction
 
     /**
-     * Pulls down [panel]. **The assignment names it**, never where the gesture started, so the action does the same
-     * thing from every gesture — a double tap and an item's swipe included.
+     * Pulls down the system's panels, the way [pull] names. **The assignment says how**, so the action never depends on a
+     * setting elsewhere that describes the phone.
      *
-     * **Performed by the launcher's accessibility service** under either [ShadeStyle], which only decides how.
+     * **Performed by the launcher's accessibility service.** [pull] keeps the stored key `panel`, which it was called
+     * while its only members were [ShadePull.NOTIFICATIONS] and [ShadePull.QUICK_SETTINGS] — both still mean what they
+     * meant, so a stored assignment reads back unchanged.
      */
     @Serializable
     @SerialName("panel")
-    data class OpenSystemPanel(val panel: ShadePanel) : GestureAction
+    data class OpenSystemPanel(@SerialName("panel") val pull: ShadePull) : GestureAction
 
     /**
      * Turns the screen off and locks it, as the power button does.

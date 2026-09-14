@@ -195,14 +195,13 @@ class ShellViewModel(
     fun startShortcut(shortcut: AppShortcut) = appShortcuts.start(shortcut)
 
     /**
-     * Runs what a swipe in [direction] on HOME is set to. **Read as it fires**, like an item's gesture, so a swipe
-     * reassigned a moment ago does the new thing.
+     * Runs what a swipe in [direction] on HOME is set to — a swipe that began [startX] across the pager, 0 at the left.
+     * **Read as it fires**, like an item's gesture, so a swipe reassigned a moment ago does the new thing.
      */
-    fun runHomeSwipe(direction: SwipeDirection) {
+    fun runHomeSwipe(direction: SwipeDirection, startX: Float) {
         viewModelScope.launch {
-            val gestures = settingsRepository.homeGestures.first()
-            val action = gestures.swipes[direction] ?: return@launch
-            gestureActionRunner.run(action, gestures.shadeStyle)
+            val action = settingsRepository.homeGestures.first().swipes[direction] ?: return@launch
+            gestureActionRunner.run(action, startX)
         }
     }
 

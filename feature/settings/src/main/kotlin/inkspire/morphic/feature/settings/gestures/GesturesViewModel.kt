@@ -3,8 +3,6 @@ package inkspire.morphic.feature.settings.gestures
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.designsystem.gesture.describeGestureAction
-import inkspire.morphic.core.model.GestureAction
-import inkspire.morphic.core.model.ShadeStyle
 import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.needsGestureService
 import inkspire.morphic.data.apps.AppRepository
@@ -15,16 +13,12 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 
 /**
  * What the Gestures section shows.
  *
  * @property swipes what each swipe on HOME is set to, already named. A direction with no entry has no action.
  * @property doubleTap what a double tap on HOME is set to, already named, or null for nothing.
- * @property showsShadeStyle whether any gesture on home — HOME's own or an item's — opens a panel: the only time the
- *   panel style does anything, and so the only time it is offered.
- * @property shadeStyle the stored panel style.
  * @property needsService whether any gesture on home, an item's included, runs an action that needs the gesture service.
  * @property serviceOn whether the gesture service is switched on — as fresh as the last
  *   [GesturesViewModel.refreshService].
@@ -32,23 +26,21 @@ import kotlinx.coroutines.launch
 data class GesturesState(
     val swipes: Map<SwipeDirection, String> = emptyMap(),
     val doubleTap: String? = null,
-    val showsShadeStyle: Boolean = false,
-    val shadeStyle: ShadeStyle = ShadeStyle.COMBINED,
     val needsService: Boolean = false,
     val serviceOn: Boolean = false,
 )
 
 /**
- * Screen-level state holder for **Gestures**: what a swipe or a double tap on HOME itself does, the panel style, and
- * whether the gesture service some of those actions need is on.
+ * Screen-level state holder for **Gestures**: what a swipe or a double tap on HOME itself does, and whether the gesture
+ * service some of those actions need is on.
  *
  * It reads the app catalog as well as the store because an action is listed by name, and an app's name is the
  * catalog's — see `describeGestureAction`. It reads the items' gestures too, though it lists none of them, because an
- * icon's panel action depends on the same style and service as HOME's. Assigning happens in the action picker, a
- * destination of its own, so the only write here is the style.
+ * icon's panel action needs the same service as HOME's. Assigning happens in the action picker, a destination of its
+ * own, so nothing here writes.
  */
 class GesturesViewModel(
-    private val settingsRepository: SettingsRepository,
+    settingsRepository: SettingsRepository,
     appRepository: AppRepository,
     private val gestureService: GestureServiceAccess,
 ) : ViewModel() {
@@ -64,21 +56,13 @@ class GesturesViewModel(
             serviceOn,
         ) { gestures, itemGestures, apps, on ->
             val catalog = apps.associateBy { it.componentKey }
-            val everyAction = gestures.actions + itemGestures.actions
             GesturesState(
                 swipes = gestures.swipes.mapValues { describeGestureAction(it.value, catalog) },
                 doubleTap = gestures.doubleTap?.let { describeGestureAction(it, catalog) },
-                showsShadeStyle = everyAction.any { it is GestureAction.OpenSystemPanel },
-                shadeStyle = gestures.shadeStyle,
-                needsService = everyAction.any { it.needsGestureService },
+                needsService = (gestures.actions + itemGestures.actions).any { it.needsGestureService },
                 serviceOn = on,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), GesturesState())
-
-    /** Sets how the user's phone arranges its system panels. */
-    fun setShadeStyle(style: ShadeStyle) {
-        viewModelScope.launch { settingsRepository.setShadeStyle(style) }
-    }
 
     /** Re-reads whether the gesture service is on — as the section comes back from the system's settings. */
     fun refreshService() {

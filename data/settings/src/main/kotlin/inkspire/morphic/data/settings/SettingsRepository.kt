@@ -15,7 +15,6 @@ import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.ItemGesture
 import inkspire.morphic.core.model.RotationMode
 import inkspire.morphic.core.model.SearchPlacement
-import inkspire.morphic.core.model.ShadeStyle
 import inkspire.morphic.core.model.SurfaceTransition
 import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.SyncMode
@@ -125,14 +124,11 @@ interface SettingsRepository {
     /** Sets what [gesture] does on [item]; a null [action] clears it. */
     suspend fun setItemGesture(item: GridItem, gesture: ItemGesture, action: GestureAction?)
 
-    /** What a swipe on HOME itself does in each direction, and the panel style a system-panel action resolves with. */
+    /** What a swipe or a double tap on HOME itself does. */
     val homeGestures: Flow<HomeGestures>
 
     /** Sets what a swipe in [direction] on HOME does; a null [action] hands that one-finger swipe back to its edge. */
     suspend fun setHomeSwipe(direction: SwipeDirection, action: GestureAction?)
-
-    /** Sets how the user's phone arranges its system panels. */
-    suspend fun setShadeStyle(style: ShadeStyle)
 
     /** Sets what a double tap on HOME's empty space does; a null [action] makes it do nothing. */
     suspend fun setHomeDoubleTap(action: GestureAction?)

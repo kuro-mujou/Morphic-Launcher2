@@ -42,7 +42,6 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.GestureAction
 import inkspire.morphic.core.model.ItemGesture
-import inkspire.morphic.core.model.ShadePanel
 import inkspire.morphic.core.model.asItemGesture
 import kotlinx.coroutines.launch
 
@@ -55,8 +54,9 @@ import kotlinx.coroutines.launch
  * screens in the hand.
  *
  * **The System section is offered on every gesture**, with Lock screen on HOME's own only — turning the screen off from
- * an icon is not a gesture this launcher has. Its actions run through Morphic gestures and are saved whether or not
- * that is on: the gesture asks for it as it fires, the one moment that also catches a service switched off later.
+ * an icon is not a gesture this launcher has — and the by-side panel pull on HOME's vertical swipes only, the one
+ * gesture whose starting side is the user's choice. Its actions run through Morphic gestures and are saved whether or
+ * not that is on: the gesture asks for it as it fires, the one moment that also catches a service switched off later.
  *
  * @param onBack returns to the sheet the gesture was chosen from.
  * @param onChosen called after a choice is written, so the caller can close this destination — the screen does not
@@ -130,7 +130,7 @@ internal fun GestureActionScreen(
                 }
             }
 
-            systemSection(assigned = state.assigned, offersLockScreen = state.offersLockScreen) { action ->
+            systemSection(state) { action ->
                 viewModel.choose(action)
                 onChosen()
             }
@@ -176,24 +176,24 @@ internal fun GestureActionScreen(
     BackHandler(onBack = onBack)
 }
 
-/** The System section: its header and one panel of system actions — the two list items `appsHeaderAt` counts past. */
-private fun LazyListScope.systemSection(
-    assigned: GestureAction?,
-    offersLockScreen: Boolean,
-    onChoose: (GestureAction) -> Unit,
-) {
+/**
+ * The System section: its header, then one item holding the panel card and Lock screen — the two list items
+ * `appsHeaderAt` counts past, whichever of them are shown.
+ */
+private fun LazyListScope.systemSection(state: GestureActionState, onChoose: (GestureAction) -> Unit) {
     item(key = "system-header") { SectionHeader("SYSTEM") }
     item(key = "system") {
-        Panel {
-            val actions = ShadePanel.entries.map { GestureAction.OpenSystemPanel(it) } +
-                listOfNotNull(GestureAction.LockScreen.takeIf { offersLockScreen })
-            actions.forEach { action ->
+        Column {
+            SystemPanelCard(assigned = state.assigned, offersBySide = state.offersPanelBySide, onChoose = onChoose)
+            if (state.offersLockScreen) {
+                Panel {
                     ChoiceRow(
-                        label = describeGestureAction(action, emptyMap()),
-                        selected = assigned == action,
-                        onClick = { onChoose(action) },
+                        label = describeGestureAction(GestureAction.LockScreen, emptyMap()),
+                        selected = state.assigned == GestureAction.LockScreen,
+                        onClick = { onChoose(GestureAction.LockScreen) },
                     )
                 }
+            }
         }
     }
 }

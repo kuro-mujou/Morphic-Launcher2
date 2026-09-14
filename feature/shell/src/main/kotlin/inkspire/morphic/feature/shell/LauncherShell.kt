@@ -533,10 +533,10 @@ private fun ShellState.surfaceBindings(onOpenAppsSettings: (AppsLayout) -> Unit)
         )
     }
 
-/** HOME's own swipe actions, each handed to [run] with its direction. */
-private fun ShellState.swipeActions(run: (SwipeDirection) -> Unit): Map<SwipeDirection, SwipeAction> =
+/** HOME's own swipe actions, each handed to [run] with its direction and where across the pager it started. */
+private fun ShellState.swipeActions(run: (SwipeDirection, Float) -> Unit): Map<SwipeDirection, SwipeAction> =
     homeGestures.swipes.keys.associateWith { direction ->
-        SwipeAction(homeOneFinger(direction.revealedEdge)) { run(direction) }
+        SwipeAction(homeOneFinger(direction.revealedEdge)) { startX -> run(direction, startX) }
     }
 
 /**

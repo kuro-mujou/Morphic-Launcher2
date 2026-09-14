@@ -1,162 +1,100 @@
 package inkspire.morphic.feature.home.gestureaction
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.AppIcon
-import inkspire.morphic.core.designsystem.component.MorphicGroupPanel
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.GestureAction
 import inkspire.morphic.data.apps.AppShortcut
 
 /**
- * One app's shortcuts as a card that opens in place: the app and how many shortcuts it has, and — open — each of them.
+ * One app's shortcuts as an [ExpandableCard]: the app and how many shortcuts it has, and — open — each of them.
  *
  * **Closed by default, one card per app.** Apps publish two to four shortcuts each, so a section showing every row
- * buries the app being looked for under everyone else's; closed, it reads as an index of apps and costs one tap. The
- * card's edge is what says where one app ends, which is why the rows inside can take a divider each without the
- * group dissolving into a grid of equals.
+ * buries the app being looked for under everyone else's; closed, it reads as an index of apps and costs one tap.
  *
  * **Open by default when a closed card would hide what the user came for**: while searching, because the rows *are*
  * the results and a match behind a chevron is a match not found; and when the card holds the current choice, because a
- * selected mark inside a closed card marks nothing. A tap inverts that default rather than setting an absolute, so
- * clearing the search closes what the search opened.
+ * selected mark inside a closed card marks nothing.
  */
 @Composable
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 internal fun ShortcutGroupCard(
     group: ShortcutGroup,
     assigned: GestureAction?,
     searching: Boolean,
     onChoose: (AppShortcut) -> Unit,
 ) {
-    val colors = LocalMorphicColors.current
-    val motion = MaterialTheme.motionScheme
-    val holdsChoice = group.shortcuts.any { assigned.isThis(it) }
-    // Keyed on `searching`, so starting or clearing a search drops the flip and the default applies afresh.
-    var flipped by rememberSaveable(searching) { mutableStateOf(false) }
-    val expanded = (searching || holdsChoice) != flipped
-
-    MorphicGroupPanel(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-        ShortcutGroupHeader(group = group, expanded = expanded, onToggle = { flipped = !flipped })
-        AnimatedVisibility(
-            visible = expanded,
-            enter = expandVertically(motion.defaultSpatialSpec()) + fadeIn(motion.defaultEffectsSpec()),
-            exit = shrinkVertically(motion.defaultSpatialSpec()) + fadeOut(motion.defaultEffectsSpec()),
-        ) {
-            Column {
-                group.shortcuts.forEach { shortcut ->
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(colors.divider),
-                    )
-                    ShortcutChoiceRow(
-                        shortcut = shortcut,
-                        selected = assigned.isThis(shortcut),
-                        onClick = { onChoose(shortcut) },
-                    )
-                }
-            }
-        }
-    }
+    ExpandableCard(
+        items = group.shortcuts,
+        openByDefault = searching || group.shortcuts.any { assigned.isThis(it) },
+        header = { ShortcutGroupHeader(group) },
+        row = { shortcut ->
+            ShortcutChoiceRow(
+                shortcut = shortcut,
+                selected = assigned.isThis(shortcut),
+                onClick = { onChoose(shortcut) },
+            )
+        },
+    )
 }
 
 /**
- * The card's always-visible row: the app, its shortcut count, and a chevron that turns with the card.
+ * The card's header: the app and its shortcut count.
  *
  * **The icon is the launcher's own**, through [AppIcon], so an app is recognized here exactly as it is on home; the
  * shortcut icons below it are the app's to draw. The count is of what the card will show — under a search, the hits.
  */
 @Composable
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-private fun ShortcutGroupHeader(group: ShortcutGroup, expanded: Boolean, onToggle: () -> Unit) {
+private fun RowScope.ShortcutGroupHeader(group: ShortcutGroup) {
     val colors = LocalMorphicColors.current
     val sizePx = with(LocalDensity.current) { 40.dp.roundToPx() }
-    val chevronTurn by animateFloatAsState(
-        targetValue = if (expanded) 180f else 0f,
-        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-        label = "chevron",
+    AppIcon(
+        component = group.app.componentKey,
+        contentDescription = null,
+        sizePx = sizePx,
+        modifier = Modifier.size(40.dp),
     )
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    Text(
+        text = group.app.label,
+        style = MaterialTheme.typography.bodyLarge,
+        color = colors.content,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
         modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClickLabel = if (expanded) "Collapse" else "Expand", onClick = onToggle)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .weight(1f)
+            .padding(horizontal = 16.dp),
+    )
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(28.dp)
+            .clip(CircleShape)
+            // The page's own gray, sunk into the card: `surfaceElevated` is the card's white in the light theme.
+            .background(colors.background),
     ) {
-        AppIcon(
-            component = group.app.componentKey,
-            contentDescription = null,
-            sizePx = sizePx,
-            modifier = Modifier.size(40.dp),
-        )
         Text(
-            text = group.app.label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = colors.content,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 16.dp),
-        )
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(28.dp)
-                .clip(CircleShape)
-                // The page's own gray, sunk into the card: `surfaceElevated` is the card's white in the light theme.
-                .background(colors.background),
-        ) {
-            Text(
-                text = group.shortcuts.size.toString(),
-                style = MaterialTheme.typography.labelMedium,
-                color = colors.contentMuted,
-            )
-        }
-        Icon(
-            imageVector = Icons.Filled.KeyboardArrowDown,
-            contentDescription = null,
-            tint = colors.contentMuted,
-            modifier = Modifier
-                .padding(start = 8.dp)
-                .rotate(chevronTurn),
+            text = group.shortcuts.size.toString(),
+            style = MaterialTheme.typography.labelMedium,
+            color = colors.contentMuted,
         )
     }
 }

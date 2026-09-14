@@ -3,7 +3,6 @@ package inkspire.morphic.feature.settings.gestures
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -16,27 +15,23 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.component.MorphicGroupPanel
-import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
-import inkspire.morphic.core.model.ShadeStyle
 import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
 import inkspire.morphic.feature.settings.component.SettingsValueRow
 import org.koin.androidx.compose.koinViewModel
 
 /**
- * **Gestures**: what a swipe or a double tap on HOME itself does, how the phone's panels are arranged, and whether the
- * service some actions need is on.
+ * **Gestures**: what a swipe or a double tap on HOME itself does, and whether the service some actions need is on.
  *
  * **A swipe with an action takes one finger, and the screen on that edge moves to two.** The line under the rows says
  * so, because nothing else in settings would: assigning here changes how the Screen manager's edges are reached.
  *
  * Each row opens the action picker — the destination an item's gesture uses too — rather than a picker drawn here, so
- * there is one list of apps and shortcuts with one search box.
+ * there is one list of apps and shortcuts with one search box. How a panel action pulls is chosen there as well, as
+ * part of the action, so nothing here qualifies what a row says it does.
  *
- * **Each part below the rows is absent until something needs it**, the standing rule: the panel style until a gesture
- * opens a panel, the Morphic gestures card until a gesture needs the service. The card is always last, in one place,
- * whichever action asked for it.
+ * **The Morphic gestures card is absent until a gesture needs the service**, the standing rule, and always last.
  *
  * **Status, never a prompt.** An action that needs the service is saved whether or not it is on; the gesture asks for it
  * as it fires — `GestureServiceDialog`, in the shell.
@@ -82,49 +77,8 @@ internal fun GesturesDetail(
         }
         Note("A swipe with an action uses one finger. The screen on that edge then opens with two.")
 
-        AnimatedVisibility(visible = state.showsShadeStyle) {
-            PanelStyleSettings(style = state.shadeStyle, onStyle = viewModel::setShadeStyle)
-        }
         AnimatedVisibility(visible = state.needsService) {
             GestureServiceCard(on = state.serviceOn, onOpen = viewModel::openServiceSettings)
-        }
-    }
-}
-
-/**
- * The panel style and a picture of it.
- *
- * **The picture is what the user matches**, not the word: the style decides how a panel action opens — a touch on that
- * panel's side under Separate — so a wrong answer opens the other panel, and a drawing of the phone's own arrangement is
- * easier to recognize than "Combined".
- */
-@Composable
-private fun PanelStyleSettings(style: ShadeStyle, onStyle: (ShadeStyle) -> Unit) {
-    Column {
-        SettingsSectionHeader("System panels")
-        val styles = ShadeStyle.entries
-        MorphicSegmentedButtons(
-            options = styles.map {
-                when (it) {
-                    ShadeStyle.COMBINED -> "Combined"
-                    ShadeStyle.SEPARATE -> "Separate"
-                }
-            },
-            selectedIndex = styles.indexOf(style),
-            onSelect = { onStyle(styles[it]) },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        // Said right under the choice, because the choice looks like a setting for the phone's panels and is not one:
-        // it only tells the launcher which arrangement the phone already has.
-        Note(
-            "Match your phone's own notification panel setting. Changing it here doesn't change how your phone shows " +
-                "notifications.",
-        )
-        AnimatedVisibility(visible = style == ShadeStyle.COMBINED) {
-            ShadeStylePreview(ShadeStyle.COMBINED)
-        }
-        AnimatedVisibility(visible = style == ShadeStyle.SEPARATE) {
-            ShadeStylePreview(ShadeStyle.SEPARATE)
         }
     }
 }

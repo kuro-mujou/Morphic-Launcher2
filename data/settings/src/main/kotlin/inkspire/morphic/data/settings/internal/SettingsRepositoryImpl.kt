@@ -23,7 +23,6 @@ import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.ItemGesture
 import inkspire.morphic.core.model.RotationMode
 import inkspire.morphic.core.model.SearchPlacement
-import inkspire.morphic.core.model.ShadeStyle
 import inkspire.morphic.core.model.SurfaceTransition
 import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.SyncMode
@@ -320,8 +319,6 @@ internal class SettingsRepositoryImpl(
 
     override suspend fun setHomeSwipe(direction: SwipeDirection, action: GestureAction?) =
         update(HomeGesturesSlice) { withSwipe(direction, action) }
-
-    override suspend fun setShadeStyle(style: ShadeStyle) = update(HomeGesturesSlice) { copy(shadeStyle = style) }
 
     override suspend fun setHomeDoubleTap(action: GestureAction?) = update(HomeGesturesSlice) { copy(doubleTap = action) }
 

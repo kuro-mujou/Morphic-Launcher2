@@ -1880,18 +1880,25 @@ does not scroll behind what is opening.
   member and the missed one would do nothing silently. `describeGestureAction` moved to `core:designsystem/gesture` on
   its second consumer. The action picker is shared through `GestureTarget` (an item's gesture or a HOME swipe), and
   settings reaches it through `app` (`GestureActionRoute.HomeSwipe`), because a feature cannot import another's route.
-- **A panel action names its panel.** `GestureAction.OpenSystemPanel(panel)` is Notifications or Quick settings, picked
-  in the action picker. The first version stored a panel-less `system_panel` and chose the panel from where the gesture
-  started (`ShadeRequest`, `panelAt`), which made a double tap's result depend on where the thumb landed and left quick
-  settings unreachable under Combined; naming the panel also lets an item's gesture open one. The retired discriminator
-  no longer decodes, so a `home_gestures` blob holding it falls back to the defaults once — deliberately, rather than
-  guessing a panel.
-- **Every panel action runs through the accessibility service**, under either style: its global actions for a combined
-  shade, a replayed swipe on the panel's side for a separate one. The reflection over `StatusBarManager`'s hidden
-  `expandNotificationsPanel`/`expandSettingsPanel` (and `EXPAND_STATUS_BAR`) went with the start X: it needed no service
-  on stock Android, but as a fallback it opened RedMagic's control center whichever panel was asked for, silently.
-- **Combined or separate is the user's to say** (`ShadeStyle`), because nothing exposes it: One UI, HyperOS and stock
-  each keep it in a private setting. It decides *how* a panel opens, never which.
+- **A panel action says how it pulls, and nothing describes the phone.** `GestureAction.OpenSystemPanel(pull)` holds a
+  `ShadePull`, picked from the picker's System panel card: *Pull down panel* (the global expand — whatever the phone
+  shows), *Panel by side* (left half notifications, right half quick settings, by where the swipe started),
+  *Notifications* and *Quick settings*. By side is offered on HOME's vertical swipes only, since a horizontal swipe's
+  side follows its direction, a double tap's is where the thumb landed and an icon's is where the icon sits; the pager
+  hands the start X to the runner, and every other caller passes null.
+- **The phone's arrangement was a stored `ShadeStyle`, and that was reversed.** The user had to say whether their phone
+  combined or separated its panels, and a panel action opened by global action or by side-swipe accordingly — so a wrong
+  answer silently opened the other panel, from a setting on a different screen than the action. Nothing exposes the
+  arrangement (One UI, HyperOS and stock keep it privately), so every `ShadePull` is now one that works on both: a swipe
+  on the left of the status bar reaches notifications on either, and a swipe on the right followed by a second reaches
+  quick settings on either — a separate shade opens them on the first, a combined one expands into them on the second.
+  `GLOBAL_ACTION_QUICK_SETTINGS` is unused for that reason: RedMagic answers it with its control center.
+- **Stored assignments survived the change.** The field keeps the key `panel` and `NOTIFICATIONS`/`QUICK_SETTINGS`
+  keep their names and meaning; a stored `shadeStyle` is ignored as an unknown key. The earlier panel-less
+  `system_panel` still does not decode, so a blob holding it falls back to the defaults.
+- **Every panel action runs through the accessibility service.** The reflection over `StatusBarManager`'s hidden
+  `expandNotificationsPanel`/`expandSettingsPanel` (and `EXPAND_STATUS_BAR`) is gone: it needed no service on stock
+  Android, but as a fallback it opened RedMagic's control center whichever panel was asked for, silently.
 - **A gesture that needs the service asks for it as it fires** — Smart Launcher's model. `GestureActionRunner` checks
   `GestureAction.needsGestureService` (one derivation, also read by the settings card) and, with the service off, reports
   the action to `GestureServiceAccess.blocked` instead of running it; the shell turns that into `GestureServiceDialog`,
@@ -1901,12 +1908,12 @@ does not scroll behind what is opening.
   `CentralSurfacesCommandQueueCallbacksAdapt.handleExpandToNotifications` opens the control center unless CTS is
   running, and only a real touch on the left half of the status bar (`ControlPanelWindowManager.dispatchToControlPanel`)
   reaches notifications — so no call, no `cmd statusbar` and no `GLOBAL_ACTION_NOTIFICATIONS` can. `MorphicGestureService`
-  ("Morphic gestures") replays that touch under a separate style; it performs gestures and global actions only, with no
+  ("Morphic gestures") replays that touch for a named panel; it performs gestures and global actions only, with no
   window content and no events. **A Play release needs the accessibility-use declaration** for it.
-- **The section says what the style is not**: it mirrors the phone and changes nothing about it. `ShadeStylePreview`
-  draws each arrangement — one phone for combined, two phones (notifications, control center) for separate. The
-  Morphic gestures card is status only, in one place, shown whenever any gesture on home — an item's included — needs
-  the service.
+- **The picker's System panel card is an `ExpandableCard`**, extracted on its second consumer from the Shortcuts card;
+  a tap inverts the card's default and is forgotten when the default changes. The Gestures section lost its panel-style
+  control and its drawing (`ShadeStylePreview`) with the style; its Morphic gestures card is status only, in one place,
+  shown whenever any gesture on home — an item's included — needs the service.
 - Verified on an API 36 emulator and a RedMagic NX809J (Android 16). Two-finger opening was checked by hand, since
   `adb input` drives one finger.
 

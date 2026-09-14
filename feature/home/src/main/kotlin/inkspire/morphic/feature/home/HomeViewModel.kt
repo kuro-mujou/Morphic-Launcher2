@@ -441,16 +441,17 @@ class HomeViewModel(
     fun runGesture(item: GridItem, gesture: ItemGesture) {
         viewModelScope.launch {
             val action = settingsRepository.homeItemGestures.first().actionsOn(item)[gesture] ?: return@launch
-            gestureActionRunner.run(action, settingsRepository.homeGestures.first().shadeStyle)
+            // No side: an icon's gesture starts wherever the icon happens to sit.
+            gestureActionRunner.run(action, startX = null)
         }
     }
 
     /** Performs HOME's own double-tap action, and nothing when none is assigned — read as it fires, like [runGesture]. */
     fun runHomeDoubleTap() {
         viewModelScope.launch {
-            val gestures = settingsRepository.homeGestures.first()
-            val action = gestures.doubleTap ?: return@launch
-            gestureActionRunner.run(action, gestures.shadeStyle)
+            val action = settingsRepository.homeGestures.first().doubleTap ?: return@launch
+            // No side: where a double tap lands is where the thumb was, not a choice.
+            gestureActionRunner.run(action, startX = null)
         }
     }
 

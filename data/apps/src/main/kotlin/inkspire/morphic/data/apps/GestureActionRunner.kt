@@ -1,7 +1,6 @@
 package inkspire.morphic.data.apps
 
 import inkspire.morphic.core.model.GestureAction
-import inkspire.morphic.core.model.ShadeStyle
 import inkspire.morphic.core.model.needsGestureService
 
 /**
@@ -20,9 +19,10 @@ interface GestureActionRunner {
      * because that is the one failure the user can fix, and the gesture is the only moment that also catches a service
      * switched off after the action was assigned.
      *
-     * @param shadeStyle how the phone arranges its panels, which decides how a panel action opens. Ignored by the rest.
+     * @param startX where the gesture began across the screen, 0 at the left and 1 at the right, or null for a gesture
+     *   whose side means nothing. Only a by-side panel action reads it — see [SystemShade.expand].
      */
-    fun run(action: GestureAction, shadeStyle: ShadeStyle)
+    fun run(action: GestureAction, startX: Float?)
 }
 
 /** Default [GestureActionRunner], over the commands that do the work. */
@@ -34,7 +34,7 @@ internal class DefaultGestureActionRunner(
     private val gestureService: GestureServiceAccess,
 ) : GestureActionRunner {
 
-    override fun run(action: GestureAction, shadeStyle: ShadeStyle) {
+    override fun run(action: GestureAction, startX: Float?) {
         if (action.needsGestureService && !gestureService.isOn) {
             gestureService.reportBlocked(action)
             return
@@ -42,7 +42,7 @@ internal class DefaultGestureActionRunner(
         when (action) {
             is GestureAction.LaunchApp -> appLauncher.launch(action.component)
             is GestureAction.LaunchShortcut -> appShortcuts.start(action.id, action.packageName, action.userSerial)
-            is GestureAction.OpenSystemPanel -> systemShade.expand(action.panel, shadeStyle)
+            is GestureAction.OpenSystemPanel -> systemShade.expand(action.pull, startX)
             GestureAction.LockScreen -> screenLock.lock()
         }
     }

@@ -3,7 +3,7 @@ package inkspire.morphic.core.designsystem.gesture
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.GestureAction
-import inkspire.morphic.core.model.ShadePanel
+import inkspire.morphic.core.model.ShadePull
 
 /**
  * What an assigned [GestureAction] is called wherever one is listed — an item's gesture sheet on home, and the
@@ -18,9 +18,11 @@ fun describeGestureAction(action: GestureAction, catalog: Map<ComponentKey, AppI
     when (action) {
         is GestureAction.LaunchApp -> catalog[action.component]?.label ?: MissingApp
         is GestureAction.LaunchShortcut -> action.label
-        is GestureAction.OpenSystemPanel -> when (action.panel) {
-            ShadePanel.NOTIFICATIONS -> "Notifications"
-            ShadePanel.QUICK_SETTINGS -> "Quick settings"
+        is GestureAction.OpenSystemPanel -> when (action.pull) {
+            ShadePull.PULL_DOWN -> "Pull down panel"
+            ShadePull.BY_SIDE -> "Panel by side"
+            ShadePull.NOTIFICATIONS -> "Notifications"
+            ShadePull.QUICK_SETTINGS -> "Quick settings"
         }
         GestureAction.LockScreen -> "Lock screen"
     }

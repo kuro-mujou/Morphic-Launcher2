@@ -2,13 +2,12 @@ package inkspire.morphic.data.settings
 
 import inkspire.morphic.core.model.GestureAction
 import inkspire.morphic.core.model.HomeEdge
-import inkspire.morphic.core.model.ShadeStyle
 import inkspire.morphic.core.model.SwipeDirection
 import kotlinx.serialization.Serializable
 
 /**
  * **What HOME itself does when swiped or double-tapped**, apart from what is bound to its edges: an action per swipe
- * direction, one for a double tap on empty space, and the [ShadeStyle] a system-panel action needs.
+ * direction and one for a double tap on empty space.
  *
  * **A direction with an action takes the one-finger swipe, and the edge it points at keeps the two-finger one.** So an
  * action never costs the user a side surface, and a direction with none behaves exactly as it does without this.
@@ -17,14 +16,10 @@ import kotlinx.serialization.Serializable
  *
  * @property doubleTap what a double tap on HOME's empty space does, or null for nothing — a double tap then does
  *   nothing at all.
- * @property shadeStyle read only when a [GestureAction.OpenSystemPanel] fires — HOME's own or an item's, which is why
- *   it lives here once rather than beside each. Kept when every such action is cleared, so assigning one again does
- *   not need the question answered twice.
  */
 @Serializable
 data class HomeGestures(
     val swipes: Map<SwipeDirection, GestureAction> = emptyMap(),
-    val shadeStyle: ShadeStyle = ShadeStyle.COMBINED,
     val doubleTap: GestureAction? = null,
 ) {
     /** This record with [direction] set to [action], or cleared when it is null — removed, which keeps it sparse. */

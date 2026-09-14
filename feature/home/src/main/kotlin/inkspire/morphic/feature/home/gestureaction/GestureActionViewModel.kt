@@ -40,6 +40,8 @@ data class ShortcutGroup(val app: AppInfo, val shortcuts: List<AppShortcut>)
  *   is unassigned, which is what makes the "None" row the selected one.
  * @property offersLockScreen whether the System section lists Lock screen — on HOME's own gestures, on a device that has
  *   the action at all.
+ * @property offersPanelBySide whether the system panel card lists the by-side pull — on HOME's vertical swipes, the
+ *   only gestures whose starting side is the user's choice.
  * @property loadingShortcuts true until the platform has answered. Shortcuts arrive later than apps — one query
  *   across every profile — and a section that appeared without warning halfway through a scroll would move the
  *   list under the finger.
@@ -51,6 +53,7 @@ data class GestureActionState(
     val query: String = "",
     val loadingShortcuts: Boolean = true,
     val offersLockScreen: Boolean = false,
+    val offersPanelBySide: Boolean = false,
 )
 
 /**
@@ -74,6 +77,8 @@ class GestureActionViewModel(
 ) : ViewModel() {
 
     private val offersLockScreen = screenLock.isSupported && target !is GestureTarget.Item
+
+    private val offersPanelBySide = target is GestureTarget.HomeSwipe && !target.direction.isHorizontal
 
     private val query = MutableStateFlow("")
     private val shortcuts = MutableStateFlow<List<AppShortcut>?>(null)
@@ -108,6 +113,7 @@ class GestureActionViewModel(
                 query = text,
                 loadingShortcuts = loaded == null,
                 offersLockScreen = offersLockScreen,
+                offersPanelBySide = offersPanelBySide,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), GestureActionState())
 
