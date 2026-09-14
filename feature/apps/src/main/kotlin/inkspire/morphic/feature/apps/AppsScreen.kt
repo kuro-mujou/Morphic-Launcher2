@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
+import inkspire.morphic.core.designsystem.alphabet.AlphabetStrip
 import inkspire.morphic.core.designsystem.backdrop.OnFilm
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
@@ -75,7 +76,6 @@ import inkspire.morphic.feature.apps.layout.AppsVerticalGrid
 import inkspire.morphic.feature.apps.layout.AppsVerticalList
 import inkspire.morphic.feature.apps.layout.alphabet.AlphabetFilterBar
 import inkspire.morphic.feature.apps.layout.alphabet.AlphabetPicker
-import inkspire.morphic.feature.apps.layout.alphabet.AlphabetStrip
 import inkspire.morphic.feature.apps.layout.alphabet.LetterBucket
 import inkspire.morphic.feature.apps.layout.categorycard.AppsCategoryCard
 import inkspire.morphic.feature.apps.layout.categorypager.AppsCategoryPager

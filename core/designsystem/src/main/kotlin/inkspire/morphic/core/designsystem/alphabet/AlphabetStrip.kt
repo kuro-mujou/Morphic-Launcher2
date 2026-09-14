@@ -1,4 +1,4 @@
-package inkspire.morphic.feature.apps.layout.alphabet
+package inkspire.morphic.core.designsystem.alphabet
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -68,7 +68,7 @@ import kotlin.math.roundToInt
  *   than on every frame of a drag — the caller scrolls on it, and a scroll per frame is a scroll per frame.
  */
 @Composable
-internal fun AlphabetStrip(
+fun AlphabetStrip(
     labels: List<String>,
     style: AlphabetStripStyle,
     onLetter: (Int?) -> Unit,
