@@ -71,6 +71,7 @@ import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.colsFor
+import inkspire.morphic.core.model.railSlot
 import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.apps.LetterBucket
 import inkspire.morphic.feature.apps.layout.AppsVerticalGrid
@@ -582,14 +583,18 @@ private fun rememberAlphabetFilter(state: AppsState, layout: AppsLayout, present
  * content its presence was its own business; a column comes out of the width the content divides into cells, so the
  * answer is needed where the insets are decided — see [AppsWithIndexStrip].
  *
- * Null three ways: on the arranged layouts, which filter by letter rather than indexing themselves; on empty buckets,
- * the user's A–Z switch being off or there being nothing to index; and under a query, which replaces the very
- * arrangement the rail indexes, so the rail goes with it and the width comes back.
+ * **This is where the layout meets the setting**, which is why it is a function of both: the rail is configured per
+ * layout, and *which* layout is on screen is [AppsScreen]'s parameter rather than anything the ViewModel knows.
+ *
+ * Null four ways: on a layout that draws no rail at all — the arranged three, which filter by letter instead; on one
+ * whose rail the user has switched off; on empty buckets, there being nothing to index; and under a query, which
+ * replaces the very arrangement the rail indexes, so the rail goes with it and the width comes back.
  */
-private fun alphabetIndexStyle(state: AppsState, layout: AppsLayout, showResults: Boolean): AlphabetStripStyle? =
-    state.alphabetStrip.takeIf {
-        layout.indexesAlphabetically && state.alphabetBuckets.isNotEmpty() && !showResults
-    }
+private fun alphabetIndexStyle(state: AppsState, layout: AppsLayout, showResults: Boolean): AlphabetStripStyle? {
+    if (showResults || state.alphabetBuckets.isEmpty()) return null
+    return state.alphabetRails[layout.railSlot]?.drawn
+}
+
 
 /**
  * [content], with the A–Z index strip in a column of its own down the trailing edge.

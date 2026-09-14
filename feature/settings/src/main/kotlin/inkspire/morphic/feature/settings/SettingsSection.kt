@@ -16,7 +16,6 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.ScreenRotation
-import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -100,21 +99,6 @@ enum class SettingsSection {
      * folder grid housed, it had nothing left to show.
      */
     FOLDER,
-
-    /**
-     * **Extras**: what belongs to more than one surface and sizes none of them.
-     *
-     * The A–Z index strip is the first and, today, the only one. It is not the [APPS] section's because what it
-     * attaches to is *content ordered A–Z* — the APPS derived layouts have that now and HOME's vertical list will
-     * have it next — and a setting filed under one surface is one the other has to reach across for or lose to a
-     * rename.
-     *
-     * **A bucket, and named as one on purpose.** Every other row here names a surface or a material; this one names
-     * what it is, which is the honest label for a place things are put. The risk it carries is the one every bucket
-     * carries — that it becomes where anything goes rather than where cross-surface things go — and the guard is
-     * this sentence rather than the name.
-     */
-    EXTRAS,
 
     /**
      * **About**: what this build is, what it asks the device for, and the two documents that answer for it.
@@ -206,10 +190,6 @@ internal fun SettingsSection.meta(homeLayout: HomeLayout): SettingsSectionMeta =
             "Folders", Icons.Outlined.Folder,
         )
 
-        SettingsSection.EXTRAS -> SettingsSectionMeta(
-            "Extras", Icons.Outlined.Tune,
-        )
-
         SettingsSection.ABOUT -> SettingsSectionMeta(
             "About", Icons.Outlined.Info,
         )
@@ -283,7 +263,6 @@ internal val SettingsSection.parent: SettingsSection?
         SettingsSection.HOME,
         SettingsSection.APPS,
         SettingsSection.FOLDER,
-        SettingsSection.EXTRAS,
         SettingsSection.ABOUT,
             -> null
     }
@@ -324,12 +303,7 @@ internal val settingsGroups: List<SettingsGroup> = listOf(
             SettingsSection.FOLDER,
         ),
     ),
-    // **Its own group, unheaded, and last.** A bucket under "Layout" would claim to arrange something, and under
-    // "Personalization" it would claim to be a look; what it holds is neither, and a third heading over a single row
-    // would be a label longer than the thing it labels.
-    SettingsGroup(null, listOf(SettingsSection.EXTRAS)),
-    // **About sits in a panel of its own rather than beside Extras**, though both are unheaded single rows and the
-    // list would look tidier with one panel holding two. Every other row in this index changes the launcher; this one
-    // only describes it, and the gap between two panels is the only thing in the list that can say so.
+    // **About sits in a panel of its own**, unheaded and last. Every other row in this index changes the launcher;
+    // this one only describes it, and the gap between panels is the only thing in the list that can say so.
     SettingsGroup(null, listOf(SettingsSection.ABOUT)),
 )

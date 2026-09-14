@@ -214,20 +214,6 @@ After R7, since that change moves the padding these layouts are built from.
 
 `SettingsSectionHeader("On home", …)` in `feature:settings/gestures/GesturesDetail.kt`. The string only.
 
-#### R10. Move Extras into the layouts that use it
-
-Wanted: no Extras section. Its one feature, the A–Z switch and the strip style, appears in the settings of each layout
-that actually draws a strip or picker: the APPS list, grid and category pager, and HOME's list once R3 lands.
-
-**Reverses** `SettingsSection.EXTRAS`'s rationale ("belongs to more than one surface and sizes none of them") and
-`ExtrasDetail`'s "one switch for both affordances". With the section gone, `SettingsSection.EXTRAS`, its meta, its
-place in `SettingsList` and `ExtrasViewModel`'s DI binding all go. Removed, not left empty.
-
-**Open question:** Does the setting stay one launcher-wide `AlphabetStrip`, shown in several places, or split per
-layout? Showing one setting in three places means changing it on the list also changes the grid, which surprises
-anyone who sets them apart. Splitting per layout changes what the stored value means, and by the settings-key rule in
-CLAUDE.md that means a new key, not reinterpreting the old one.
-
 ### Wallpaper studio
 
 #### R11. Credit gart in the wallpaper studio

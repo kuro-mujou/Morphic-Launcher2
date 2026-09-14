@@ -1,6 +1,5 @@
 package inkspire.morphic.feature.apps
 
-import inkspire.morphic.core.model.AlphabetStripStyle
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.CardChrome
@@ -12,7 +11,9 @@ import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.IconSizing
 import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.VerticalEdge
+import inkspire.morphic.core.model.railSlot
 import inkspire.morphic.data.apps.LetterBucket
+import inkspire.morphic.data.settings.AlphabetRail
 import inkspire.morphic.core.model.Folder as FolderModel
 
 /**
@@ -115,28 +116,32 @@ data class AppsState(
     val query: String = "",
     val results: List<AppInfo> = emptyList(),
     val letterBuckets: List<LetterBucket> = emptyList(),
-    val alphabetStrip: AlphabetStripStyle? = null,
+    val alphabetRails: Map<GridSlot, AlphabetRail> = emptyMap(),
 )
 
 /**
- * The A–Z buckets this surface can offer — empty when the user has A–Z navigation off, or there is nothing to
- * index.
+ * The A–Z buckets this surface can offer — empty only when there is nothing to index.
  *
- * **Which *affordance* those buckets get is [indexesAlphabetically]'s answer, not this one.** One switch turns the
- * alphabet on; what it becomes is a property of the layout looking at it.
+ * **No longer gated on a switch**, which is what the rail becoming per-layout leaves behind. The buckets feed two
+ * different affordances ([indexesAlphabetically] decides which), and only one of them is switchable: a rail costs a
+ * column of the surface, so each layout opts into its own, where the category pager's letter *picker* is a button in
+ * a header that costs nothing and is simply there. Which rail is drawn is `alphabetIndexStyle`'s answer now.
  */
 val AppsState.alphabetBuckets: List<LetterBucket>
-    get() = if (alphabetStrip == null) emptyList() else letterBuckets
+    get() = letterBuckets
 
 /**
- * Whether [layout] indexes itself with a strip, or filters itself from a picker — the two things an alphabet can do
- * for a surface, decided by whether that surface is *in* alphabetical order.
+ * Whether [layout] indexes itself with a rail, or filters itself from a picker — the two things an alphabet can do for
+ * a surface, decided by whether that surface is *in* alphabetical order.
  *
- * A strip that scrolls needs an A–Z list under it; the two derived layouts are that list, and the three arranged
- * ones are an order the user chose, where the only thing "go to M" can mean is *show me M*.
+ * A rail that scrolls needs an A–Z list under it; the two derived layouts are that list, and the three arranged ones
+ * are an order the user chose, where the only thing "go to M" can mean is *show me M*.
+ *
+ * Derived from [railSlot] rather than listing those two layouts again: one silently disagreeing with the other would
+ * draw a rail nothing configures, or configure one nothing draws.
  */
 val AppsLayout.indexesAlphabetically: Boolean
-    get() = this == AppsLayout.VERTICAL_LIST || this == AppsLayout.VERTICAL_GRID
+    get() = railSlot != null
 
 /**
  * Where [layout]'s search field sits — [SearchPlacement.Hidden] until the store answers, which is also the default an

@@ -104,11 +104,11 @@ internal fun SettingsList(
 
         settingsGroups.forEachIndexed { index, group ->
             item(key = "group-${group.header ?: index}") {
-                // **The break between two groups is paid here, not by the heading.** A heading that pays its own
-                // separates nothing when a group has none: `Extras` is one unheaded row, and it sat welded to the
-                // bottom of the Layout panel — a sixth Layout row wearing a different corner radius. What the eye is
-                // reading is the gap between two *panels*, which is this list's to give whether or not a word sits in
-                // it. The first group takes none when it is first — it is already under the app bar — and pays it
+                // **The break between two groups is paid here, not by the heading.** A heading that pays its own separates
+                // nothing when a group has none: `About` is one unheaded row, and welded to the bottom of the panel above it
+                // would read as one more of that panel's rows wearing a different corner radius. What the eye is reading is
+                // the gap between two *panels*, which is this list's to give whether or not a word sits in it. The first group
+                // takes none when it is first — it is already under the app bar — and pays it
                 // like any other once the setup row is above it.
                 Column(
                     modifier = Modifier

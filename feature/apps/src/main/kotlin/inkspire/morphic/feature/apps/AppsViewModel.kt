@@ -3,7 +3,6 @@ package inkspire.morphic.feature.apps
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
-import inkspire.morphic.core.model.AlphabetStripStyle
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.CardChrome
@@ -32,6 +31,7 @@ import inkspire.morphic.data.layout.AppsOrderRepository
 import inkspire.morphic.data.layout.AppsPagerChange
 import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.layout.reconcileReportedOrder
+import inkspire.morphic.data.settings.AlphabetRail
 import inkspire.morphic.data.settings.OrientationSettings
 import inkspire.morphic.data.settings.SettingsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -66,7 +66,7 @@ private data class AppsSizing(
     val card: CardChrome?,
     val categoryTabEdge: VerticalEdge,
     val searchByLayout: Map<AppsLayout, SearchPlacement>,
-    val alphabetStrip: AlphabetStripStyle?,
+    val alphabetRails: Map<GridSlot, AlphabetRail>,
 )
 
 /**
@@ -95,7 +95,7 @@ private data class PerSurface(
     val wraps: Map<GridSlot, Boolean>,
     val remembersPage: Map<GridSlot, Boolean>,
     val chrome: ResolvedChrome,
-    val alphabetStrip: AlphabetStripStyle?,
+    val alphabetRails: Map<GridSlot, AlphabetRail>,
 )
 
 /**
@@ -428,10 +428,10 @@ class AppsViewModel(
                         searchByLayout = AppsLayout.entries.associateWith(chrome::searchOn),
                     )
                 },
-                // **Null is "no strip", so the disabled state cannot be mistaken for a style.** The stored record
-                // has both a flag and a look; a surface only ever needs to know which look to draw or that there is
-                // nothing to draw, and collapsing the pair here is what stops every reader repeating the test.
-                settingsRepository.alphabetStrip.map { strip -> strip.style.takeIf { strip.enabled } },
+                // Passed through per layout rather than collapsed to one style here, because *which* layout is on
+                // screen is the screen's parameter and not this ViewModel's — `alphabetIndexStyle` is where the two
+                // meet. `AlphabetRail.drawn` is the collapse, applied there.
+                settingsRepository.alphabetRails,
                 ::PerSurface,
             ),
             pagerConfig,
@@ -446,7 +446,7 @@ class AppsViewModel(
                 wraps = perSurface.wraps,
                 remembersPage = perSurface.remembersPage,
                 card = perDevice.card,
-                alphabetStrip = perSurface.alphabetStrip,
+                alphabetRails = perSurface.alphabetRails,
                 categoryTabEdge = perSurface.chrome.categoryTabEdge,
                 searchByLayout = perSurface.chrome.searchByLayout,
             )
@@ -495,7 +495,7 @@ class AppsViewModel(
                 query = searched.query,
                 results = searched.results,
                 letterBuckets = searched.letters,
-                alphabetStrip = configured.alphabetStrip,
+                alphabetRails = configured.alphabetRails,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), AppsState())
 

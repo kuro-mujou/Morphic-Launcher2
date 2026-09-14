@@ -31,7 +31,8 @@ import inkspire.morphic.core.model.boardRotates
 import inkspire.morphic.core.model.icon.IconAppearance
 import inkspire.morphic.core.model.icon.PreviewBackground
 import inkspire.morphic.core.model.toGridConfig
-import inkspire.morphic.data.settings.AlphabetStrip
+import inkspire.morphic.data.settings.AlphabetRail
+import inkspire.morphic.data.settings.AlphabetRails
 import inkspire.morphic.data.settings.AppsChrome
 import inkspire.morphic.data.settings.CardOverride
 import inkspire.morphic.data.settings.DefaultLauncherAsk
@@ -189,11 +190,18 @@ private val AppsChromeSlice = SettingsSlice(
     default = AppsChrome.Default,
 )
 
-/** The A–Z index strip: one key, one blob. Not part of `apps_chrome`, for the reason [AlphabetStrip] gives. */
-private val AlphabetStripSlice = SettingsSlice(
-    name = "alphabet_strip",
-    serializer = serializer<AlphabetStrip>(),
-    default = AlphabetStrip.Default,
+/**
+ * The A–Z rails: one key, one blob. Not part of `apps_chrome`, for the reason [AlphabetRails] gives.
+ *
+ * **A new key rather than the old `alphabet_strip` re-read**, because the stored shape changed *meaning* — one
+ * launcher-wide answer became one per layout — and re-interpreting a key in place fails silently. What it costs is
+ * that a rail switched on before this lands comes back off, which is the settings-key rule working rather than a
+ * regression.
+ */
+private val AlphabetRailsSlice = SettingsSlice(
+    name = "alphabet_rails",
+    serializer = serializer<AlphabetRails>(),
+    default = AlphabetRails.Default,
 )
 
 /** What the launcher does when the device turns or folds: one key, one blob. */
@@ -254,7 +262,7 @@ internal val SettingsSlices: Map<String, SettingsSlice<*>> = listOf(
     IconStudioBackgroundSlice,
     IconStudioWorkspaceSlice,
     AppsChromeSlice,
-    AlphabetStripSlice,
+    AlphabetRailsSlice,
     OrientationSettingsSlice,
     HomeItemGesturesSlice,
     HomeGesturesSlice,
@@ -283,6 +291,17 @@ private val WrappableGrids: Map<GridSlot, Boolean> =
  */
 private val RememberPageGrids: Map<GridSlot, Boolean> =
     GridSlot.entries.mapNotNull { slot -> slot.blueprint.remembersPage?.let { slot to it } }.toMap()
+
+/**
+ * The grids that can carry an **A–Z rail**, with the blueprint default each falls back to.
+ *
+ * [WrappableGrids]'s third sibling, over [GridBlueprint.alphabetRail], and built from the registry for their reason:
+ * adding a layout that indexes by letter is an `alphabetRail = …` on its blueprint and nothing else. Three today —
+ * the APPS list and grid, and HOME's list — and deliberately not the category pager, whose alphabet is a picker with
+ * no rail to switch on.
+ */
+private val RailGrids: Map<GridSlot, Boolean> =
+    GridSlot.entries.mapNotNull { slot -> slot.blueprint.alphabetRail?.let { slot to it } }.toMap()
 
 /**
  * Default [SettingsRepository]: one Preferences DataStore, one key per slice, each holding a JSON blob.
@@ -331,13 +350,24 @@ internal class SettingsRepositoryImpl(
     override suspend fun setSearchPlacement(layout: AppsLayout, placement: SearchPlacement) =
         update(AppsChromeSlice) { withSearch(layout, placement) }
 
-    override val alphabetStrip: Flow<AlphabetStrip> = dataStore.read(AlphabetStripSlice) { it }
+    // Resolved for every rail-capable grid at once, exactly as [pagerWraps] is, and over its own smaller slot set
+    // ([RailGrids]) — mapping over that rather than over what is stored is what makes the promise "an entry for
+    // every layout that can draw one, always" hold on a fresh install, where the blob is empty.
+    override val alphabetRails: Flow<Map<GridSlot, AlphabetRail>> = dataStore.read(AlphabetRailsSlice) { rails ->
+        RailGrids.mapValues { (slot, base) ->
+            AlphabetRail(enabled = rails.enabledFor(slot, base), style = rails.styleFor(slot))
+        }
+    }
 
-    override suspend fun setAlphabetStripEnabled(enabled: Boolean) =
-        update(AlphabetStripSlice) { copy(enabled = enabled) }
+    override suspend fun setAlphabetRailEnabled(slot: GridSlot, enabled: Boolean?) {
+        require(slot in RailGrids) { "$slot is not a layout that can draw an A–Z rail" }
+        update(AlphabetRailsSlice) { withEnabled(slot, enabled) }
+    }
 
-    override suspend fun setAlphabetStripStyle(style: AlphabetStripStyle) =
-        update(AlphabetStripSlice) { copy(style = style) }
+    override suspend fun setAlphabetRailStyle(slot: GridSlot, style: AlphabetStripStyle?) {
+        require(slot in RailGrids) { "$slot is not a layout that can draw an A–Z rail" }
+        update(AlphabetRailsSlice) { withStyle(slot, style) }
+    }
 
     override val orientationSettings: Flow<OrientationSettings> = dataStore.read(OrientationSettingsSlice) { it }
 

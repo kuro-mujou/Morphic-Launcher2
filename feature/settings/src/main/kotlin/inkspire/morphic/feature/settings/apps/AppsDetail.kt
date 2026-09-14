@@ -1,5 +1,7 @@
 package inkspire.morphic.feature.settings.apps
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,6 +28,7 @@ import inkspire.morphic.core.designsystem.grid.maxCells
 import inkspire.morphic.core.designsystem.grid.minCellFor
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.insets.uiInsets
+import inkspire.morphic.core.model.AlphabetStripStyle
 import inkspire.morphic.core.model.AppsCardGrid
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.CardChrome
@@ -359,6 +362,41 @@ internal fun AppsDetail(initialLayout: AppsLayout? = null, modifier: Modifier = 
                 onSelect = { viewModel.setSearch(searchOptions[it].second) },
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            // **The A–Z rail, on the two layouts that can draw one** — said by `rail` being null on the other three
+            // rather than by a layout test here, so a sixth layout declaring a rail on its blueprint reaches this
+            // screen without it. It used to be one switch in a section called Extras, which is what made it hard to
+            // find and easy to misread: it governed two layouts from a place that named neither.
+            state.rail?.let { rail ->
+                SettingsSectionHeader("A–Z")
+                MorphicSwitchRow(
+                    label = "Index strip",
+                    // Warns rather than describes, which is the bar a supporting line has to clear here: the strip
+                    // takes a column out of the grid, so turning it on visibly re-sizes the cells beside it.
+                    supportingText = "A letter rail down the edge. The grid narrows to make room for it.",
+                    checked = rail.enabled,
+                    onCheckedChange = viewModel::setRailEnabled,
+                )
+                // **Absent while the rail is off, not disabled** — the standing rule, and the case it is clearest
+                // on: a look for something that is not drawn is a control whose effect nobody can see.
+                AnimatedVisibility(visible = rail.enabled) {
+                    Column {
+                        SettingsSectionHeader("Strip style")
+                        val styles = AlphabetStripStyle.entries
+                        MorphicSegmentedButtons(
+                            options = styles.map { style ->
+                                when (style) {
+                                    AlphabetStripStyle.STANDARD -> "Standard"
+                                    AlphabetStripStyle.CURVED -> "Curved"
+                                }
+                            },
+                            selectedIndex = styles.indexOf(rail.style),
+                            onSelect = { viewModel.setRailStyle(styles[it]) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+            }
 
             // Tabs exist on one layout only, so the chooser appears on that layout alone rather than being offered
             // and ignored.

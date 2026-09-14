@@ -3,6 +3,7 @@ package inkspire.morphic.feature.settings.apps
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.designsystem.cell.CategoryPreviewSlots
+import inkspire.morphic.core.model.AlphabetStripStyle
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.CardChrome
 import inkspire.morphic.core.model.DeviceConfiguration
@@ -14,7 +15,9 @@ import inkspire.morphic.core.model.SearchPlacement
 import inkspire.morphic.core.model.VerticalEdge
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.pagerSlot
+import inkspire.morphic.core.model.railSlot
 import inkspire.morphic.data.apps.AppRepository
+import inkspire.morphic.data.settings.AlphabetRail
 import inkspire.morphic.data.settings.AppsChrome
 import inkspire.morphic.data.settings.GridOverride
 import inkspire.morphic.data.settings.SettingsRepository
@@ -98,15 +101,19 @@ internal val ConfigurableLayouts: List<AppsLayout> = listOf(
  * configuration. Null is "not yet", exactly as in the dock's and home's sections.
  */
 /**
- * The four sources that are **not keyed by the selected grid**, grouped so the section's outer `combine` stays within
+ * The five sources that are **not keyed by the selected grid**, grouped so the section's outer `combine` stays within
  * its five flows — the same folding [AppsViewModel]'s `PerDevice` does, one screen over. `Triple` covered three of
  * them until page memory made a fourth.
+ *
+ * **Field order is load-bearing**: it is built with `::SurfacePagingBits`, so the flows are bound by position and a
+ * field inserted anywhere but the end silently pairs each source with the wrong one.
  */
 private data class SurfacePagingBits(
     val chrome: AppsChrome,
     val wraps: Map<GridSlot, Boolean>,
     val remembersPage: Map<GridSlot, Boolean>,
     val card: CardChrome?,
+    val rails: Map<GridSlot, AlphabetRail>,
 )
 
 data class AppsSectionState(
@@ -119,6 +126,7 @@ data class AppsSectionState(
     val wraps: Boolean? = null,
     val rememberPage: Boolean? = null,
     val card: CardChrome? = null,
+    val rail: AlphabetRail? = null,
     val boundLayouts: Set<AppsLayout> = emptySet(),
 )
 
@@ -204,10 +212,10 @@ class AppsSectionViewModel(
                         },
                         settingsRepository.rowHeight(GridSlot.APPS_LIST, configuration),
                         settingsRepository.horizontalPadding(current.slot, configuration),
-                        // Eight sources against `combine`'s five, so the four that are **not keyed by the selected
-                        // grid** are grouped: the chrome slice is one value for the whole surface, wrapping and page
-                        // memory are behaviors, and the card's tile chrome belongs to one fixed slot. The four above
-                        // all follow whichever layout's chip is selected.
+                        // Nine sources against `combine`'s five, so the five that are **not keyed by the selected
+                        // grid** are grouped: the chrome slice is one value for the whole surface, wrapping, page
+                        // memory and the A–Z rail are behaviors, and the card's tile chrome belongs to one fixed
+                        // slot. The four above all follow whichever layout's chip is selected.
                         combine(
                             settingsRepository.appsChrome,
                             settingsRepository.pagerWraps,
@@ -220,6 +228,7 @@ class AppsSectionViewModel(
                             } else {
                                 settingsRepository.cardChrome(current.slot, configuration)
                             },
+                            settingsRepository.alphabetRails,
                             ::SurfacePagingBits,
                         ),
                     ) { size, icon, rowHeight, padding, bits ->
@@ -229,8 +238,13 @@ class AppsSectionViewModel(
                         // pagers carry it, so home never appears in either map.
                         val pagerWraps = current.pagerSlot?.let { bits.wraps[it] }
                         val pagerRemembers = current.pagerSlot?.let { bits.remembersPage[it] }
+                        // Null on the three layouts that draw no rail, by the same means the two above are: the map
+                        // holds an entry only for a grid whose blueprint declares one, so "has this layout a rail"
+                        // needs no second list here to agree with.
+                        val rail = bits.rails[current.slot]
                         AppsSectionState(
-                            current, size, icon, rowHeight, padding, bits.chrome, pagerWraps, pagerRemembers, bits.card,
+                            current, size, icon, rowHeight, padding, bits.chrome, pagerWraps, pagerRemembers,
+                            bits.card, rail,
                         )
                     }
                 }
@@ -369,6 +383,23 @@ class AppsSectionViewModel(
      * No device, because wrapping is a behavior rather than a size; and guarded by `pagerSlot`, so a stale press
      * while a non-paging chip is selected writes nothing rather than reaching a repository that would throw.
      */
+    /**
+     * Draws the **selected** layout's A–Z rail, or stops drawing it.
+     *
+     * Guarded exactly as [setWraps] is, and for its reason: a toggle reaching this while a layout that draws no rail
+     * is selected writes nothing rather than reaching a repository that would throw.
+     */
+    fun setRailEnabled(value: Boolean) {
+        val slot = layout.value.railSlot ?: return
+        viewModelScope.launch { settingsRepository.setAlphabetRailEnabled(slot, value) }
+    }
+
+    /** Switches the **selected** layout's rail look; whether it is drawn at all is [setRailEnabled]'s. */
+    fun setRailStyle(style: AlphabetStripStyle) {
+        val slot = layout.value.railSlot ?: return
+        viewModelScope.launch { settingsRepository.setAlphabetRailStyle(slot, style) }
+    }
+
     fun setWraps(value: Boolean) {
         val slot = layout.value.pagerSlot ?: return
         viewModelScope.launch { settingsRepository.setPagerWrap(slot, value) }

@@ -65,7 +65,7 @@ import inkspire.morphic.feature.apps.layout.alphabet.alphabetDim
  * @param indexed the A–Z run the index strip is pointing at, or null when nothing is being scrubbed. The grid is
  *   scrolled to its first cell and every cell outside it is dimmed — which together is what makes an arrival
  *   legible, since scrolling alone lands on a grid that looks exactly like it did a moment ago. See
- *   `layout/alphabet/AlphabetStrip`.
+ *   `core:designsystem/alphabet/AlphabetStrip`.
  */
 @Composable
 fun AppsVerticalGrid(

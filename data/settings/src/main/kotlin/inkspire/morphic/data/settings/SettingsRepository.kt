@@ -78,16 +78,17 @@ interface SettingsRepository {
     suspend fun setSearchPlacement(layout: AppsLayout, placement: SearchPlacement)
 
     /**
-     * The A–Z index strip, for every surface whose content is ordered A–Z — see [AlphabetStrip] for why that is
-     * the thing it belongs to rather than a surface.
+     * The A–Z rail each layout that can draw one is set to — **an entry for every such layout, always**, resolved
+     * against its blueprint, exactly as [pagerWraps] is over its own slot set. See [AlphabetRails] for why this is
+     * per layout rather than one switch for the launcher.
      */
-    val alphabetStrip: Flow<AlphabetStrip>
+    val alphabetRails: Flow<Map<GridSlot, AlphabetRail>>
 
-    /** Draws the A–Z strip, or stops drawing it. */
-    suspend fun setAlphabetStripEnabled(enabled: Boolean)
+    /** Draws [slot]'s A–Z rail, or stops drawing it; **null clears** the override, restoring the blueprint's answer. */
+    suspend fun setAlphabetRailEnabled(slot: GridSlot, enabled: Boolean?)
 
-    /** Switches the A–Z strip's look; whether it is drawn at all is [setAlphabetStripEnabled]'s. */
-    suspend fun setAlphabetStripStyle(style: AlphabetStripStyle)
+    /** Switches [slot]'s rail look; whether it is drawn at all is [setAlphabetRailEnabled]'s. Null clears. */
+    suspend fun setAlphabetRailStyle(slot: GridSlot, style: AlphabetStripStyle?)
 
     /** What the launcher does when the device turns or folds — see [OrientationSettings]. */
     val orientationSettings: Flow<OrientationSettings>

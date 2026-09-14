@@ -130,6 +130,9 @@ class HomeViewModel(
      * **The whole installed collection in A–Z order, with its letter runs** — what HOME's index rail draws and
      * filters by, or [HomeAlphabet.Off] while the user has A–Z navigation switched off.
      *
+     * **Only the list pairing's rail is read here**, `GridSlot.HOME_LIST` being the one home grid that can carry one
+     * — the pager pairing offers no rail and its blueprint says so.
+     *
      * **Every app, not the ones on the list.** The rail is how a short HOME list reaches the rest of the phone
      * without opening APPS, which is the whole of Niagara's arrangement and what it is modeled on. Indexing the list
      * itself would offer four or five letters and reach nothing new.
@@ -141,8 +144,8 @@ class HomeViewModel(
      * reads this and writes nothing.
      */
     private val alphabet: Flow<HomeAlphabet> =
-        combine(appRepository.observeIndexed(), settingsRepository.alphabetStrip) { indexed, strip ->
-            val style = strip.style.takeIf { strip.enabled } ?: return@combine HomeAlphabet.Off
+        combine(appRepository.observeIndexed(), settingsRepository.alphabetRails) { indexed, rails ->
+            val style = rails[GridSlot.HOME_LIST]?.drawn ?: return@combine HomeAlphabet.Off
             HomeAlphabet(style = style, apps = indexed.apps, letters = indexed.letters)
         }
 

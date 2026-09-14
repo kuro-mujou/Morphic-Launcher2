@@ -7,6 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SdkSuppress
 import androidx.test.platform.app.InstrumentationRegistry
 import inkspire.morphic.core.model.AppsLayout
+import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.data.settings.LookRepository
@@ -116,7 +117,9 @@ class LookCaptureHarness {
             "Index" to {
                 setHomeLayout(HomeLayout.PAGER_WITH_DOCK)
                 setSide(HomeEdge.BOTTOM, SideBinding.Apps(AppsLayout.VERTICAL_GRID))
-                setAlphabetStripEnabled(true)
+                // The rail is per layout now, so a look turns it on for the grid this one binds — not for the
+                // launcher. Naming the slot is what keeps the capture showing what the look actually sets.
+                setAlphabetRailEnabled(GridSlot.APPS_SCROLL, true)
             },
         )
     }

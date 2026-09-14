@@ -2,6 +2,7 @@ package inkspire.morphic.feature.settings.grid
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import inkspire.morphic.core.model.AlphabetStripStyle
 import inkspire.morphic.core.model.ArrangementKey
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridConfig
@@ -21,6 +22,7 @@ import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.layout.GridReflow
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.LayoutRepository
+import inkspire.morphic.data.settings.AlphabetRail
 import inkspire.morphic.data.settings.GridOverride
 import inkspire.morphic.data.settings.OrientationSettings
 import inkspire.morphic.data.settings.SettingsRepository
@@ -76,6 +78,18 @@ sealed interface MainAreaSize {
  *   false-by-default so the screen draws the control from the state alone instead of re-deciding from [layout] which
  *   pairing has one — the same "absent means the question does not apply" the blueprint uses one layer down.
  */
+/**
+ * The two **behaviors** this section reads, grouped so its `combine` stays within its five flows — the same folding
+ * `AppsSectionViewModel`'s `SurfacePagingBits` does, one section over.
+ *
+ * Neither is keyed by the device, which is what separates them from everything else in that `combine`: turning the
+ * phone on its side is no reason for pages to stop looping or a rail to disappear.
+ */
+private data class HomeBehaviors(
+    val wraps: Map<GridSlot, Boolean>,
+    val rails: Map<GridSlot, AlphabetRail>,
+)
+
 data class GridSizeState(
     val layout: HomeLayout = HomeLayout.PAGER_WITH_DOCK,
     val main: MainAreaSize? = null,
@@ -83,6 +97,7 @@ data class GridSizeState(
     val sideExtentDp: Int? = null,
     val paddingDp: Int? = null,
     val wraps: Boolean? = null,
+    val rail: AlphabetRail? = null,
 )
 
 /**
@@ -151,12 +166,23 @@ class GridSizeViewModel(
                     settingsRepository.iconSizing(slot, configuration),
                     settingsRepository.extent(homeLayout.sideSlot, configuration),
                     settingsRepository.horizontalPadding(slot, configuration),
-                    settingsRepository.pagerWraps,
-                ) { main, icon, sideExtentDp, padding, wraps ->
-                    // The only field here that is *not* keyed by the device: wrapping is a behavior, so it is read
-                    // straight off the resolved map. `pagerSlot` is what turns "this pairing has no pager" into the
-                    // null the screen reads as "draw no control".
-                    GridSizeState(homeLayout, main, icon, sideExtentDp, padding, homeLayout.pagerSlot?.let { wraps[it] })
+                    // Two behaviors against `combine`'s last slot, so they travel as one: neither is keyed by the
+                    // device, and both are read out of a resolved map by the pairing's own grid.
+                    combine(settingsRepository.pagerWraps, settingsRepository.alphabetRails, ::HomeBehaviors),
+                ) { main, icon, sideExtentDp, padding, behaviors ->
+                    // The two fields here that are *not* keyed by the device, both read straight off a resolved map.
+                    // `pagerSlot` is what turns "this pairing has no pager" into the null the screen reads as "draw
+                    // no control"; the rail needs no such bridge, since the map holds an entry only for a grid whose
+                    // blueprint declares one and the pager pairing's main grid does not.
+                    GridSizeState(
+                        layout = homeLayout,
+                        main = main,
+                        icon = icon,
+                        sideExtentDp = sideExtentDp,
+                        paddingDp = padding,
+                        wraps = homeLayout.pagerSlot?.let { behaviors.wraps[it] },
+                        rail = behaviors.rails[slot],
+                    )
                 }
             }
         }
@@ -261,6 +287,25 @@ class GridSizeViewModel(
     fun setWraps(value: Boolean) {
         val slot = layout.value.pagerSlot ?: return
         viewModelScope.launch { settingsRepository.setPagerWrap(slot, value) }
+    }
+
+    /**
+     * Draws this pairing's main grid's **A–Z rail**, or stops drawing it.
+     *
+     * Guarded by the blueprint rather than by the layout, which is [setWraps]'s guard read from the other direction:
+     * "can this grid carry a rail" is declared once, on the blueprint, and both the control's presence and this
+     * write's legality follow from it. A stale press on the pager pairing writes nothing rather than reaching a
+     * repository that would throw.
+     */
+    fun setRailEnabled(value: Boolean) {
+        val slot = layout.value.mainSlot.takeIf { it.blueprint.rails } ?: return
+        viewModelScope.launch { settingsRepository.setAlphabetRailEnabled(slot, value) }
+    }
+
+    /** Switches the rail's look; whether it is drawn at all is [setRailEnabled]'s. */
+    fun setRailStyle(style: AlphabetStripStyle) {
+        val slot = layout.value.mainSlot.takeIf { it.blueprint.rails } ?: return
+        viewModelScope.launch { settingsRepository.setAlphabetRailStyle(slot, style) }
     }
 
     fun edit(edge: GridEditorEdge, add: Boolean, fromCols: Int, fromRows: Int) {

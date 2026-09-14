@@ -56,7 +56,6 @@ import inkspire.morphic.feature.settings.about.PrivacyPolicyDetail
 import inkspire.morphic.feature.settings.apps.AppsDetail
 import inkspire.morphic.feature.settings.dock.DockDetail
 import inkspire.morphic.feature.settings.effects.EffectsDetail
-import inkspire.morphic.feature.settings.extras.ExtrasDetail
 import inkspire.morphic.feature.settings.folder.FolderDetail
 import inkspire.morphic.feature.settings.gestures.GesturesDetail
 import inkspire.morphic.feature.settings.grid.GridSizeDetail
@@ -357,7 +356,6 @@ private fun SectionPane(
         SettingsSection.DOCK -> DockDetail()
         SettingsSection.APPS -> AppsDetail(initialLayout = appsLayout)
         SettingsSection.FOLDER -> FolderDetail()
-        SettingsSection.EXTRAS -> ExtrasDetail()
         SettingsSection.ABOUT -> AboutDetail(homeLayout = homeLayout, onOpenSection = onOpenSection)
         SettingsSection.PERMISSIONS -> PermissionsDetail()
         SettingsSection.PRIVACY -> PrivacyPolicyDetail()

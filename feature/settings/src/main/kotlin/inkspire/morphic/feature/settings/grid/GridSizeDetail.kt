@@ -1,5 +1,8 @@
 package inkspire.morphic.feature.settings.grid
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -13,6 +16,7 @@ import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.fitRowHeight
 import inkspire.morphic.core.designsystem.cell.toIconMetrics
 import inkspire.morphic.core.designsystem.cell.wholeRowHeightRange
+import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
 import inkspire.morphic.core.designsystem.component.slider.MorphicSliderRow
 import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitchRow
 import inkspire.morphic.core.designsystem.grid.editableRangeIn
@@ -21,6 +25,7 @@ import inkspire.morphic.core.designsystem.grid.sideZoneFraction
 import inkspire.morphic.core.designsystem.grid.splitForSideZone
 import inkspire.morphic.core.designsystem.grid.usableWindowArea
 import inkspire.morphic.core.designsystem.insets.uiInsets
+import inkspire.morphic.core.model.AlphabetStripStyle
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.HomePagerGrid
 import inkspire.morphic.core.model.HorizontalPaddingRange
@@ -177,6 +182,41 @@ internal fun GridSizeDetail(modifier: Modifier = Modifier) {
                     companion = companion,
                     onSetRowHeight = viewModel::setRowHeight,
                 )
+            }
+
+            // **The A–Z rail, on the pairing whose main grid can carry one** — the list, said by `rail` being null on
+            // the other rather than by this screen asking the layout again. Here rather than in the Home hub because
+            // this is where HOME's list is configured; the hub chooses a pairing and navigates.
+            state.rail?.let { rail ->
+                SettingsSectionHeader("A–Z")
+                MorphicSwitchRow(
+                    label = "Index strip",
+                    // The supporting-line rule again: this warns of what the mockup above cannot show. The rail
+                    // narrows the list, and holding a letter replaces the whole screen with that letter's apps —
+                    // including apps that are not on home at all, which is the part nobody guesses from a switch.
+                    supportingText = "A letter rail beside the list. Holding a letter shows every app under it.",
+                    checked = rail.enabled,
+                    onCheckedChange = viewModel::setRailEnabled,
+                )
+                // Absent while the rail is off, not disabled — a look for something that is not drawn is a control
+                // whose effect nobody can see.
+                AnimatedVisibility(visible = rail.enabled) {
+                    Column {
+                        SettingsSectionHeader("Strip style")
+                        val styles = AlphabetStripStyle.entries
+                        MorphicSegmentedButtons(
+                            options = styles.map { style ->
+                                when (style) {
+                                    AlphabetStripStyle.STANDARD -> "Standard"
+                                    AlphabetStripStyle.CURVED -> "Curved"
+                                }
+                            },
+                            selectedIndex = styles.indexOf(rail.style),
+                            onSelect = { viewModel.setRailStyle(styles[it]) },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
             }
 
             // **Only on the pairing that has a pager**, which the state says by leaving `wraps` null rather than by

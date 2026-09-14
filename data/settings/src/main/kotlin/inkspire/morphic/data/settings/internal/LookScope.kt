@@ -27,7 +27,7 @@ internal object LookScope {
         SurfaceRegisterKey,
         "surface_metrics",
         "apps_chrome",
-        "alphabet_strip",
+        "alphabet_rails",
         "surface_paging",
         "backdrop_effect",
         IconAppearance,

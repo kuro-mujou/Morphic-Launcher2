@@ -322,6 +322,20 @@ val HorizontalPaddingRange: IntRange = 0..64
  *   **On by default**, unlike [wraps]: remembering is the behavior a user expects, and it carries none of wrapping's
  *   gesture cost. A separate axis from [wraps] entirely — one is *whether the pages loop*, the other *whether the
  *   surface reopens where you left it* — so the same grid answers both independently.
+ * @property alphabetRail whether this grid draws an **A–Z rail** by default — or **null** for a grid that cannot
+ *   carry one, which is the same convention [wraps] uses and for its reason: it is what lets `SettingsRepository`
+ *   refuse a slot that has no such setting, and what lets each settings section decide whether to draw the control
+ *   without naming the grids that have it.
+ *
+ *   **Per grid rather than one switch for the launcher**, which reverses what the setting used to be. The old single
+ *   value rested on the rail belonging to *A–Z-ordered content* — true while only APPS drew one, and untrue the
+ *   moment HOME's list did, since that list is in the order the user put their apps in and its rail *filters*
+ *   rather than indexes. With the ordering gone as the thing it attaches to, what is left is the layout, and three
+ *   of them can hold one. `SurfacePaging` records what the single value costs: L1's one `infiniteScroll` flag, read
+ *   by three pagers and configurable from one screen.
+ *
+ *   **Off by default** wherever it is offered, which is search's `Hidden` reasoning: a launcher's first run should
+ *   not carry chrome nobody asked for, and on HOME the rail costs a column of the screen.
  * @property card the tile chrome of a grid of **cards** — or **null** for every grid that draws cells rather than
  *   tiles, which is all but one. [extentDp]'s convention again, and for its reason: it is what lets
  *   `SettingsRepository` refuse a slot that has no such setting instead of every caller checking first.
@@ -339,6 +353,7 @@ data class GridBlueprint(
     val horizontalPaddingDp: Int = 0,
     val wraps: Boolean? = null,
     val remembersPage: Boolean? = null,
+    val alphabetRail: Boolean? = null,
     val card: CardChrome? = null,
 ) {
     /** True when the row count is user-editable (a full rows + columns editor). */
@@ -346,6 +361,9 @@ data class GridBlueprint(
 
     /** True when this grid is a pager whose wrapping the user may turn on and off — see [wraps]. */
     val pages: Boolean get() = wraps != null
+
+    /** True when this grid can carry an A–Z rail, and so offers the setting at all — see [alphabetRail]. */
+    val rails: Boolean get() = alphabetRail != null
 }
 
 /** Builds the per-[DeviceConfiguration] default map from one [GridDefault] per configuration. */
@@ -492,6 +510,7 @@ val HomeListGrid = GridBlueprint(
     ),
     icon = IconSizing(),
     rowHeightDp = 64,
+    alphabetRail = false,
 )
 
 /**
@@ -573,6 +592,7 @@ val AppsScrollGrid = GridBlueprint(
         tabletLandscape = GridDefault(cols = 8),
     ),
     icon = IconSizing(),
+    alphabetRail = false,
 )
 
 /**
@@ -665,6 +685,7 @@ val AppsListGrid = GridBlueprint(
     ),
     icon = IconSizing(),
     rowHeightDp = 56,
+    alphabetRail = false,
 )
 
 /**
