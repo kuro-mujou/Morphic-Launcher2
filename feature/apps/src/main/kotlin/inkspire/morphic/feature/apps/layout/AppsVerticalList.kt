@@ -56,8 +56,9 @@ import inkspire.morphic.feature.apps.layout.alphabet.alphabetDim
  * layout's**: the field belongs to the surface, which draws it where `SearchPlacement` says and hands this the
  * matches to render — so a query narrows the rows without the list knowing a query exists.
  *
- * @param insetSides which bars this layout reserves room for. Everything but the edge a pinned search field took —
- *   the field pads itself there, and content that reserved it too would leave a phantom band under it.
+ * @param insetSides which bars this layout reserves room for. Everything but the edges the surface's chrome took for
+ *   itself — a pinned search field's, and the end when the A–Z rail has a column there. Each pads itself, and content
+ *   that reserved the same bar would leave a phantom band beside it.
  * @param indexed the A–Z run the index strip is pointing at, or null when nothing is being scrubbed. The list is
  *   scrolled to its first item and every row outside it is dimmed — which together is what makes an arrival
  *   legible, since scrolling alone lands on a list that looks exactly like it did a moment ago. See

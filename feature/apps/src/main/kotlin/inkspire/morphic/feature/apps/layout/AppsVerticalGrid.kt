@@ -54,8 +54,9 @@ import inkspire.morphic.feature.apps.layout.alphabet.alphabetDim
  * @param metrics this grid's icon sizing, resolved from `GridSlot.APPS_SCROLL`'s blueprint and the user's overrides.
  *   Its `iconPercent` is spent on the cell **height** here, so the cell itself is drawn with the metrics `derivedCell`
  *   hands back rather than with these.
- * @param insetSides which bars this layout reserves room for. Everything but the edge a pinned search field took —
- *   the field pads itself there, and content that reserved it too would leave a phantom band under it.
+ * @param insetSides which bars this layout reserves room for. Everything but the edges the surface's chrome took for
+ *   itself — a pinned search field's, and the end when the A–Z rail has a column there. Each pads itself, and content
+ *   that reserved the same bar would leave a phantom band beside it.
  * @param cols how many columns across — resolved from the same slot's blueprint and overrides, and passed rather than
  *   read here for the reason [metrics] is: this surface resolves every grid's configuration in one place, so a layout
  *   cannot end up drawing a size nobody configured. It is the count the user *chose*, so it is clamped below to what

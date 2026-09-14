@@ -2,12 +2,13 @@ package inkspire.morphic.feature.apps
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.exclude
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
@@ -55,6 +56,7 @@ import inkspire.morphic.core.designsystem.surface.AxisScroll
 import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.designsystem.surface.ScrollAxes
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import inkspire.morphic.core.model.AlphabetStripStyle
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.AppsCardGrid
 import inkspire.morphic.core.model.AppsLayout
@@ -187,6 +189,8 @@ fun AppsScreen(
     var held by remember { mutableStateOf<Int?>(null) }
     val indexed = held?.let { state.alphabetBuckets.getOrNull(it)?.range }
 
+    val strip = alphabetIndexStyle(state, layout, search.showResults)
+
     OnFilm {
         Box(
             modifier
@@ -229,53 +233,56 @@ fun AppsScreen(
                         // layouts are told the same thing through `insetSides` instead.
                         .consumeWindowInsets(search.consumed),
                 ) {
-                    // Three things can be on screen here, and they are tried in the order a user would expect to get
-                    // out of them: a query replaces everything, a chosen letter replaces the arrangement, and the
-                    // arrangement is what is there when neither is. A mode shows results before a single letter is
-                    // typed, which is what an empty query already resolves to (`AppsState.results` is the whole list
-                    // while it is blank) and what Smart Launcher shows there too.
-                    val lettered = alphabet.apps
-                    when {
-                        search.showResults -> AppsResults(layout, state.results, state, viewModel, device, search.contentSides)
-                        // Ahead of the letter it may replace, so re-picking from the bar shows the picker rather than
-                        // the letter still underneath it.
-                        alphabet.picking -> AlphabetPicker(
-                            labels = state.alphabetBuckets.map(LetterBucket::label),
-                            onPick = alphabet::choose,
-                            onDismiss = alphabet::dismiss,
-                        )
+                    val contentSides = search.contentSides(stripped = strip != null)
+                    AppsWithIndexStrip(state, strip, onLetter = { held = it }) {
+                        // Three things can be on screen here, and they are tried in the order a user would expect to
+                        // get out of them: a query replaces everything, a chosen letter replaces the arrangement, and
+                        // the arrangement is what is there when neither is. A mode shows results before a single
+                        // letter is typed, which is what an empty query already resolves to (`AppsState.results` is
+                        // the whole list while it is blank) and what Smart Launcher shows there too.
+                        val lettered = alphabet.apps
+                        when {
+                            search.showResults ->
+                                AppsResults(layout, state.results, state, viewModel, device, contentSides)
+                            // Ahead of the letter it may replace, so re-picking from the bar shows the picker rather
+                            // than the letter still underneath it.
+                            alphabet.picking -> AlphabetPicker(
+                                labels = state.alphabetBuckets.map(LetterBucket::label),
+                                onPick = alphabet::choose,
+                                onDismiss = alphabet::dismiss,
+                            )
 
-                        lettered != null -> Column(Modifier.fillMaxSize()) {
-                            // The bar takes the status bar for the pair, exactly as a top-pinned field does, and the
-                            // grid is handed sides of its own rather than `search.contentSides` because of it.
-                            // `uiInsetsPadding` respects what a field above has already consumed, so of the bar and
-                            // that field only one ever takes the top.
-                            AlphabetFilterBar(
-                                label = alphabet.label,
-                                onPick = alphabet::pick,
-                                onClose = alphabet::clear,
-                                modifier = Modifier.uiInsetsPadding(
-                                    WindowInsetsSides.Horizontal + WindowInsetsSides.Top,
+                            lettered != null -> Column(Modifier.fillMaxSize()) {
+                                // The bar takes the status bar for the pair, exactly as a top-pinned field does, and
+                                // the grid is handed sides of its own rather than `contentSides` because of it.
+                                // `uiInsetsPadding` respects what a field above has already consumed, so of the bar
+                                // and that field only one ever takes the top.
+                                AlphabetFilterBar(
+                                    label = alphabet.label,
+                                    onPick = alphabet::pick,
+                                    onClose = alphabet::clear,
+                                    modifier = Modifier.uiInsetsPadding(
+                                        WindowInsetsSides.Horizontal + WindowInsetsSides.Top,
+                                    ),
+                                )
+                                AppsResults(layout, lettered, state, viewModel, device, letteredSides)
+                            }
+
+                            else -> AppsArrangement(
+                                layout = layout,
+                                state = state,
+                                viewModel = viewModel,
+                                device = device,
+                                geometry = AppsGeometry(card, pagerFit, pagerPadding, contentSides),
+                                additions = additions,
+                                chrome = AppsChromeReach(
+                                    onSearch = query::open.takeIf { asMode },
+                                    onAlphabet = alphabet.open,
+                                    indexed = indexed,
                                 ),
                             )
-                            AppsResults(layout, lettered, state, viewModel, device, letteredSides)
                         }
-
-                        else -> AppsArrangement(
-                            layout = layout,
-                            state = state,
-                            viewModel = viewModel,
-                            device = device,
-                            geometry = AppsGeometry(card, pagerFit, pagerPadding, search.contentSides),
-                            additions = additions,
-                            chrome = AppsChromeReach(
-                                onSearch = query::open.takeIf { asMode },
-                                onAlphabet = alphabet.open,
-                                indexed = indexed,
-                            ),
-                        )
                     }
-                    AppsIndexStrip(state, layout, drawn = !search.showResults, onLetter = { held = it })
                 }
                 if (search.edge == VerticalEdge.BOTTOM) field()
             }
@@ -351,11 +358,12 @@ private fun rememberAppsSearch(viewModel: AppsViewModel, presented: Boolean): Ap
  *   shutting the keyboard mid-word.
  * @property fieldInsets what the field pads itself by: its edge's bar inset, plus the horizontal one in every case,
  *   since a landscape cutout crosses a field on any edge.
- * @property contentSides which bars the **scrolling** layouts still owe their content — everything but the edge the
- *   field took. They read the insets raw (as *content* padding, so rows scroll under the bars), which is precisely
- *   what consumption cannot reach, so they are told instead.
+ * @property verticalSides which of the two horizontal bars the content still owes — everything but the edge the field
+ *   took. Half an answer on its own: [contentSides] is where it is completed, the other half being the end edge, which
+ *   the index strip can take. Kept apart so there is one expression of "the field took its edge" rather than one per
+ *   combination.
  * @property consumed the same fact for every other layout, which pads *itself* with `windowInsetsPadding` and so
- *   respects consumption. Written out rather than derived from [contentSides] because "no sides at all" is not a
+ *   respects consumption. Written out rather than derived from [verticalSides] because "no sides at all" is not a
  *   `WindowInsetsSides` value.
  * @property showResults whether the query's matches replace the arrangement. **The category pager's search is a mode
  *   and the other four placements are fixtures**, which is the whole of this line: a mode is opened from a button and
@@ -372,11 +380,23 @@ private fun rememberAppsSearch(viewModel: AppsViewModel, presented: Boolean): Ap
 private class SearchChrome(
     val edge: VerticalEdge?,
     val fieldInsets: WindowInsets,
-    val contentSides: WindowInsetsSides,
+    private val verticalSides: WindowInsetsSides,
     val consumed: WindowInsets,
     val keyboardLift: WindowInsets?,
     val showResults: Boolean,
-)
+) {
+
+    /**
+     * Which bars a **scrolling** layout still owes its content: everything the surface's own chrome has not already
+     * taken for it. Those layouts read the insets raw, as *content* padding so rows scroll under the bars, which is
+     * precisely what consumption cannot reach — so they are told instead.
+     *
+     * @param stripped whether the A–Z strip has a column on the end edge. It pads itself there, exactly as a pinned
+     *   field pads its own, and content that reserved the same bar would leave a phantom band between the two.
+     */
+    fun contentSides(stripped: Boolean): WindowInsetsSides =
+        (if (stripped) WindowInsetsSides.Start else WindowInsetsSides.Horizontal) + verticalSides
+}
 
 /**
  * Resolves [placement] into the inset bookkeeping a field on an edge forces on everything below it.
@@ -455,10 +475,10 @@ private fun searchChrome(placement: SearchPlacement, opened: Boolean, hasQuery: 
                 null -> WindowInsetsSides.Horizontal
             },
         ),
-        contentSides = when (edge) {
-            VerticalEdge.TOP -> WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom
-            VerticalEdge.BOTTOM -> WindowInsetsSides.Horizontal + WindowInsetsSides.Top
-            null -> WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical
+        verticalSides = when (edge) {
+            VerticalEdge.TOP -> WindowInsetsSides.Bottom
+            VerticalEdge.BOTTOM -> WindowInsetsSides.Top
+            null -> WindowInsetsSides.Vertical
         },
         consumed = when (edge) {
             VerticalEdge.TOP -> bars.only(WindowInsetsSides.Top)
@@ -556,36 +576,74 @@ private fun rememberAlphabetFilter(state: AppsState, layout: AppsLayout, present
 }
 
 /**
- * The A–Z index strip on the trailing edge, when this layout and these settings have one.
+ * Which style of A–Z rail this surface is showing, or null for none.
  *
- * **Over the content rather than beside it**, which is what lets the curved style work at all: its letters swing a
- * long way inward, and a rail with a column of its own would either clip them or reserve at rest the width they only
- * need under a finger. What it costs is the last column running beneath the rail.
+ * **Resolved before anything is drawn, because the rail's column is part of the geometry.** While it floated over the
+ * content its presence was its own business; a column comes out of the width the content divides into cells, so the
+ * answer is needed where the insets are decided — see [AppsWithIndexStrip].
  *
- * **Whether there is a strip at all is decided here**, not by the caller: `alphabetLettersFor` folds three conditions
- * into one list, and drawing nothing for an empty one is this composable's own business rather than an `if` every
- * later call site has to remember.
+ * Null three ways: on the arranged layouts, which filter by letter rather than indexing themselves; on empty buckets,
+ * the user's A–Z switch being off or there being nothing to index; and under a query, which replaces the very
+ * arrangement the rail indexes, so the rail goes with it and the width comes back.
+ */
+private fun alphabetIndexStyle(state: AppsState, layout: AppsLayout, showResults: Boolean): AlphabetStripStyle? =
+    state.alphabetStrip.takeIf {
+        layout.indexesAlphabetically && state.alphabetBuckets.isNotEmpty() && !showResults
+    }
+
+/**
+ * [content], with the A–Z index strip in a column of its own down the trailing edge.
  *
- * @param drawn false while a search is open — an index over an arrangement that is not on screen would scroll
- *   something the user cannot see.
+ * **Beside the content, not over it.** The rail floated over it until the grid's last column was found running beneath
+ * the rail — a cell the rail sits on cannot be read or aimed at, and on the vertical grid that is a whole column of
+ * the collection. What the overlay bought was the curved style's reach: its letters swing `-72.dp` inward and its
+ * badge sits `-116.dp` out, and a column wide enough to hold all of that, reserved at rest, would be a quarter of the
+ * screen given to a rail nobody is touching.
+ *
+ * **Both, because a column is a layout slot and the bow is a draw.** The slot is the rail's width at rest; the letters
+ * and the badge still translate out over the content while a finger is on it, a `graphicsLayer` translation being
+ * bounded by nothing and nothing between here and the surface root clipping. Being the second child is what makes the
+ * rail paint over the content rather than under it.
+ *
+ * **The content measures the slot it is given, which is the point.** `AppsVerticalGrid` divides its own width into
+ * columns and derives its cell height from that, so narrowing the slot narrows the cells with nothing to keep in step
+ * — where reserving the column as an inset would have written the rail's width down a second place, free to disagree
+ * with the rail.
+ *
+ * **Whether there is a rail is the caller's**, which is the reversal this forces: while it floated, its presence was
+ * invisible to everything else and could stay its own business. A column comes out of the width the content divides,
+ * so it is geometry now, and the geometry is resolved once for the surface — see `strip` in [AppsScreen]. Null draws
+ * no rail and hands [content] the whole width.
+ *
+ * The rail takes the end bar inset for the pair, exactly as a pinned search field takes its own edge's, which is why
+ * the content beside it is told a side less ([SearchChrome.contentSides]).
  */
 @Composable
-private fun BoxScope.AppsIndexStrip(
+private fun AppsWithIndexStrip(
     state: AppsState,
-    layout: AppsLayout,
-    drawn: Boolean,
+    style: AlphabetStripStyle?,
     onLetter: (Int?) -> Unit,
+    content: @Composable () -> Unit,
 ) {
-    val buckets = if (layout.indexesAlphabetically) state.alphabetBuckets else emptyList()
-    if (!drawn || buckets.isEmpty()) return
-    AlphabetStrip(
-        labels = buckets.map(LetterBucket::label),
-        style = state.alphabetStrip ?: return,
-        onLetter = onLetter,
-        modifier = Modifier
-            .align(Alignment.CenterEnd)
-            .windowInsetsPadding(uiInsets.only(WindowInsetsSides.Vertical + WindowInsetsSides.End)),
-    )
+    Row(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+        ) {
+            content()
+        }
+        if (style != null) {
+            AlphabetStrip(
+                labels = state.alphabetBuckets.map(LetterBucket::label),
+                style = style,
+                onLetter = onLetter,
+                modifier = Modifier.windowInsetsPadding(
+                    uiInsets.only(WindowInsetsSides.Vertical + WindowInsetsSides.End),
+                ),
+            )
+        }
+    }
 }
 
 /**

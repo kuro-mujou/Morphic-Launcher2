@@ -190,21 +190,6 @@ building.
 The swipe conflict comes with it — HOME's edges carry bindings too — but it arrives settled: `AlphabetStrip` claims
 `SurfaceGestureLock` while a finger is on it, and the claim is the strip's own rather than the APPS call site's.
 
-#### R4. Give the strip a column of its own instead of drawing over the content
-
-Wanted: the grid/list moves aside to make room for the strip, instead of its last column running beneath the rail.
-
-**What this reverses and why that was chosen:** `AppsIndexStrip`'s KDoc (`feature:apps/AppsScreen.kt`) put the strip
-*over* the content so the curved style's letters can swing inward (`-72.dp` at the peak) without being clipped, and
-without reserving that width while nothing is touched. With a reserved column, either the bow draws out over the
-content only while scrubbing (probably what is wanted: the column is the rail's width at rest, and the bow may
-overhang it), or the curve has to shrink.
-
-**Where it bites:** The column is taken out of the width the APPS grid divides into cells, so the cell width, and
-through `derivedCell` the cell height, shrinks while the strip is on. It must come from the same geometry the layouts
-already measure (`AppsContentPadding` / `AppsGeometry`). An inset added at the call site would let drop-target math
-disagree with what is drawn.
-
 #### R5. Give the standard strip the badge the curved one has
 
 Wanted: the standard strip shows the floating letter badge too. Today it is drawn only for `AlphabetStripStyle.CURVED`
