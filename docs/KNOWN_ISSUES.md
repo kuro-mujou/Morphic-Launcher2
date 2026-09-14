@@ -24,22 +24,6 @@ come from reading the code, not from a debugger.
 
 ## Defects
 
-### D1. Scrubbing the A–Z strip is taken as the swipe that opens or closes APPS
-
-**What happens:** Dragging along the index strip on the APPS list or grid can move the surface instead of scrubbing
-letters.
-
-**Where the cause appears to be:** `surfacePagerGesture` reads the pointer on `PointerEventPass.Initial`
-(`core:designsystem/surface/SurfacePagerGesture.kt`). It has to, to arbitrate with scrolling children. `AlphabetStrip`
-consumes its down and moves on the Main pass (`feature:apps/layout/alphabet/AlphabetStrip.kt`), and Main runs after
-Initial. So by the time the strip consumes, the pan has already seen the drag. The pan only claims when the content
-reports itself at an edge (`ScrollEdges`), which predicts the symptom: it shows with the list at its top or bottom, and
-not mid-scroll. Not verified.
-
-**Direction:** The strip has to take the gesture away from the pan, not just from the list. Either it declares itself
-through `SurfaceGestureLock` while a finger is on it, or it claims on Initial. The first fits the existing contract
-better, since the lock is what item drags already use for the same job.
-
 ### D2. The context menu is misaligned with what it opens from
 
 **What happens:** Reported only as "alignment", without the case. Before fixing, find out which surface, which anchor
@@ -203,7 +187,8 @@ by letter. `HomeListRepository`'s order is the user's own, not A–Z, and the pa
 hand-arranged surface the strip can only *filter*, as the category pager's letter picker does. Settle that before
 building.
 
-Depends on D1: HOME's edges carry swipe bindings too, so the same conflict comes with it.
+The swipe conflict comes with it — HOME's edges carry bindings too — but it arrives settled: `AlphabetStrip` claims
+`SurfaceGestureLock` while a finger is on it, and the claim is the strip's own rather than the APPS call site's.
 
 #### R4. Give the strip a column of its own instead of drawing over the content
 

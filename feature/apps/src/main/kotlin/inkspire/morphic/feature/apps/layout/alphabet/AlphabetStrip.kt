@@ -27,6 +27,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.surface.claimSurfaceGestureWhilePressed
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AlphabetStripStyle
 import kotlin.math.exp
@@ -53,6 +54,14 @@ import kotlin.math.roundToInt
  * **Every letter is a slot of equal height, and the slots are the whole strip.** Both styles depend on that: the
  * finger's y divides straight into an index with no hit list, and the curve reads a letter's distance from the
  * finger in *slots*, so the bow covers the same number of letters on a short strip as on a tall one.
+ *
+ * **It claims the surface swipe while a finger is on it** ([claimSurfaceGestureWhilePressed]), or a scrub is read as
+ * the swipe that closes the surface. Consuming is not enough and cannot be made enough: `surfacePagerGesture` reads
+ * the finger on `PointerEventPass.Initial` at the surface's *root*, so it sees every event of this drag before this
+ * rail is handed any — on Initial too, since an ancestor precedes its descendants on every pass. Nothing this consumes
+ * is ever early enough to be seen. The symptom needs the content resting at an edge, because that is when `ScrollEdges`
+ * lets the pan claim a vertical drag at all, which is why a scrub over a mid-scrolled list looks fine. The lock is the
+ * contract for exactly this — state, settled before the pan decides — and it is the one item drags already hold.
  *
  * @param labels the letters to draw, top to bottom. Empty draws nothing at all rather than an empty rail.
  * @param onLetter which of [labels] is under the finger, and null when it lifts. Fires when that *changes* rather
@@ -87,6 +96,7 @@ internal fun AlphabetStrip(
             // rather than the letters' own, so the rail does not shift under a finger when the glyphs change.
             .width(28.dp)
             .onSizeChanged { heightPx = it.height }
+            .claimSurfaceGestureWhilePressed()
             .pointerInput(labels) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
