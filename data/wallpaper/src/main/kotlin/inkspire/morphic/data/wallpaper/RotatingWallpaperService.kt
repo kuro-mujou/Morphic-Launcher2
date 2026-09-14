@@ -126,9 +126,8 @@ class RotatingWallpaperService : WallpaperService() {
          * **A live wallpaper is the only one the system cannot analyze for itself** — there is no bitmap to read, only
          * a surface being drawn to — so a service that does not answer this leaves every consumer of
          * `WallpaperManager.getWallpaperColors` with nothing: the status-bar icon contrast, any themed-icon palette,
-         * and (the reason it is here) the launcher's own `WallpaperRepository.luminance`. Answering it means the
-         * rotating pair takes the *same* path as every other wallpaper rather than needing a special case in the
-         * repository that reads our files behind the system's back.
+         * and another launcher's text contrast. This launcher measures the pair's files itself
+         * (`WallpaperRepository.brightness`), but everything else on the device can only ask the system.
          *
          * Null until something has been drawn, which is honest rather than a gap: the system re-asks after
          * [notifyColorsChanged], and [draw] fires that the first time an image appears and again whenever the device

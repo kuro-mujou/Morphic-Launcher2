@@ -12,6 +12,7 @@ import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.arrangementKey
 import inkspire.morphic.core.model.on
+import inkspire.morphic.core.model.wallpaper.WallpaperBrightness
 import inkspire.morphic.data.apps.AppInfoOpener
 import inkspire.morphic.data.apps.AppShortcut
 import inkspire.morphic.data.apps.AppShortcuts
@@ -50,10 +51,9 @@ import kotlinx.coroutines.launch
  *   that edge two-finger-only. This is the one state field read for both halves of a binding at once — HOME's pager
  *   for the open policy, the bound layout's for the close — which is why it arrives as a map rather than as the two
  *   booleans a single surface would want.
- * @property wallpaperLuminance how bright the wallpaper behind the chrome is — its mean relative luminance, which is
- *   the launcher's dark/light input. **A number rather than a verdict** because most surfaces are not read against the
- *   wallpaper at all but against the film, and a film's brightness is this blended with a wash. `0f` until the first
- *   read, which is the darkest reading and so the same first frame the hardcoded `DARK` used to give.
+ * @property wallpaperBrightness how bright the wallpaper behind the chrome is — spot by spot when it is measured, the
+ *   system's whole-screen verdict when it cannot be. The launcher's dark/light input for HOME, and the mean the film
+ *   is weighed from. "No dark text" until the first read, the safer miss.
  * @property backdropEffect how frosted surfaces render over the wallpaper. Handed down as-is rather than resolved,
  *   because *what* it means is a drawing decision and belongs to the modifier that draws it.
  * @property backdropImages the wallpaper pre-blurred at the two strengths frosted surfaces render at — the user's own,
@@ -70,7 +70,7 @@ import kotlinx.coroutines.launch
 data class ShellState(
     val register: SurfaceRegister = SurfaceRegister.Default,
     val pagerWraps: Map<GridSlot, Boolean> = emptyMap(),
-    val wallpaperLuminance: Float = 0f,
+    val wallpaperBrightness: WallpaperBrightness = WallpaperBrightness.Reported(supportsDarkText = false),
     val backdropEffect: BackdropEffect = BackdropEffect.Default,
     val backdropImages: BackdropImages = BackdropImages(),
     val backdropAccent: Int? = null,
@@ -236,12 +236,12 @@ class ShellViewModel(
                 settingsRepository.homeGestures,
                 ::Triple,
             ),
-            wallpaperRepository.luminance,
+            wallpaperRepository.brightness(orientation),
             settingsRepository.backdropEffect,
             backdropImages(settingsRepository),
             wallpaperRepository.accentColor,
-        ) { (register, wraps, gestures), luminance, effect, images, accent ->
-            ShellState(register, wraps, luminance, effect, images, accent, gestures)
+        ) { (register, wraps, gestures), brightness, effect, images, accent ->
+            ShellState(register, wraps, brightness, effect, images, accent, gestures)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), ShellState())
 
     /** Reports the orientation the shell is being drawn in, so the rotating pair's right half is sampled. */

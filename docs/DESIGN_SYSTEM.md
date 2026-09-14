@@ -86,29 +86,27 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
 
 ## The wallpaper-brightness signal
 
-- **That brightness signal is L2's own idea, not a port, and it is now live** — worth knowing before looking for it
-  in L1, which has no luminance analysis anywhere and themes from the system's dark mode. `LauncherShell` reads
-  `WallpaperRepository.luminance` and the hardcoded `darkTheme = true` is gone. It is a *number* rather than the
-  light/dark verdict it started as; see "Adaptive content color" for why a verdict could not survive the film.
-- **It asks the system before it reads anything, and it did not need `Blur.kt`.** The plan had it waiting on the
-  dominant-color half of L1's `Blur.kt`; both halves of that assumption were wrong.
-  `WallpaperManager.getWallpaperColors` already answers the question over the wallpaper that is *actually displayed*
-  — another app's, or a live one, neither of which we can read as a bitmap — with no permission and no decode, and on
-  API 31+ `HINT_SUPPORTS_DARK_TEXT` is literally the verdict. And `dominantColor` would have been the **wrong
-  statistic** anyway: it weights each pixel by saturation so a vivid accent beats washed-out gray, which is what an
-  *accent* wants and the opposite of what "how bright is this?" wants. So the blur *and* the dominant color are both
-  still unported, still waiting on the frosted backdrop that is their real consumer.
-- **Reading our own file is the fallback, and it is gated on proof.** Only when the system says nothing (API 26, or a
-  live wallpaper publishing no colors) *and* `appliedSystemId` still equals the live wallpaper id — i.e. nothing has
-  replaced ours since we set it, which is the second job that field's KDoc reserved it for. Otherwise `DARK`, which
-  is both the old hardcoded value and the safer miss: light chrome over an unexpectedly bright wallpaper is
-  unreadable, dark chrome over a dark one is merely dull. The cut is at relative luminance **0.179**, which is not a
-  taste value — it is where the WCAG contrast ratios against black and white cross.
-- **`RotatingWallpaperService` now publishes its colors** (`onComputeColors` + `notifyColorsChanged` on each new
-  image). A live wallpaper is the one kind the system cannot analyze for itself, so a service that stays silent
-  leaves *every* consumer of `getWallpaperColors` with nothing — status-bar icon contrast included. Answering means
-  our own rotating pair takes the same path as every other wallpaper instead of needing a special case that reads our
-  files behind the system's back. L1's service published nothing and had no caller that missed it.
+- **That brightness signal is L2's own idea, not a port** — L1 has no luminance analysis anywhere and themes from the
+  system's dark mode.
+- **It is a map of the displayed picture** (`WallpaperRepository.brightness` → `WallpaperBrightness`). When
+  `backdropSourcePath` proves a file is what is on screen — the frost's own gate — the file is measured into a
+  `LuminanceMap`, 96 cells across, each the mean of its pixels' linear luminances — fine enough to see a flower bed as
+  texture rather than as a calm mid-tone, which at 48 it was. The shell hands it to
+  `BackdropState.brightness` with `screenToBitmapMapping` built from the map's own size, so text reads the same patch
+  of picture the frost beside it draws.
+- **It no longer reads `WallpaperColors.primaryColor`, and that was the bug.** The first cut themed HOME from the
+  primary color's luminance against 0.179, floored by `HINT_SUPPORTS_DARK_TEXT`. The primary color is a population
+  winner, and on a two-toned picture it is a coin flip the device calls: a sky-over-water photo (46% of its pixels
+  wanting light text) gave white labels on the Pixel emulator and black ones on a Samsung A07, whose
+  `SemWallpaperManagerService` extracts its own colors. Simulated device crops of the same image put the "primary"
+  anywhere from 0.09 to 0.72. And either verdict was wrong for half the screen anyway — the second reason for the
+  map.
+- **What is left of the system is the hint alone**, for a wallpaper that cannot be read (another app's, a live one not
+  ours): `WallpaperBrightness.Reported`. Dark text only when the mean is bright *and* at most 5% of the picture is
+  dark, which a half-dark picture cannot earn on any device. No getter below API 31, so light text there — the safer
+  miss, since light chrome keeps its halo over a bright patch.
+- **`RotatingWallpaperService` still publishes its colors** (`onComputeColors` + `notifyColorsChanged`), for everything
+  else on the device — status-bar contrast, other launchers. This launcher measures the pair's files itself.
 
 ## The frosted backdrop and the full-screen frost
 
@@ -260,16 +258,30 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
 
   | Background | Who themes it | Reading |
   |---|---|---|
-  | the wallpaper (HOME) | `LauncherShell` | `isDarkBackground(wallpaperLuminance)` |
+  | the wallpaper (HOME) | `OnWallpaper`, per spot; `LauncherShell` for the rest | `inkOver` the cells under it |
   | the film (APPS, collections, sheets, menu) | `OnFilm` | `LocalFilm.isDark`, resolved once at the shell |
-  | a panel (container tiles) | `OnPanel` | the wallpaper washed at the **user's** own tint |
+  | a panel (container tiles) | `OnPanel` | the wallpaper's mean washed at the **user's** own tint |
   | a solid color (settings) | its own zone | `isSystemInDarkTheme()` |
 
-- **The wallpaper reading is a number now, not a verdict** (`WallpaperRepository.luminance`). A light/dark answer
-  cannot be blended with a wash at 35%, and blending is the whole job. The threshold moved to the one place that
-  still asks a yes/no question: `isDarkBackground`, at the WCAG crossover of 0.179 where contrast-against-white and
-  contrast-against-black cross. `data:wallpaper` keeps its own copy of that number for one job of its own, and the
-  duplication is safe because a derived constant has nothing to prefer and so nothing to drift.
+- **The wallpaper is not one background, so HOME's text is not themed once.** `OnWallpaper` wraps each piece of text on
+  the picture — `CellLabel` (grid and dock), `AppRowCell`/`ActionRowCell`'s label and mark (the home list), a
+  widget's placeholder label — and the snap markers read the same way per marker. It re-themes its content with
+  `MorphicTheme` for the spot it occupies, read with `onLayoutRectChanged` because `onGloballyPositioned` does not
+  reliably re-fire under a scroller, and it does nothing on a frost or with no measured picture. The shell's
+  `LauncherTheme` is now only HOME's starting point: `wantsLightInk` over the whole map, or the system's hint.
+- **The rule (`inkOver`) judges the worst patch, not the average.** Each ink is scored against the patch hardest for
+  it — the 95th percentile for light ink, the 5th for dark (percentiles, so one petal does not decide) — and the better
+  one wins, ties to light. **Where neither reaches 4.5:1, a pill backing in the ink's own background is sized to lift
+  that patch to it**, in sRGB because that is where it is composited, capped at 60%. So a label straddling sky and
+  flowers gets exactly enough backing and one on plain sky gets none; a swipe fades it rather than toggling it. The
+  ink is read in composition (a label recomposes when it flips) and the backing alpha in the draw phase.
+- **This reverses a decision recorded here**: per-label sampling was "deliberately not built" as a wallpaper read per
+  cell, and a strengthened halo was meant to carry the local variation instead. The cost was mis-stated — the picture
+  is measured once per change, and a label's reading is a handful of array reads — and the halo did not carry it: a
+  60%, 4px shadow does not rescue near-black text on dark flowers.
+- **The mean still exists, for the surfaces blurred across the whole picture.** The film and the panel are the
+  wallpaper averaged and washed, so they are weighed from `LuminanceMap.mean` through `isDarkBackground`, the WCAG
+  crossover of 0.179.
 - **`OnFilm` is one call for two facts, because they are one fact.** A surface arriving over the film must not frost
   itself again *and* must be themed against the film; the sets needing each are identical, and the second is the half
   nobody remembers because forgetting it is invisible until someone picks a wash that crosses the threshold. Its four
@@ -286,11 +298,8 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
   without setting `LocalOverFrost` — which would tell its own panel to fill flat — and over the film it does the
   opposite: the panel is flat, its scrim is a theme color, and re-theming would re-decide a question the scrim
   answers.
-- **Grid labels take the theme's content color and a halo struck from the theme's background.** Both flip together:
-  near-black text with a white halo on a bright wallpaper, white with a black halo on a dark one. The halo is doing
-  real work rather than decorating — a wallpaper is a photograph, so its *mean* says little about the pixels under
-  any one label, and a fixed black shadow only ever rescues light text. Per-label sampling would be the correct
-  answer and is deliberately not built: it costs a wallpaper read per cell, re-run on every scroll and page change.
+- **Grid labels keep a halo struck from the resolved theme's background**, so it always opposes the ink. It softens
+  the odd bright speck under a letter; reaching contrast is the backing's job, not the halo's.
 - **`SurfaceBackdropLayer` opts out of `LocalOverFrost` and is not wrapped in `OnFilm`** — a film is not drawn *on* a
   film. Two of them stacking is the deliberate depth cue below.
 

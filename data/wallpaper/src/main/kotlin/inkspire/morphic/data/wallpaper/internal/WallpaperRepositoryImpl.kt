@@ -14,7 +14,6 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
-import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.scale
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -24,6 +23,8 @@ import androidx.datastore.preferences.preferencesDataStore
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
 import inkspire.morphic.core.graphics.BitmapBlur
 import inkspire.morphic.core.model.Orientation
+import inkspire.morphic.core.model.wallpaper.LuminanceMap
+import inkspire.morphic.core.model.wallpaper.WallpaperBrightness
 import inkspire.morphic.data.wallpaper.NormalizedCropRect
 import inkspire.morphic.data.wallpaper.RotatingWallpaperService
 import inkspire.morphic.data.wallpaper.WallpaperFiles
@@ -115,10 +116,14 @@ internal class WallpaperRepositoryImpl(
     private val displayedWallpaperChanges: Flow<WallpaperState> =
         combine(storedState, systemColorChanges()) { state, _ -> state }
 
-    override val luminance: Flow<Float> = displayedWallpaperChanges
-        .map { resolveLuminance(it) }
-        .distinctUntilChanged()
-        .flowOn(dispatchers.io)
+    override fun brightness(orientation: Flow<Orientation>): Flow<WallpaperBrightness> =
+        combine(displayedWallpaperChanges, orientation, ::Pair)
+            .map { (state, current) -> brightnessSource(state, current) }
+            // On the source, for `backdrop`'s reason: an unrelated state write or a colors tick must not re-decode an
+            // unchanged picture. The system's verdict is part of the key, so a wallpaper we cannot read still updates.
+            .distinctUntilChanged()
+            .map { measureBrightness(it) }
+            .flowOn(dispatchers.io)
 
     override val accentColor: Flow<Int?> = displayedWallpaperChanges
         .map { resolveAccent(it) }
@@ -447,18 +452,38 @@ internal class WallpaperRepositoryImpl(
         }
     }
 
+    /** What [brightness] will be measured from: a picture proven to be on screen, or else the system's verdict. */
+    private sealed interface BrightnessSource {
+        data class Picture(val file: BackdropSource) : BrightnessSource
+        data class System(val supportsDarkText: Boolean) : BrightnessSource
+    }
+
     /**
-     * Ask the system; if it will not say, read our own file — but only when our file is provably what is on screen.
+     * The picture [backdropSourcePath] allows, or the system's verdict when it allows none.
      *
-     * **That guard is the whole of the correctness here.** The wallpaper the chrome sits on may have been set by
-     * another app entirely, so "we have an image stored" is not evidence of anything. `appliedSystemId` is: it is the
-     * id the system gave the wallpaper *at the moment we set it*, so it still matching the live id means nothing has
-     * replaced ours since. That is the second job `WallpaperState`'s KDoc reserved the field for, now doing it.
+     * **The same gate as the frost, and that is the whole of the correctness.** The wallpaper the chrome sits on may
+     * have been set by another app, so "we have an image stored" is evidence of nothing; the gate is what makes a map of
+     * our file a map of the screen.
      */
-    private fun resolveLuminance(state: WallpaperState): Float {
-        systemLuminance(WallpaperManager.getInstance(appContext))?.let { return it }
-        val path = state.appliedHome?.path?.takeIf { ownsSystemWallpaper(state) } ?: return 0f
-        return decodeFile(path, BRIGHTNESS_SAMPLE_STEP)?.let { meanLuminance(it).toFloat() } ?: 0f
+    private suspend fun brightnessSource(state: WallpaperState, orientation: Orientation): BrightnessSource =
+        backdropSourcePath(state, orientation)?.let { BrightnessSource.Picture(backdropSource(it)) }
+            ?: BrightnessSource.System(systemSupportsDarkText())
+
+    private fun measureBrightness(source: BrightnessSource): WallpaperBrightness = when (source) {
+        is BrightnessSource.Picture -> decodeFile(source.file.path, LUMINANCE_SAMPLE_STEP)
+            ?.let { WallpaperBrightness.Measured(measureLuminance(it)) }
+            // Gone between the gate and the decode: nothing to measure, so the verdict is all there is.
+            ?: WallpaperBrightness.Reported(systemSupportsDarkText())
+
+        is BrightnessSource.System -> WallpaperBrightness.Reported(source.supportsDarkText)
+    }
+
+    /** [bitmap]'s pixels as a [LUMINANCE_MAP_COLUMNS]-wide luminance map. */
+    private fun measureLuminance(bitmap: Bitmap): LuminanceMap {
+        val width = bitmap.width
+        val height = bitmap.height
+        val pixels = IntArray(width * height).also { bitmap.getPixels(it, 0, width, 0, 0, width, height) }
+        return luminanceMapOf(pixels, width, height, LUMINANCE_MAP_COLUMNS)
     }
 
     /**
@@ -486,47 +511,18 @@ internal class WallpaperRepositoryImpl(
     }
 
     /**
-     * The system's own reading of the live wallpaper, or null if it has none to give.
+     * `HINT_SUPPORTS_DARK_TEXT` for the displayed wallpaper — the system's verdict, for a picture we cannot read.
      *
-     * **Preferred over anything we could compute**, because it is computed over what is *actually displayed* — another
-     * app's wallpaper, or a live one, neither of which we can read as a bitmap at all. It needs no permission and no
-     * decode. Null below API 27, and null for a live wallpaper whose service publishes no colors (ours does — see
-     * [RotatingWallpaperService]).
-     *
-     * On API 31+ the OS also states its verdict directly: `HINT_SUPPORTS_DARK_TEXT` *is* the question this method
-     * asks, decided with area-weighted analysis rather than a single color, so it wins where it exists. The getter
-     * arrived in 31 even though the constant dates from 27, which is the only reason for the second branch.
+     * **The hint and never `primaryColor`'s luminance.** The primary color is a cluster's population winner, which a
+     * half-dark picture hands to either half depending on the device's own extraction. The hint needs a bright mean
+     * *and* almost no dark area, so a picture that is half dark cannot earn it on any device. False below API 31,
+     * where the getter does not exist, and whenever the system has nothing to say.
      */
-    private fun systemLuminance(manager: WallpaperManager): Float? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1) return null
-        val colors = runCatching { manager.getWallpaperColors(WallpaperManager.FLAG_SYSTEM) }.getOrNull() ?: return null
-        val measured = ColorUtils.calculateLuminance(colors.primaryColor.toArgb()).toFloat()
-        // **The hint is a verdict and this reading is a measurement, so the verdict is applied as a floor.** The OS
-        // says dark text wins over the whole picture, area-weighted; the primary color's own luminance is the only
-        // number on offer and can sit below the crossover even when the picture as a whole is bright. Raising it to
-        // the crossover keeps the number consistent with the verdict without inventing one — a made-up "bright"
-        // constant would read as a measurement and is not one.
-        val hinted = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            colors.colorHints and WallpaperColors.HINT_SUPPORTS_DARK_TEXT != 0
-        return if (hinted) measured.coerceAtLeast(DARK_TEXT_LUMINANCE) else measured
-    }
-
-    /**
-     * Mean relative luminance over a tiny downscale of [source].
-     *
-     * **Per-pixel luminance averaged, not the luminance of an averaged color** — the two differ because luminance is
-     * gamma-expanded, and a picture that is half black and half white is a mid-gray by the second reading while the
-     * first correctly reports it as the borderline case it is.
-     *
-     * Deliberately *not* `Blur.kt`'s `dominantColor`, which the port plan expected to be reused here: that one weights
-     * each pixel by saturation so a vivid accent beats washed-out gray, which is exactly right for picking an accent
-     * and exactly wrong for asking how bright something is.
-     */
-    private fun meanLuminance(source: Bitmap): Double {
-        val small = source.scale(BRIGHTNESS_GRID, BRIGHTNESS_GRID)
-        val pixels = IntArray(BRIGHTNESS_GRID * BRIGHTNESS_GRID)
-        small.getPixels(pixels, 0, BRIGHTNESS_GRID, 0, 0, BRIGHTNESS_GRID, BRIGHTNESS_GRID)
-        return pixels.sumOf { ColorUtils.calculateLuminance(it) } / pixels.size
+    private fun systemSupportsDarkText(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return false
+        val manager = WallpaperManager.getInstance(appContext)
+        val colors = runCatching { manager.getWallpaperColors(WallpaperManager.FLAG_SYSTEM) }.getOrNull() ?: return false
+        return colors.colorHints and WallpaperColors.HINT_SUPPORTS_DARK_TEXT != 0
     }
 
     /**
@@ -689,23 +685,22 @@ internal class WallpaperRepositoryImpl(
         /** How far back the gallery watch looks, in seconds - see `newGalleryImages`. */
         const val GALLERY_SLACK_SECONDS = 2
 
-        /**
-         * The crossover, needed here for one job: reconciling the OS's dark-text *hint* with the number it publishes
-         * beside it (see [systemLuminance]).
-         *
-         * **The chrome's copy lives in `core:designsystem`** — `isDarkBackground` — because the question is asked of
-         * the film and the panel too, not only of the wallpaper, and this module can see neither. The two agree by
-         * both being the WCAG crossover rather than by one reading the other, which is safe precisely because it is a
-         * derived constant and not a preference. Contrast against white is `1.05 / (L + 0.05)` and against black is
-         * `(L + 0.05) / 0.05`; equal at `(L + 0.05)² = 0.0525`, so `L ≈ 0.179`.
-         */
-        const val DARK_TEXT_LUMINANCE = 0.179f
-
-        /** The stored image is decoded this much smaller for a brightness read — see `decodeFile`. */
+        /** The stored image is decoded this much smaller for an accent read — see `decodeFile`. */
         const val BRIGHTNESS_SAMPLE_STEP = 8
 
-        /** Side of the square the sampled image is reduced to before averaging. L1 uses the same 32 in `Blur.kt`. */
-        const val BRIGHTNESS_GRID = 32
+        /**
+         * How much smaller the picture is decoded for its luminance map: a few pixels per cell even on a 720-wide
+         * screen, so a cell is a mean of its patch rather than one sampled pixel.
+         */
+        const val LUMINANCE_SAMPLE_STEP = 2
+
+        /**
+         * Cells across the luminance map — about 4dp a cell on a phone, which is fine enough to see **texture**. At
+         * half this, cells averaged a flower bed's petals into a calm mid-tone: under one label they reported a spread
+         * of 0.13–0.42 where the pixels ran 0.02–0.66, so a busy spot drew almost no backing. At this size the cells
+         * report 0.06–0.59, and flat sky still reads flat.
+         */
+        const val LUMINANCE_MAP_COLUMNS = 96
 
         /**
          * How far a strength of 1.0 blurs, in pixels of the **wallpaper**.

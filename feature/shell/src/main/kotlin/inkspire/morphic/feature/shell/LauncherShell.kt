@@ -28,9 +28,9 @@ import inkspire.morphic.core.designsystem.backdrop.LocalBackdrop
 import inkspire.morphic.core.designsystem.backdrop.LocalBackdropEffect
 import inkspire.morphic.core.designsystem.backdrop.LocalFilm
 import inkspire.morphic.core.designsystem.backdrop.SurfaceBackdropLayer
-import inkspire.morphic.core.designsystem.backdrop.isDarkBackground
 import inkspire.morphic.core.designsystem.backdrop.rememberBackdropState
 import inkspire.morphic.core.designsystem.backdrop.resolveFilm
+import inkspire.morphic.core.designsystem.backdrop.wantsLightInk
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
 import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.LocalDragCoordinator
@@ -73,6 +73,8 @@ import inkspire.morphic.core.model.Orientation
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.pagerSlot
+import inkspire.morphic.core.model.wallpaper.LuminanceMap
+import inkspire.morphic.core.model.wallpaper.WallpaperBrightness
 import inkspire.morphic.data.settings.SideBinding
 import inkspire.morphic.data.widgets.AppWidgetHostController
 import inkspire.morphic.feature.apps.AppsScreen
@@ -146,9 +148,10 @@ fun LauncherShell(
     // The launcher's dark/light input is **wallpaper brightness**, not the system's dark-mode switch: chrome sits
     // directly on the picture with nothing between, so what it has to contrast is the picture. Settings is the other
     // half of that rule — its own surface, so its own `isSystemInDarkTheme()`. The two can therefore disagree, and
-    // should. **And it is HOME's alone** now that it is not the launcher's only theme: everything drawn on the film
-    // re-themes itself (`OnFilm`), because a wash at 35% can invert the answer this line gives.
-    LauncherTheme(darkTheme = isDarkBackground(state.wallpaperLuminance)) {
+    // should. **And it is only HOME's starting point**: text on the wallpaper re-themes itself for its own spot
+    // (`OnWallpaper`), and everything drawn on the film re-themes itself against the film (`OnFilm`).
+    val homeLight = homeWantsLightInk(state)
+    LauncherTheme(darkTheme = homeLight) {
         val scope = rememberCoroutineScope()
         val pagerState = rememberSurfacePagerState()
 
@@ -559,14 +562,22 @@ private fun shellBackdrop(state: ShellState, windowSize: IntSize): BackdropState
     accentColor = state.backdropAccent,
     windowSize = windowSize,
     filmImage = state.backdropImages.film,
-    luminance = state.wallpaperLuminance,
+    luminanceMap = state.measuredLuminance(),
 )
 
 @Composable
 private fun shellFilm(state: ShellState): Film = resolveFilm(
     effect = state.backdropEffect,
     // Null when there is no picture to sample, which is what makes the answer fall back to HOME's own.
-    wallpaperLuminance = state.backdropImages.film?.let { state.wallpaperLuminance },
-    fallback = isDarkBackground(state.wallpaperLuminance),
+    wallpaperLuminance = state.backdropImages.film?.let { state.measuredLuminance()?.mean },
+    fallback = homeWantsLightInk(state),
     accent = state.backdropAccent?.let(::Color),
 )
+
+/** Whether HOME as a whole wants light ink — sorted over the whole map, so only once per picture. */
+@Composable
+private fun homeWantsLightInk(state: ShellState): Boolean =
+    remember(state.wallpaperBrightness) { state.wallpaperBrightness.wantsLightInk() }
+
+/** The wallpaper's luminance map, or null when the picture could not be measured. */
+private fun ShellState.measuredLuminance(): LuminanceMap? = (wallpaperBrightness as? WallpaperBrightness.Measured)?.map

@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.graphics.Bitmap
 import android.net.Uri
 import inkspire.morphic.core.model.Orientation
+import inkspire.morphic.core.model.wallpaper.WallpaperBrightness
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
 
@@ -181,7 +182,7 @@ object WallpaperFiles {
  * params (`BackdropEffect`) genuinely are preferences and stay there, arriving with S5f.
  *
  * **All three sources are here — picked, captured and the rotating pair** — and the half that *reads* them has
- * started: [luminance] is the first, and it is the one reading that needs no image processing at all. Still absent:
+ * started: [brightness] is the first. Still absent:
  * - **the blur and the dominant color** (`loadBackdropBlur`, `loadDominantColor`) — both are effect inputs, and both
  *   need image processing, which belongs beside the graphics code rather than in a
  *   repository. The **capture** exists for them, and lands first on purpose: an effect has to answer "which image do I
@@ -193,38 +194,29 @@ interface WallpaperRepository {
     val wallpaper: Flow<WallpaperState>
 
     /**
-     * How bright the **currently displayed** wallpaper is — its mean relative luminance, `0f..1f`. Re-emits when it
+     * How bright the **currently displayed** wallpaper is, as the chrome on it needs to know — re-emitted when it
      * changes.
      *
-     * **A number rather than the light/dark verdict it used to be**, and the frosted chrome is why. A surface is read
-     * against what is *immediately* behind it, which for most of them is not the wallpaper but the film: the wallpaper
-     * blended toward a wash. That blend needs a quantity — a verdict cannot be mixed with a wash at 35% — so the
-     * threshold moved to the one place that still asks a yes/no question, `isDarkBackground` in `core:designsystem`.
+     * **Measured from the picture whenever the picture can be proven to be on screen**, by exactly the rule [backdrop]
+     * samples under, and never from the system's colors in that case. The system's `primaryColor` is the most populous
+     * color cluster, which on a picture with a bright sky and dark water is a coin flip — and the flip is decided by the
+     * device: one image gave white text on an emulator and black on a Samsung, whose wallpaper service extracts its own
+     * colors. A map of our own file answers the same on both, and says *where* the bright and dark parts are.
      *
-     * Note "currently displayed", not "the one we own": a launcher's chrome has to contrast whatever is actually behind
-     * it, which may be a wallpaper another app set or a live wallpaper that is not ours. So this asks the *system*
-     * first, and only falls back to reading our own file when the system says nothing **and** our file is provably what
-     * is on screen (`appliedSystemId` still matching the live id — the second job that field's KDoc reserved it for).
+     * **Otherwise the system's verdict, `HINT_SUPPORTS_DARK_TEXT`, and nothing else from it** — bright on average with
+     * almost no dark area. It cannot say where anything is, so it can only theme the screen whole, and it only ever
+     * says "dark text" about a picture that is safe to say it about. Below API 31 there is no getter, and the answer is
+     * light text, the safer miss.
      *
-     * **It does not need `Blur.kt`'s `dominantColor`, which the port plan assumed it would**, for two reasons worth
-     * writing down. The first is that `WallpaperManager.getWallpaperColors` already answers this: the OS computes it
-     * over the real wallpaper, with no permission and no decode, and `HINT_SUPPORTS_DARK_TEXT` is literally the
-     * question. The second is that `dominantColor` would be the *wrong statistic* even as a fallback — it is a
-     * saturation-weighted average, deliberately biased so a vivid accent beats washed-out gray, which is what an
-     * *accent* wants and the opposite of what "is this bright?" wants. Those are separate readings of one image, and
-     * the blur half of `Blur.kt` still has no consumer until the frosted backdrop lands.
-     *
-     * **Zero when nothing can be read**, which reproduces the `DARK` default this replaced: light chrome over an
-     * unexpectedly bright wallpaper is unreadable, where dark chrome over a dark one is merely dull, so the safer
-     * miss is the one that keeps the chrome light.
+     * @param orientation which half of the rotating pair is displayed, for [backdrop]'s reason.
      */
-    val luminance: Flow<Float>
+    fun brightness(orientation: Flow<Orientation>): Flow<WallpaperBrightness>
 
     /**
      * The wallpaper's **representative color** as ARGB, or null when it cannot be read — what
      * `BackdropTint.WALLPAPER` washes a frosted surface in.
      *
-     * The third reading of "what is displayed", beside [luminance] and [backdrop], and it takes the same two-step:
+     * The third reading of "what is displayed", beside [brightness] and [backdrop], and it takes the same two-step:
      * `WallpaperColors.getPrimaryColor` first, because the OS computed it over the wallpaper *actually* on screen
      * (another app's, a live one) with no permission and no decode; `dominantColor` over our own file only below API
      * 27 or when a live wallpaper publishes nothing, and then only if that file is provably what is displayed.

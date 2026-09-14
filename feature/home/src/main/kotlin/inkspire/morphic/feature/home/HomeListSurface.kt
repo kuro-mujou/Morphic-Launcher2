@@ -791,10 +791,11 @@ private fun AddAppsRow(height: Dp, metrics: IconMetrics, onClick: () -> Unit) {
                 .height(height)
                 .clickable(onClick = onClick),
         ) { size ->
+            // Read inside the slot, where the cell has themed it against the spot the mark is drawn on.
             Icon(
                 imageVector = Icons.Filled.Add,
                 contentDescription = null,
-                tint = colors.content,
+                tint = LocalMorphicColors.current.content,
                 modifier = Modifier.size(size),
             )
         }

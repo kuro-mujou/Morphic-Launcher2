@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
+import inkspire.morphic.core.designsystem.backdrop.OnWallpaper
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.IconSizingRanges
@@ -210,7 +211,6 @@ fun AppRowCell(
     itemGestures: Modifier = Modifier,
     labelColor: Color? = null,
 ) {
-    val colors = LocalMorphicColors.current
     BoxWithConstraints(modifier = modifier) {
         // The icon is bounded by the row's inner box on both axes; in practice the height wins, since a row is
         // far wider than it is tall. Clamped again to that height so a short row can't be overflowed by the
@@ -258,20 +258,21 @@ fun AppRowCell(
                 // and the group was the whole strip again — the target this cell is deliberately not. Unweighted, the
                 // text still measures against the width the outer row leaves it, so a long label ellipsises at
                 // exactly the same place it always did; only a *short* one now stops where it stops.
-                Text(
-                    text = app.label,
-                    style = labelStyle,
-                    // The theme's content color, not the grid label's white-on-wallpaper: a list is read against
-                    // the surface's own background, so it has no wallpaper to fight and needs no drop shadow.
-                    //
-                    // **Overridable, for a row drawn on something other than that background.** A picker fills the
-                    // chosen row with `accent`, and a label fixed to `content` then vanishes into it — the icon
-                    // stays, the name goes, and the row reads as a blank bar. The caller knows what it painted
-                    // underneath; this cell cannot.
-                    color = labelColor ?: colors.content,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                // On HOME's list the label sits on the wallpaper, so it is themed by the spot under it; on a film or a
+                // sheet `OnWallpaper` does nothing and the surface's own theme stands.
+                OnWallpaper {
+                    Text(
+                        text = app.label,
+                        style = labelStyle,
+                        // **Overridable, for a row drawn on something other than that background.** A picker fills
+                        // the chosen row with `accent`, and a label fixed to `content` then vanishes into it — the
+                        // icon stays, the name goes, and the row reads as a blank bar. The caller knows what it
+                        // painted underneath; this cell cannot.
+                        color = labelColor ?: LocalMorphicColors.current.content,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }
@@ -303,7 +304,6 @@ fun ActionRowCell(
     metrics: IconMetrics = LocalIconMetrics.current,
     mark: @Composable (size: Dp) -> Unit,
 ) {
-    val colors = LocalMorphicColors.current
     BoxWithConstraints(modifier = modifier) {
         val innerHeight = (maxHeight - 8.dp * 2).coerceAtLeast(0.dp)
         val iconSize = metrics
@@ -315,17 +315,21 @@ fun ActionRowCell(
                 .padding(horizontal = 8.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // The mark and the label each read their own spot: they are a row's width apart, and a caller's mark
+            // tinted from `LocalMorphicColors` inside the slot takes the ink of the spot it is drawn on.
             if (metrics.showIcon) {
-                mark(iconSize)
+                OnWallpaper { mark(iconSize) }
                 Spacer(modifier = Modifier.width(16.dp))
             }
-            Text(
-                text = label,
-                style = rowLabelStyle(metrics),
-                color = colors.content,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            OnWallpaper {
+                Text(
+                    text = label,
+                    style = rowLabelStyle(metrics),
+                    color = LocalMorphicColors.current.content,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

@@ -283,9 +283,10 @@ Plans: [docs/ICON_STUDIO_PLAN.md](docs/ICON_STUDIO_PLAN.md) (S1–S8),
   `darkTheme = isSystemInDarkTheme()` (our controlled surface); the launcher feeds a reading of **whatever is actually
   behind the text**, which is four different things — the wallpaper on HOME, the film on APPS/collections/sheets/menu,
   a panel inside a container tile, a solid color in settings. Chrome contrasts what it sits on, so the theme is nested
-  per **background**, not only per zone: `OnFilm` and `OnPanel` are those nestings, and the wallpaper reading is a
-  luminance rather than a verdict because a verdict cannot be blended with a wash. Full rules — the four backgrounds,
-  why the film is resolved once at the shell, and why grid labels carry a halo — in
+  per **background**, not only per zone: `OnFilm` and `OnPanel` are those nestings, and `OnWallpaper` is the
+  third: the wallpaper is read as a **per-spot luminance map**, never as one number or the system's `primaryColor`,
+  because one reading of a two-toned picture is wrong for half the screen and flips between devices. Full rules — the
+  four backgrounds, why the film is resolved once at the shell, and how text on HOME reads its spot — in
   [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) → "Adaptive content color". **The brightness half is built, and so is the frosted backdrop** (see [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md));
   `FrostedTextField` and the rest of the frosted-chrome subsystem stay deferred; settings needs none of it. **The window
   half has landed**: `app`'s theme carries the platform's own `Theme.Wallpaper` recipe (`windowShowWallpaper` over a

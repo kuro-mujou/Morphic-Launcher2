@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.model.BackdropEffect
 import inkspire.morphic.core.model.BackdropTint
+import inkspire.morphic.core.model.wallpaper.LuminanceMap
 import kotlin.math.roundToInt
 
 /**
@@ -63,6 +64,20 @@ import kotlin.math.roundToInt
 class BackdropImage(
     val image: ImageBitmap,
     val screenToBitmap: (Rect) -> Rect,
+)
+
+/**
+ * The wallpaper's [LuminanceMap], and the mapping that finds a screen rectangle's cells in it.
+ *
+ * **Paired for [BackdropImage]'s reason**: the mapping is derived from the map's own dimensions, and it is the same
+ * center-crop [screenToBitmapMapping] the frost draws with — so the text asking "what is behind me?" reads the patch of
+ * picture the frost beside it shows, not a neighboring one.
+ *
+ * @property screenToMap maps a rectangle in **screen** coordinates onto fractional cell coordinates of [map].
+ */
+class BackdropBrightness(
+    val map: LuminanceMap,
+    val screenToMap: (Rect) -> Rect,
 )
 
 /**
@@ -106,16 +121,20 @@ enum class BackdropRole {
  *   frost at all — a settings preview of one panel, which has only one strength to show and no film to get wrong.
  * @property tintColor the wallpaper's representative color, which every wash is blended toward — see
  *   [wallpaperTone]. `Color.Unspecified` when it could not be read, which makes the washes plain white and black.
- * @property luminance the wallpaper's **mean relative luminance**, which is what a surface drawn on this has to
- *   contrast. Here rather than beside the images because it describes the same picture and travels to the same
- *   places: a panel asking "should my text be light?" is asking about the thing this state holds.
+ * @property brightness how bright the picture is spot by spot, or null when it has not been measured — which leaves
+ *   text on the wallpaper themed by HOME's whole-screen verdict. Here rather than beside the images because it
+ *   describes the same picture and travels to the same places: text asking "should I be light?" is asking about the
+ *   thing this state holds.
  */
 class BackdropState(
     val panel: BackdropImage,
     val film: BackdropImage = panel,
     val tintColor: Color = Color.Unspecified,
-    val luminance: Float = 0f,
+    val brightness: BackdropBrightness? = null,
 ) {
+
+    /** The whole picture's mean luminance, which a surface blurred across all of it has to contrast; 0 unmeasured. */
+    val luminance: Float get() = brightness?.map?.mean ?: 0f
 
     /** The picture for [role] — the one seam a caller has to get right, and the only one there is. */
     fun imageFor(role: BackdropRole): BackdropImage = when (role) {
@@ -150,8 +169,8 @@ fun rememberBackdropState(
     accentColor: Int?,
     windowSize: IntSize,
     filmImage: Bitmap? = panelImage,
-    luminance: Float = 0f,
-): BackdropState? = remember(panelImage, filmImage, accentColor, windowSize, luminance) {
+    luminanceMap: LuminanceMap? = null,
+): BackdropState? = remember(panelImage, filmImage, accentColor, windowSize, luminanceMap) {
     if (panelImage == null || filmImage == null || windowSize.width == 0 || windowSize.height == 0) {
         null
     } else {
@@ -159,7 +178,12 @@ fun rememberBackdropState(
             panel = panelImage.asBackdropImage(windowSize),
             film = filmImage.asBackdropImage(windowSize),
             tintColor = accentColor?.let { Color(it) } ?: Color.Unspecified,
-            luminance = luminance,
+            brightness = luminanceMap?.let { map ->
+                BackdropBrightness(
+                    map = map,
+                    screenToMap = screenToBitmapMapping(map.columns, map.rows, windowSize.width, windowSize.height),
+                )
+            },
         )
     }
 }

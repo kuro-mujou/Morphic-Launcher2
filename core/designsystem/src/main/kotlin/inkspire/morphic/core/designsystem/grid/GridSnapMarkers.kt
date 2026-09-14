@@ -1,15 +1,27 @@
 package inkspire.morphic.core.designsystem.grid
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.layout.onLayoutRectChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.backdrop.BackdropBrightness
+import inkspire.morphic.core.designsystem.backdrop.InkReader
+import inkspire.morphic.core.designsystem.backdrop.LocalBackdrop
+import inkspire.morphic.core.designsystem.backdrop.LocalOverFrost
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import inkspire.morphic.core.designsystem.theme.MorphicColors
 import inkspire.morphic.core.model.GridConfig
 import kotlin.math.abs
 import kotlin.math.max
@@ -48,16 +60,25 @@ private const val MinVisibleAlpha = 0.05f
  *   position to fade around without a finger, so a separate flag would only be a second way to say the same thing.
  * @param draggedSpan the dragged footprint in logical cells, used to measure distance from the item's *edge*
  *   rather than from the finger — so a wide item lights up the lattice along its whole width.
+ * @param color a fixed color for every marker, or null to ink **each marker for the patch of wallpaper under it** —
+ *   the same rule and reader `OnWallpaper` gives a label, since a lattice spread over sky and flowers is text's
+ *   problem at a smaller size. With nothing measured it is the theme's content.
  */
 @Composable
 fun Modifier.gridSnapMarkers(
     config: GridConfig,
     localFinger: () -> Offset?,
     draggedSpan: () -> GridSpan,
-    color: Color = LocalMorphicColors.current.content,
+    color: Color? = null,
 ): Modifier {
     val markerPx = with(LocalDensity.current) { 16.dp.toPx() }
-    return drawBehind {
+    val themed = LocalMorphicColors.current.content
+    val brightness = LocalBackdrop.current?.brightness?.takeUnless { LocalOverFrost.current }
+    val reader = remember { InkReader() }
+    // State, so a grid that moves without the finger moving still redraws against where it now is.
+    var screenOrigin by remember { mutableStateOf(IntOffset.Zero) }
+    return onLayoutRectChanged(throttleMillis = 0, debounceMillis = 0) { screenOrigin = it.boundsInScreen.topLeft }
+        .drawBehind {
         val finger = localFinger() ?: return@drawBehind
         val span = draggedSpan()
 
@@ -88,11 +109,19 @@ fun Modifier.gridSnapMarkers(
                 // drop away quickly at the edge of the field instead of leaving a wide gray haze.
                 val alpha = (1f - distance / buffer).coerceIn(0f, 1f).pow(1.5f)
                 if (alpha <= MinVisibleAlpha) continue
-                drawSnapMarker(Offset(x, y), markerPx, color.copy(alpha = alpha))
+                val left = screenOrigin.x + x - markerPx / 2f
+                val top = screenOrigin.y + y - markerPx / 2f
+                val marker = Rect(left, top, left + markerPx, top + markerPx)
+                val ink = color ?: brightness?.let { markerInk(it, reader, marker) } ?: themed
+                drawSnapMarker(Offset(x, y), markerPx, ink.copy(alpha = alpha))
             }
         }
     }
 }
+
+/** The ink for a marker covering [screen] — a label's rule, without the backing a 16dp mark has no room for. */
+private fun markerInk(brightness: BackdropBrightness, reader: InkReader, screen: Rect): Color =
+    if (reader.read(brightness, screen).light) MorphicColors.Dark.content else MorphicColors.Light.content
 
 /**
  * A footprint's size in logical cells — what [gridSnapMarkers] measures its falloff against.

@@ -13,7 +13,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
@@ -21,28 +20,24 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
+import inkspire.morphic.core.designsystem.backdrop.OnWallpaper
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 
 /**
  * A grid-cell label: single line, ellipsized, sized by [IconMetrics.labelScale].
  *
- * **It takes the theme's content color, and the halo behind it takes the theme's background.** Both flip together, so
- * a label is near-black with a white halo on a bright wallpaper and white with a black one on a dark wallpaper — and
- * on the APPS surface or in an open collection it is whatever the *film* wants, because those subtrees re-theme
- * themselves (`OnFilm`). This is the "wallpaper-adaptive UI" a TODO here asked for; the brightness subsystem it was
- * waiting on had landed, but nothing had connected the two, so the label stayed white on every wallpaper.
+ * **On HOME it is themed against the patch of wallpaper it sits on** ([OnWallpaper]), not against the picture as a
+ * whole: a wallpaper is a photograph, and its mean says nothing about the pixels under any one label. On the APPS
+ * surface or in an open collection it is whatever the *film* wants, because those subtrees re-theme themselves.
  *
- * **The halo is what carries the local variation, and it is doing real work.** A wallpaper is a photograph, so its
- * *mean* luminance says little about the pixels under any one label: a bright picture with a dark corner will show a
- * near-black label on near-black. Striking the halo from the background rather than always from black is what makes
- * that survivable in both directions, where a fixed black shadow only ever rescues light text.
+ * The halo takes the resolved theme's background, so it always opposes the ink — a softening for the odd petal under a
+ * letter. Where the ink alone cannot reach contrast, [OnWallpaper] adds a backing; the halo is not asked to do that job.
  */
 @Composable
 internal fun CellLabel(
     label: String,
     modifier: Modifier = Modifier,
     metrics: IconMetrics = LocalIconMetrics.current,
-    color: Color = LocalMorphicColors.current.content,
 ) {
     val baseStyle = MaterialTheme.typography.labelSmall
     val fontSize = baseStyle.fontSize * metrics.labelScale
@@ -51,23 +46,25 @@ internal fun CellLabel(
     } else {
         fontSize * 1.2f
     }
-    Text(
-        text = label,
-        modifier = modifier,
-        style = baseStyle.copy(
-            fontSize = fontSize,
-            lineHeight = lineHeight,
-            shadow = Shadow(
-                color = LocalMorphicColors.current.background.copy(alpha = 0.6f),
-                offset = Offset(0f, 2f),
-                blurRadius = 4f,
+    OnWallpaper(modifier) {
+        val colors = LocalMorphicColors.current
+        Text(
+            text = label,
+            style = baseStyle.copy(
+                fontSize = fontSize,
+                lineHeight = lineHeight,
+                shadow = Shadow(
+                    color = colors.background.copy(alpha = 0.6f),
+                    offset = Offset(0f, 2f),
+                    blurRadius = 4f,
+                ),
             ),
-        ),
-        color = color,
-        textAlign = TextAlign.Center,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
+            color = colors.content,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
 }
 
 /**

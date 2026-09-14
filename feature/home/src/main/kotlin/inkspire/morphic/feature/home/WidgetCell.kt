@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import inkspire.morphic.core.designsystem.backdrop.OnWallpaper
 import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
 import inkspire.morphic.core.designsystem.menu.LocalMenuHost
 import inkspire.morphic.core.designsystem.surface.EmbeddedViewTouchFrame
@@ -68,7 +69,6 @@ internal fun WidgetCell(
 ) {
     val host = koinInject<AppWidgetHostController>()
     val density = LocalDensity.current
-    val colors = LocalMorphicColors.current
 
     // Reset with the id, so a cell reused for a different widget re-measures rather than reporting the previous
     // one's size to the new provider.
@@ -107,7 +107,13 @@ internal fun WidgetCell(
                 .then(itemGestures),
             contentAlignment = Alignment.Center,
         ) {
-            Text(text = label, style = MaterialTheme.typography.labelMedium, color = colors.contentMuted)
+            OnWallpaper {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = LocalMorphicColors.current.contentMuted
+                )
+            }
         }
         return
     }

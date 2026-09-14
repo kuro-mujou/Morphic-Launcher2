@@ -17,9 +17,8 @@ import inkspire.morphic.core.model.BackdropEffect
  * `1.05 / (L + 0.05)` and against black is `(L + 0.05) / 0.05`; setting them equal gives `(L + 0.05)² = 0.0525`, so
  * `L ≈ 0.179`. Above it a background wants dark chrome, below it light.
  *
- * `data:wallpaper` holds the same number for one job of its own (reconciling the OS's dark-text hint with the number
- * beside it) and the duplication is deliberate: a `core` module cannot read a `data` one, and a derived constant is
- * the one kind of value that is safe to state twice — there is nothing to prefer, so there is nothing to drift.
+ * **For a surface that is one flat tone** — the film and the panel, which are the wallpaper blurred and washed. Text
+ * on the wallpaper itself is not judged by a mean against this; see [inkOver].
  */
 const val DarkTextLuminance = 0.179f
 
