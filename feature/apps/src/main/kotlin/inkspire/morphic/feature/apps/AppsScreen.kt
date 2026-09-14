@@ -596,9 +596,9 @@ private fun alphabetIndexStyle(state: AppsState, layout: AppsLayout, showResults
  *
  * **Beside the content, not over it.** The rail floated over it until the grid's last column was found running beneath
  * the rail — a cell the rail sits on cannot be read or aimed at, and on the vertical grid that is a whole column of
- * the collection. What the overlay bought was the curved style's reach: its letters swing `-72.dp` inward and its
- * badge sits `-116.dp` out, and a column wide enough to hold all of that, reserved at rest, would be a quarter of the
- * screen given to a rail nobody is touching.
+ * the collection. What the overlay bought was the rail's reach under a finger: the curved style's letters swing
+ * `-72.dp` inward and either style's badge sits further out still, and a column wide enough to hold all of that,
+ * reserved at rest, would be a quarter of the screen given to a rail nobody is touching.
  *
  * **Both, because a column is a layout slot and the bow is a draw.** The slot is the rail's width at rest; the letters
  * and the badge still translate out over the content while a finger is on it, a `graphicsLayer` translation being

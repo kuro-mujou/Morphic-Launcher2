@@ -12,8 +12,8 @@ enum class AlphabetStripStyle {
     STANDARD,
 
     /**
-     * The letters bow toward the finger and swell, falling off smoothly either side, with the current one repeated
-     * in a badge beside the strip. Niagara Launcher's, which is where the shape is from.
+     * The letters bow toward the finger and swell, falling off smoothly either side. Niagara Launcher's, which is
+     * where the shape is from.
      */
     CURVED,
 }

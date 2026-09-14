@@ -145,26 +145,29 @@ internal fun AlphabetStrip(
                 }
             }
         }
-        // **The badge, and only on the curved style.** A standard strip answers with the letter itself, which is
-        // enough while nothing has moved; a bowed one has pulled that letter out from under the finger, so it needs
-        // somewhere to say what is selected that the finger is not sitting on. Placed by the finger rather than by
-        // the letter, since the finger is the thing the eye is already following.
-        if (style == AlphabetStripStyle.CURVED) {
-            fingerY?.let { y ->
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .offset { IntOffset(x = -116.dp.roundToPx(), y = (y - 44.dp.toPx() / 2f).roundToInt()) }
-                        .size(44.dp)
-                        .background(colors.surfaceElevated, CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = active?.let(labels::get).orEmpty(),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = colors.content,
-                    )
-                }
+        // **The badge, on both styles, because what it answers is the finger.** The rail is 28dp wide and a
+        // fingertip is wider, so the letter being chosen is the letter covered up — as true of a straight rail as of
+        // a bowed one, where the bow is a second reason on top of it. Placed by the finger rather than by the letter,
+        // since the finger is what the eye is already following.
+        fingerY?.let { y ->
+            // **Clear of whatever is drawn out in that space, then the badge's own width again.** On the curved rail
+            // that is the letters themselves, which swing 72dp inward and must not be landed on. The standard rail
+            // draws nothing outside itself, so the badge sits straight against it: air between the two reads as a
+            // badge floating loose, with nothing crossing the gap to say what it belongs to.
+            val badgeX = -((if (style == AlphabetStripStyle.CURVED) 72.dp else 0.dp) + 44.dp)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset { IntOffset(x = badgeX.roundToPx(), y = (y - 44.dp.toPx() / 2f).roundToInt()) }
+                    .size(44.dp)
+                    .background(colors.surfaceElevated, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = active?.let(labels::get).orEmpty(),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = colors.content,
+                )
             }
         }
     }

@@ -190,13 +190,6 @@ building.
 The swipe conflict comes with it — HOME's edges carry bindings too — but it arrives settled: `AlphabetStrip` claims
 `SurfaceGestureLock` while a finger is on it, and the claim is the strip's own rather than the APPS call site's.
 
-#### R5. Give the standard strip the badge the curved one has
-
-Wanted: the standard strip shows the floating letter badge too. Today it is drawn only for `AlphabetStripStyle.CURVED`
-(`AlphabetStrip.kt`), and the comment above the badge argues the standard style does not need one. That comment goes
-with the change. Placement: the badge sits `-116.dp` from the rail, a value picked for a rail whose letters bow out
-toward it. A standard rail has no bow to clear, so the offset probably wants to be different per style.
-
 ### Context menu
 
 #### R6. Redesign the context menu
