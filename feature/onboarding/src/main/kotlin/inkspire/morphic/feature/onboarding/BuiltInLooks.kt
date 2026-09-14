@@ -4,8 +4,7 @@ import android.content.Context
 import inkspire.morphic.data.settings.Look
 
 /**
- * The looks the first-run screen offers, read from this module's assets in the order they are offered. The first is the
- * one preselected.
+ * The looks the first-run screen offers, read from this module's assets in the order they are offered.
  *
  * **Files, not code.** Each is a [Look] captured by `LookCaptureHarness` from a store configured through the settings
  * setters — the harness holds the recipe each was made with — so a file here is the store's own format and cannot drift
@@ -22,7 +21,8 @@ internal class BuiltInLooks(private val context: Context) {
      */
     fun load(): List<LookOption> = Offered.map { (file, summary) ->
         val json = context.assets.open("looks/$file.json").bufferedReader().use { it.readText() }
-        LookOption(id = file, look = Look.parse(json), summary = summary)
+        val look = Look.parse(json)
+        LookOption(id = file, title = look.name, look = look, summary = summary)
     }
 
     private companion object {
@@ -36,5 +36,5 @@ internal class BuiltInLooks(private val context: Context) {
     }
 }
 
-/** One look the first-run screen offers: the file it came from, the look itself, and its summary. */
-internal data class LookOption(val id: String, val look: Look, val summary: String)
+/** One look the first-run screen offers: where it came from, what its row is called, the look itself, and its summary. */
+internal data class LookOption(val id: String, val title: String, val look: Look, val summary: String)

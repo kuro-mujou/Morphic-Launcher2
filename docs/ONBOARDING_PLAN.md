@@ -1,6 +1,6 @@
 # Onboarding Plan — a look in one tap, the rest when it is asked for
 
-**Status:** design locked (2026-09-08, author-confirmed); **O1–O6 built** (2026-09-14), O7 not. This is the *what and in what order*;
+**Status:** design locked (2026-09-08, author-confirmed); **O1–O7 built** (2026-09-14). This is the *what and in what order*;
 the open questions at the end are real.
 
 **Amended 2026-09-14 by a survey of four shipping launchers** — see "What shipping launchers do". The locked
@@ -413,6 +413,21 @@ the row moves into it.
 **O7 — start over.** A settings action that clears the `onboarding` slice and re-arms the picker. Small, and it is
 how every slice above gets tested twice.
 
+> **Built 2026-09-14, with the author's answer to open question 4 for this path.** Re-opening the first-run screen on an
+> arranged launcher would have applied Classic before anything was chosen, so starting over offers the user's own setup
+> back instead. About's "Run first-time setup again" calls `LookRepository.startOver`, which in **one transaction**
+> captures the look in force into `setup_restart_look` (a slice no look carries) and resets the onboarding flag to its
+> default — the hint re-arms and dismissed hub steps return. The first-run screen then lists "Your current setup" first
+> and preselected, so applying it changes nothing and only a different look changes anything.
+> - **Stored, not held in memory**: a launcher killed mid-choice still offers the setup it came from, rather than
+>   falling back to preselecting a shipped look over an arranged home.
+> - **Finished first, forgotten second**: "Use this look" completes setup and then clears the stored setup, so an
+>   interruption between the two can never re-open the screen with nothing to offer back.
+> - **Picking a different look can move icons**, which `LookRepository.apply`'s KDoc now says in place of "safe only
+>   before HOME is arranged": a smaller grid is settled by `fitMainTo`/`fitDockTo`, whose strays go to later pages or
+>   to HOME, and nothing is deleted.
+> - **Its own holder, `StartOverViewModel`**, since `AboutViewModel` is a package snapshot with no store behind it.
+
 ---
 
 ## Rejected
@@ -459,6 +474,8 @@ how every slice above gets tested twice.
 4. **What happens to a look when the user has already customized?** "Start over" clears everything, but applying a
    look from settings later (a real want — it is how you try the others) overwrites the in-list slices silently.
    A confirm, a preview, or an undo?
+   *Answered for starting over, 2026-09-14: the current setup is captured and offered back first — see O7. Applying a
+   look from settings outside first-run setup is still unbuilt, and still owes this answer.*
 5. **Does the picker eventually gain a fifth tile — "restore a shared look"?** That is the W6+ seam arriving, and it
    is the reason the format is a slice map rather than a script. *Survey: Nova puts "Restore backup" as a quiet link
    on its first screen rather than as a choice beside the others — the placement to copy. Moving to a new phone is Auto

@@ -23,7 +23,8 @@ import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 
 /**
- * A row of the setup hub: something the launcher has not been told yet, and the way to tell it.
+ * A call-to-action row: something to do, and a line saying what doing it changes. The setup hub draws its steps with
+ * it, and About its "Run first-time setup again".
  *
  * **Not `SettingsNavRow`, and the difference is what each row is *for*.** That one is an index entry — it names a
  * place, and its KDoc argues at length that a second line makes a list of them read as one sentence with the nouns

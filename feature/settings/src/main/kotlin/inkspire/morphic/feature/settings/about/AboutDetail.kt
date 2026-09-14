@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Update
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +28,7 @@ import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.feature.settings.SettingsSection
 import inkspire.morphic.feature.settings.component.SettingsNavRow
+import inkspire.morphic.feature.settings.setup.SetupRow
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -72,6 +74,28 @@ internal fun AboutDetail(
         )
         Spacer(Modifier.height(20.dp))
         AboutPanel(state, homeLayout, onOpenSection)
+        Spacer(Modifier.height(20.dp))
+        StartOverPanel()
+    }
+}
+
+/**
+ * "Run first-time setup again": re-opens the first-run screen with the user's current setup as its first, chosen row, so
+ * nothing changes unless a different look is picked.
+ *
+ * **In About because it concerns the launcher as a whole** rather than any one surface, and About is the pane that does.
+ * A panel of its own below the report, since it is the one row here that changes something.
+ */
+@Composable
+private fun StartOverPanel() {
+    val viewModel = koinViewModel<StartOverViewModel>()
+    MorphicGroupPanel {
+        SetupRow(
+            icon = Icons.Outlined.RestartAlt,
+            title = "Run first-time setup again",
+            supporting = "Pick a look again. Nothing changes unless you choose a different one.",
+            onClick = viewModel::startOver,
+        )
     }
 }
 

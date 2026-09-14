@@ -225,7 +225,7 @@ private val DefaultLauncherAskSlice = SettingsSlice(
 )
 
 /** Whether first-run setup is finished — see [Onboarding]. Read through `resolve`, never bare: absence has two meanings. */
-private val OnboardingSlice = SettingsSlice(
+internal val OnboardingSlice = SettingsSlice(
     name = "onboarding",
     serializer = serializer<Onboarding>(),
     default = Onboarding.Default,
@@ -260,6 +260,7 @@ internal val SettingsSlices: Map<String, SettingsSlice<*>> = listOf(
     HomeGesturesSlice,
     DefaultLauncherAskSlice,
     OnboardingSlice,
+    RestartLookSlice,
     SurfacePagingSlice,
 ).associateBy { it.name }
 

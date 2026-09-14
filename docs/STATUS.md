@@ -1640,6 +1640,23 @@ the default carries a dismiss button.
   stored `["ICON_STYLE"]`, and it stayed gone after a relaunch; the wallpaper row opened the Wallpaper section. No crash
   in logcat. Tests: `data:settings` 109, `data:setup` 5, `feature:settings` 42.
 
+**First-run setup can be started over, and it offers the current setup back first.** `O7` of the plan. About gains a
+"Run first-time setup again" row. `LookRepository.startOver` captures the look in force into `setup_restart_look` and
+resets the onboarding flag to its default, in one DataStore transaction; the gate follows the flag, so the settings
+screen is replaced by the first-run screen at once. That screen lists "Your current setup" first and preselected, so
+nothing changes unless a different look is picked.
+
+- **The captured setup is stored**, in a slice looks never carry, so a launcher killed mid-choice still offers it
+  instead of preselecting a shipped look over an arranged home. "Use this look" finishes setup, then clears it.
+- **Starting over resets the flag whole**: the edge hint returns, and so do dismissed setup-hub steps.
+- **`LookRepository.apply`'s precondition is restated**: applying over an arranged home can move icons — a smaller grid
+  is settled by `fitMainTo` and `fitDockTo`, which carry strays to later pages or to HOME — but never deletes them.
+- **`StartOverViewModel` is its own holder**, since `AboutViewModel` reads a package snapshot with no store behind it.
+- **Verified on the emulator, on the author's arranged install** (backed up first): About's row opened the first-run
+  screen with "Your current setup" first; trying Library and returning to the current setup, then "Use this look",
+  landed on the same home; the store read `{"completed":true}` with no `setup_restart_look` left. No crash in logcat.
+  Tests: `data:settings` 111, `feature:settings` 42.
+
 **The home button works from everywhere, which it did not.** `MainActivity` had no `onNewIntent`, and that is the
 whole of the signal: the launcher is `launchMode="singleTask"` and declares `category.HOME`, so pressing home starts
 nothing — the system hands the live instance a fresh HOME intent, and an Activity ignoring it leaves whatever was on

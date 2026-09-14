@@ -44,5 +44,6 @@ internal object LookScope {
         "home_gestures",
         "orientation_settings",
         "onboarding",
+        "setup_restart_look",
     )
 }

@@ -3,6 +3,7 @@ package inkspire.morphic.feature.settings.di
 import inkspire.morphic.feature.settings.SettingsShellViewModel
 import inkspire.morphic.feature.settings.about.AboutViewModel
 import inkspire.morphic.feature.settings.about.LicensesViewModel
+import inkspire.morphic.feature.settings.about.StartOverViewModel
 import inkspire.morphic.feature.settings.apps.AppsSectionViewModel
 import inkspire.morphic.feature.settings.dock.DockViewModel
 import inkspire.morphic.feature.settings.effects.EffectsViewModel
@@ -52,6 +53,7 @@ val settingsSurfaceModule = module {
     // `androidContext()`. Licenses reads the manifest `:app` generated, which reaches here as an interface —
     // see `LicenseManifestSource`.
     viewModel { AboutViewModel(get()) }
+    viewModel { StartOverViewModel(get()) }
     viewModel { LicensesViewModel(get()) }
 
     // The one ViewModel here taking a parameter: the studio cannot work out *what it is editing* for itself, and
