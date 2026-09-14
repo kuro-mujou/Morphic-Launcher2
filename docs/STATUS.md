@@ -1579,6 +1579,27 @@ inside a scaled, rounded box that takes no touch, looping the pan to the bottom 
   its placements while previewed, so looks that size HOME's grid differently would strand them on a switch; the frost
   is a scrim in the picture; nothing is announced to TalkBack.
 
+**The first-run screen offers four looks, chosen by looking at them.** `O4` of the plan. Rows for `Classic`, `Library`,
+`Minimal` and `Index` sit under the live preview; the first is applied as the screen is shown, tapping another applies
+it, and the preview re-renders from the store and plays that look's crossing. "Use this look" waits for the last apply
+to land, then finishes. There is no "Not now": with a look always applied, it would repeat "Use this look".
+
+- **The looks are captured files, not code** — `feature:onboarding/assets/looks`, read by `BuiltInLooks`.
+  `LookCaptureHarness#captureBuiltIn` makes each on a store cleared with `pm clear`, from a recipe of settings-setter
+  calls, and refuses a store that already binds an edge. Every look leaves `surface_metrics` at its defaults, so HOME's
+  grid is one size in all four and switching in the preview never strands what HOME seeded.
+- **The preview's ViewModels live in a store of its own** (`LauncherMiniature`), cleared when the screen goes, rather
+  than in the Activity's beside the real launcher's; and the miniature is one described image to TalkBack, with the
+  rows a radio group. Those were the two items `O3` left owed.
+- **State is one flow** (`OnboardingState`): the gate, the rows, the selection, and the preview's edge — the last read
+  back from the stored register, so the crossing follows what is really bound. A newer tap cancels an older apply.
+- **Verified on the emulator** on a cleared store: Classic preselected with its pager crossing; Library crossing right
+  to category cards; Minimal's list home crossing to the list; Index crossing to the A–Z grid with its strip; "Use
+  this look" on Index closing the gate onto that home, whose swipe up opened the grid; and the previous install's data
+  restored straight to its own home. No crash in logcat.
+- **Known:** the names are placeholders (plan question 1); the miniature is small on a phone under four two-line rows;
+  the default-launcher dialog still lands on the first home, which is `O4b`'s.
+
 **The home button works from everywhere, which it did not.** `MainActivity` had no `onNewIntent`, and that is the
 whole of the signal: the launcher is `launchMode="singleTask"` and declares `category.HOME`, so pressing home starts
 nothing — the system hands the live instance a fresh HOME intent, and an Activity ignoring it leaves whatever was on

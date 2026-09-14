@@ -1,0 +1,22 @@
+{
+    "name": "Minimal",
+    "slices": {
+        "surface_register_v2": {
+            "homeLayout": "LIST_WITH_WIDGET_AREA",
+            "sides": {
+                "BOTTOM": {
+                    "type": "apps"
+                }
+            }
+        },
+        "surface_metrics": {},
+        "apps_chrome": {},
+        "alphabet_strip": {},
+        "surface_paging": {},
+        "backdrop_effect": {
+            "type": "blur"
+        },
+        "icon_appearance": {},
+        "icon_applied_preset": null
+    }
+}

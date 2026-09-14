@@ -1,0 +1,24 @@
+{
+    "name": "Index",
+    "slices": {
+        "surface_register_v2": {
+            "sides": {
+                "BOTTOM": {
+                    "type": "apps",
+                    "layout": "VERTICAL_GRID"
+                }
+            }
+        },
+        "surface_metrics": {},
+        "apps_chrome": {},
+        "alphabet_strip": {
+            "enabled": true
+        },
+        "surface_paging": {},
+        "backdrop_effect": {
+            "type": "blur"
+        },
+        "icon_appearance": {},
+        "icon_applied_preset": null
+    }
+}

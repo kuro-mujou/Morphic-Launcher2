@@ -26,13 +26,15 @@ fun OnboardingGate(
     content: @Composable () -> Unit,
 ) {
     val viewModel = koinViewModel<OnboardingViewModel>()
-    val gate by viewModel.gate.collectAsStateWithLifecycle()
-    when (gate) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    when (state.gate) {
         OnboardingGateState.UNRESOLVED -> Unit
         OnboardingGateState.OPEN -> OnboardingScreen(
+            state = state,
             preview = preview,
-            onShown = viewModel::applyClassic,
-            onUse = viewModel::finish,
+            onShown = viewModel::onScreenShown,
+            onSelect = viewModel::select,
+            onUse = viewModel::use,
         )
 
         OnboardingGateState.CLOSED -> content()

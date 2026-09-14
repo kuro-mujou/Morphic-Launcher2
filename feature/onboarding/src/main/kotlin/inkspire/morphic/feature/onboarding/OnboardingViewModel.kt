@@ -2,67 +2,85 @@ package inkspire.morphic.feature.onboarding
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import inkspire.morphic.core.model.AppsLayout
-import inkspire.morphic.core.model.HomeEdge
-import inkspire.morphic.core.model.HomeLayout
+import inkspire.morphic.core.common.dispatcher.AppDispatchers
+import inkspire.morphic.data.settings.LookRepository
 import inkspire.morphic.data.settings.SettingsRepository
-import inkspire.morphic.data.settings.SideBinding
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-
-/** Which side of the onboarding gate the launcher is on. */
-enum class OnboardingGateState {
-    /** The flag has not been read yet. */
-    UNRESOLVED,
-
-    /** Setup is unfinished, so the first-run screen stands in for the launcher. */
-    OPEN,
-
-    /** Setup is finished, so the launcher is shown. */
-    CLOSED,
-}
+import kotlinx.coroutines.withContext
 
 /**
- * State holder for [OnboardingGate]: whether first-run setup is finished, and the two writes that finish it.
+ * State holder for [OnboardingGate] and the first-run screen: whether setup is finished, the offered looks, and the
+ * writes that choose one.
  *
  * **Scoped to the Activity, and that is its real lifetime.** The gate sits outside navigation, so `koinViewModel`
  * resolves against the Activity's store — and the gate lives exactly as long as the Activity does.
  */
-class OnboardingViewModel(private val settingsRepository: SettingsRepository) : ViewModel() {
+internal class OnboardingViewModel(
+    private val settingsRepository: SettingsRepository,
+    private val lookRepository: LookRepository,
+    private val builtInLooks: BuiltInLooks,
+    private val dispatchers: AppDispatchers,
+) : ViewModel() {
 
-    /** Which side of the gate to compose. Follows the store, so a cleared flag re-opens the gate with no restart. */
-    val gate: StateFlow<OnboardingGateState> = settingsRepository.onboarding
-        .map { if (it.completed) OnboardingGateState.CLOSED else OnboardingGateState.OPEN }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), OnboardingGateState.UNRESOLVED)
+    private val options = MutableStateFlow<List<LookOption>>(emptyList())
+    private val selected = MutableStateFlow<String?>(null)
+    private var applying: Job? = null
+
+    val state: StateFlow<OnboardingState> = combine(
+        settingsRepository.onboarding,
+        settingsRepository.surfaceRegister,
+        options,
+        selected,
+    ) { onboarding, register, looks, selectedId ->
+        OnboardingState(
+            gate = if (onboarding.completed) OnboardingGateState.CLOSED else OnboardingGateState.OPEN,
+            looks = looks.map { LookRow(id = it.id, name = it.look.name, summary = it.summary) },
+            selected = selectedId,
+            previewEdge = register.sides.keys.firstOrNull(),
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), OnboardingState())
 
     /**
-     * Applies the classic look — HOME's pager with a dock, and the paged app list behind the bottom edge.
-     *
-     * **Applied for real, before the user has chosen it**, because the preview *is* the launcher and shows only what
-     * the store holds. Nothing is final until [finish]; applying again is harmless.
-     *
-     * **The flag is stamped unfinished first**, and the gate depends on the order: an absent flag beside a stored
-     * register reads as an install set up before the flag existed, so writing the register first closes the gate.
+     * Reads the offered looks and applies the first, once — called as the first-run screen is shown, so a launcher whose
+     * setup is long finished never reads them.
      */
-    fun applyClassic() {
+    fun onScreenShown() {
+        if (selected.value != null) return
         viewModelScope.launch {
-            settingsRepository.beginOnboarding()
-            settingsRepository.setHomeLayout(HomeLayout.PAGER_WITH_DOCK)
-            settingsRepository.setSide(HomeEdge.BOTTOM, SideBinding.Apps(AppsLayout.PAGER))
+            if (options.value.isEmpty()) options.value = withContext(dispatchers.io) { builtInLooks.load() }
+            options.value.firstOrNull()?.let { select(it.id) }
         }
     }
 
     /**
-     * Finishes setup with the look already applied, closing the gate.
+     * Applies the look [id] for real, since the preview *is* the launcher and shows only what the store holds.
      *
-     * Only reachable from a screen that applied a look on being shown, which is what keeps the gate from closing on a
-     * launcher with no edge bound.
+     * **The flag is stamped unfinished first**: an absent flag beside a stored register reads as an install set up before
+     * the flag existed, so applying without the stamp would close the gate. **A newer choice cancels an older apply**, so
+     * taps in quick succession end on the last one rather than on whichever write finished last.
      */
-    fun finish() {
-        viewModelScope.launch { settingsRepository.completeOnboarding() }
+    fun select(id: String) {
+        val option = options.value.firstOrNull { it.id == id } ?: return
+        selected.value = id
+        applying?.cancel()
+        applying = viewModelScope.launch {
+            settingsRepository.beginOnboarding()
+            lookRepository.apply(option.look)
+        }
+    }
+
+    /** Finishes setup with the look on screen — after its apply has landed, so the gate never closes on half of one. */
+    fun use() {
+        viewModelScope.launch {
+            applying?.join()
+            settingsRepository.completeOnboarding()
+        }
     }
 
     private companion object {

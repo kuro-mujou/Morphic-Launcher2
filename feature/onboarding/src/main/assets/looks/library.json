@@ -1,0 +1,22 @@
+{
+    "name": "Library",
+    "slices": {
+        "surface_register_v2": {
+            "sides": {
+                "RIGHT": {
+                    "type": "apps",
+                    "layout": "CATEGORY_CARD"
+                }
+            }
+        },
+        "surface_metrics": {},
+        "apps_chrome": {},
+        "alphabet_strip": {},
+        "surface_paging": {},
+        "backdrop_effect": {
+            "type": "blur"
+        },
+        "icon_appearance": {},
+        "icon_applied_preset": null
+    }
+}

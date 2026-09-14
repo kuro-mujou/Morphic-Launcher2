@@ -1,6 +1,6 @@
 # Onboarding Plan — a look in one tap, the rest when it is asked for
 
-**Status:** design locked (2026-09-08, author-confirmed); **O1–O3 built** (2026-09-14), the rest not. This is the *what and in what order*;
+**Status:** design locked (2026-09-08, author-confirmed); **O1–O4 built** (2026-09-14), the rest not. This is the *what and in what order*;
 the open questions at the end are real.
 
 **Amended 2026-09-14 by a survey of four shipping launchers** — see "What shipping launchers do". The locked
@@ -333,6 +333,22 @@ differently. `feature:onboarding` must not depend on `feature:settings`.
 
 **O4 — the picker.** `feature:onboarding` — a ViewModel, one live preview over four named rows (A1; A5 for what it
 draws), "Not now" = apply the recommended look. Replaces O1's stub, inside O1's gate.
+
+> **Built 2026-09-14.** Four rows — `Classic`, `Library`, `Minimal`, `Index`, still placeholder names (question 1) — under
+> O3's live preview. The first is applied as the screen is shown; tapping a row applies that look, and the preview
+> re-renders from the store and plays that look's crossing, read back from the stored register. "Use this look" waits
+> for the last apply before finishing.
+> - **No "Not now".** With a look always applied and selected, a button keeping the recommended one would do exactly
+>   what "Use this look" does until a row is tapped — a control that changes nothing.
+> - **The looks are captured files** in `feature:onboarding/assets/looks`, made by `LookCaptureHarness#captureBuiltIn`
+>   on a store cleared with `pm clear`, one look per run. The harness holds each recipe as settings-setter calls, so
+>   every blob is written by the code that owns its slice; it refuses a store that already has an edge bound.
+> - **All four leave `surface_metrics` at its defaults**, so HOME's grid is the same size in each and switching looks
+>   in the preview never strands what HOME seeded — `LookRepository.apply`'s precondition, met by construction.
+> - **O3's two owed items are paid.** The preview's ViewModels live in a store of the miniature's own, cleared when it
+>   leaves, and the miniature is one described image to TalkBack; the rows are a radio group.
+> - **The preview is small on a phone** — four two-line rows take most of the height. It reads, and is the first thing
+>   to revisit if the rows get shorter names or one line each.
 
 **O4b — the edge hint.** A2: one hint on HOME naming the edge the applied look bound, stored as a dismissal in the
 `onboarding` slice. It carries A3's sequence too: `DefaultLauncherPrompt` waits past the resume that closed the gate,
