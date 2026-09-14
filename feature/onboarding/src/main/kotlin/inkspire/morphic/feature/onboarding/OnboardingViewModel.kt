@@ -26,7 +26,7 @@ enum class OnboardingGateState {
 }
 
 /**
- * State holder for [OnboardingGate]: whether first-run setup is finished, and the action that finishes it.
+ * State holder for [OnboardingGate]: whether first-run setup is finished, and the two writes that finish it.
  *
  * **Scoped to the Activity, and that is its real lifetime.** The gate sits outside navigation, so `koinViewModel`
  * resolves against the Activity's store — and the gate lives exactly as long as the Activity does.
@@ -39,19 +39,30 @@ class OnboardingViewModel(private val settingsRepository: SettingsRepository) : 
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), OnboardingGateState.UNRESOLVED)
 
     /**
-     * Applies the classic look — HOME's pager with a dock, and the paged app list behind the bottom edge — then
-     * finishes setup.
+     * Applies the classic look — HOME's pager with a dock, and the paged app list behind the bottom edge.
      *
-     * **The register is written before the flag.** A process killed between the writes leaves the gate open over a look
-     * already applied, and applying it again is harmless; the other order could close the gate on a launcher with no
-     * edge bound, which is the state the gate exists to rule out.
+     * **Applied for real, before the user has chosen it**, because the preview *is* the launcher and shows only what
+     * the store holds. Nothing is final until [finish]; applying again is harmless.
+     *
+     * **The flag is stamped unfinished first**, and the gate depends on the order: an absent flag beside a stored
+     * register reads as an install set up before the flag existed, so writing the register first closes the gate.
      */
     fun applyClassic() {
         viewModelScope.launch {
+            settingsRepository.beginOnboarding()
             settingsRepository.setHomeLayout(HomeLayout.PAGER_WITH_DOCK)
             settingsRepository.setSide(HomeEdge.BOTTOM, SideBinding.Apps(AppsLayout.PAGER))
-            settingsRepository.completeOnboarding()
         }
+    }
+
+    /**
+     * Finishes setup with the look already applied, closing the gate.
+     *
+     * Only reachable from a screen that applied a look on being shown, which is what keeps the gate from closing on a
+     * launcher with no edge bound.
+     */
+    fun finish() {
+        viewModelScope.launch { settingsRepository.completeOnboarding() }
     }
 
     private companion object {

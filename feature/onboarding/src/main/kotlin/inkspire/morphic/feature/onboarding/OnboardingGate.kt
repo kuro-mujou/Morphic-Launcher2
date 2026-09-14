@@ -3,6 +3,7 @@ package inkspire.morphic.feature.onboarding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import inkspire.morphic.core.designsystem.surface.SurfacePagerState
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -15,14 +16,25 @@ import org.koin.androidx.compose.koinViewModel
  *
  * **Composing nothing while unresolved is not a blank screen**: the window is transparent over the wallpaper, which is
  * what the launcher is about to show anyway.
+ *
+ * @param preview the launcher drawn as a picture, driven by the pager state it is handed. A slot rather than a
+ *   dependency, so this module never names the shell that `app` puts here.
  */
 @Composable
-fun OnboardingGate(content: @Composable () -> Unit) {
+fun OnboardingGate(
+    preview: @Composable (SurfacePagerState) -> Unit,
+    content: @Composable () -> Unit,
+) {
     val viewModel = koinViewModel<OnboardingViewModel>()
     val gate by viewModel.gate.collectAsStateWithLifecycle()
     when (gate) {
         OnboardingGateState.UNRESOLVED -> Unit
-        OnboardingGateState.OPEN -> OnboardingScreen(onApplyClassic = viewModel::applyClassic)
+        OnboardingGateState.OPEN -> OnboardingScreen(
+            preview = preview,
+            onShown = viewModel::applyClassic,
+            onUse = viewModel::finish,
+        )
+
         OnboardingGateState.CLOSED -> content()
     }
 }

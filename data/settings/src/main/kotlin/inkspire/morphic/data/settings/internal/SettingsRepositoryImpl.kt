@@ -371,6 +371,8 @@ internal class SettingsRepositoryImpl(
         .distinctUntilChanged()
         .flowOn(dispatchers.io)
 
+    override suspend fun beginOnboarding() = update(OnboardingSlice) { copy(completed = false) }
+
     override suspend fun completeOnboarding() = update(OnboardingSlice) { copy(completed = true) }
 
     override suspend fun setCategoryTabEdge(edge: VerticalEdge) =

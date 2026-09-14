@@ -103,6 +103,12 @@ import org.koin.compose.koinInject
  *
  * **The crossing animation is a user setting too**, read from the same `SurfaceRegister` and handed to `SurfacePager`
  * as [inkspire.morphic.core.model.SurfaceTransition]; the Screen manager section is where it is chosen.
+ *
+ * @param interactive false for **a picture of the launcher rather than the launcher** — the first-run screen's
+ *   preview. It then takes no swipe, handles neither back nor the home button, hosts no drag band, menu or prompt, and
+ *   keeps no widget host listening. It also draws no frost: the backdrop maps *screen* positions to the wallpaper, so a
+ *   scaled-down copy would sample the wrong part of the picture, and the plain scrim is the honest fallback.
+ * @param pagerState the pan between HOME and its sides, hoisted so a preview can play a crossing by itself.
  */
 @Composable
 fun LauncherShell(
@@ -118,6 +124,8 @@ fun LauncherShell(
      */
     onAssignGesture: (GridItem, ItemGesture) -> Unit = { _, _ -> },
     onOpenWidgetContainerSettings: (Long) -> Unit = {},
+    interactive: Boolean = true,
+    pagerState: SurfacePagerState = rememberSurfacePagerState(),
 ) {
     val viewModel = koinViewModel<ShellViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -137,15 +145,7 @@ fun LauncherShell(
     val device = currentDeviceConfiguration()
     LaunchedEffect(device) { viewModel.setDevice(device) }
 
-    // **The widget host listens while the launcher is on screen, and only then.** A provider only pushes updates to
-    // a listening host, so a clock stops ticking without this; listening while the launcher is not visible is work
-    // for nobody. Here rather than in `MainActivity` because "the launcher is on screen" is precisely what this
-    // composable means — the Activity also hosts settings, where no widget is drawn.
-    val widgetHost = koinInject<AppWidgetHostController>()
-    LifecycleStartEffect(widgetHost) {
-        widgetHost.startListening()
-        onStopOrDispose { widgetHost.stopListening() }
-    }
+    if (interactive) ListenForWidgets()
 
     // The launcher's dark/light input is **wallpaper brightness**, not the system's dark-mode switch: chrome sits
     // directly on the picture with nothing between, so what it has to contrast is the picture. Settings is the other
@@ -155,7 +155,6 @@ fun LauncherShell(
     val homeLight = homeWantsLightInk(state)
     LauncherTheme(darkTheme = homeLight) {
         val scope = rememberCoroutineScope()
-        val pagerState = rememberSurfacePagerState()
 
         // **Who owns the finger, when the answer is not "the pager".** Hosted here because the pager it guards is
         // here, and because the claimants are spread across three surfaces (an open folder, an item held down with its
@@ -168,7 +167,7 @@ fun LauncherShell(
         // always loses. See `ItemSwipeClaim`.
         val itemSwipeClaim = remember { ItemSwipeClaim() }
 
-        ReturnToHome(pagerState, homePresses)
+        if (interactive) ReturnToHome(pagerState, homePresses)
 
         // **The launcher's one drag coordinator, and this is the layer it belongs to** — the common ancestor of HOME
         // and every side surface, which is what docs/DRAG_AND_DROP_DESIGN.md §2 has specified from the start. Each
@@ -261,7 +260,7 @@ fun LauncherShell(
 
         CompositionLocalProvider(
             LocalFilm provides film,
-            LocalBackdrop provides backdrop,
+            LocalBackdrop provides backdrop.takeIf { interactive },
             LocalInkSurface provides homeInk,
             LocalBackdropEffect provides state.backdropEffect,
             LocalSurfaceGestureLock provides gestureLock,
@@ -283,7 +282,7 @@ fun LauncherShell(
                     swipeActions = state.swipeActions(viewModel::runHomeSwipe),
                     // A swipe switches surfaces only when nothing on screen has claimed the finger. Read as a lambda, so
                     // the gesture asks at the two moments it can still hand the swipe back rather than at composition.
-                    enabled = { !gestureLock.isLocked },
+                    enabled = { interactive && !gestureLock.isLocked },
                     retainedEdges = setOfNotNull(dragSourceEdge),
                     // **The frost, between HOME and whatever is sliding over it.** A side surface is transparent and is
                     // read against this; the two move differently on purpose — the pane translates, the frost only fades
@@ -314,23 +313,42 @@ fun LauncherShell(
                 // **The top-action band, above every surface** — hence a sibling of the pager rather than its
                 // `overlay` slot, which is deliberately drawn *under* the side surfaces so the frost can sit between
                 // them. The band has to be over the drawer it takes apps out of.
-                TopActionOverlay(
-                    coordinator = coordinator,
-                    openEdge = pagerState.openEdge,
-                    onEject = eject,
-                    onRemove = viewModel::removeFromHome,
-                    onUninstall = viewModel::uninstall,
-                )
+                if (interactive) {
+                    TopActionOverlay(
+                        coordinator = coordinator,
+                        openEdge = pagerState.openEdge,
+                        onEject = eject,
+                        onRemove = viewModel::removeFromHome,
+                        onUninstall = viewModel::uninstall,
+                    )
+                }
 
                 // **The item menu, above everything including the band.** A sibling for the band's reason and one
                 // more of its own: the menu is anchored to an item that may be on any surface, and it is *modal*
                 // while it is up (it locks the surface swipe), so nothing may pan out from under it. It draws
                 // nothing at all when no menu is open.
-                MenuOverlay(menuHost)
-                GestureServicePrompt()
-                DefaultLauncherPrompt()
+                if (interactive) {
+                    MenuOverlay(menuHost)
+                    GestureServicePrompt()
+                    DefaultLauncherPrompt()
+                }
             }
         }
+    }
+}
+
+/**
+ * **The widget host listens while the launcher is on screen, and only then.** A provider only pushes updates to a
+ * listening host, so a clock stops ticking without this; listening while the launcher is not visible is work for
+ * nobody. In the shell rather than `MainActivity` because "the launcher is on screen" is precisely what the shell
+ * means — the Activity also hosts settings, where no widget is drawn — and not for a preview, which is a picture.
+ */
+@Composable
+private fun ListenForWidgets() {
+    val widgetHost = koinInject<AppWidgetHostController>()
+    LifecycleStartEffect(widgetHost) {
+        widgetHost.startListening()
+        onStopOrDispose { widgetHost.stopListening() }
     }
 }
 

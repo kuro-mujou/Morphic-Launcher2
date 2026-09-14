@@ -147,6 +147,15 @@ interface SettingsRepository {
      */
     val onboarding: Flow<Onboarding>
 
+    /**
+     * Records that first-run setup has **started**, before the first-run screen writes anything.
+     *
+     * Not a no-op on a fresh install, where the flag already reads unfinished: that reading comes from the key being
+     * *absent*, and an absent flag beside a stored surface register reads as finished. The first-run screen writes the
+     * register to preview a look, so without this stamp the gate would close itself the moment it did.
+     */
+    suspend fun beginOnboarding()
+
     /** Records that first-run setup is finished. */
     suspend fun completeOnboarding()
 

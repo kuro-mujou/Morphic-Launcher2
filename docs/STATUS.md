@@ -1553,6 +1553,30 @@ at startup, so a new slice cannot be left off it quietly.
   `inkspire.morphic.data.settings.SideBinding.Apps`, and a package move would make every shipped or shared look drop
   them. The fix changes what `surface_register` stores as well, so it needs the key-rename seam.
 
+**The first-run screen shows the launcher itself, scaled down, crossing to the app list on its own.** `O3` of the plan,
+built as something other than its paragraph: the settings previews it meant to lift are abstract editing diagrams, and
+the confirmed amendments ask for the user's real apps and a crossing, so the author chose the real launcher over a
+second renderer. The screen applies Classic for real on being shown and draws `LauncherShell` at the window's full size
+inside a scaled, rounded box that takes no touch, looping the pan to the bottom edge; "Use this layout" only finishes.
+
+- **`LauncherShell(interactive = false)`** draws a picture rather than running a launcher: no swipe, no back or
+  home-button handling, no drag band, menu, prompts or widget listening, and no frost — the backdrop maps screen
+  positions onto the wallpaper, so a scaled copy would sample the wrong part, and the plain scrim stands in. The
+  `pagerState` is hoisted so the screen can drive it; widget listening moved into `ListenForWidgets`, which is also
+  what brought `LauncherShell` back under detekt's length bound.
+- **`app` passes the shell to `OnboardingGate` as a slot**, so `feature:onboarding` names neither the shell nor settings.
+- **Laid out full-size, then scaled**: every surface measures the window, so a copy laid out small would still arrange
+  itself for the whole screen. The box is a punch-through hole, so HOME's icons sit on the real wallpaper.
+- **A bug in `O1` surfaced and is fixed.** Previewing writes the register, and an absent flag beside a stored register
+  reads as a finished install, so the gate closed on its own first write. `beginOnboarding` stamps `completed = false`
+  before anything is applied.
+- **Verified on the emulator**, from an uninstall and reinstall: the screen stayed up with the real launcher in the box —
+  the seeded home over the wallpaper, then the paged app list — crossing on its own; "Use this layout" closed the gate
+  onto that home; restoring the previous install's data went straight to its own home. No crash in logcat.
+- **Known, and owed to `O4`:** the preview's ViewModels live in the Activity's store and outlive the gate; home seeds
+  its placements while previewed, so looks that size HOME's grid differently would strand them on a switch; the frost
+  is a scrim in the picture; nothing is announced to TalkBack.
+
 **The home button works from everywhere, which it did not.** `MainActivity` had no `onNewIntent`, and that is the
 whole of the signal: the launcher is `launchMode="singleTask"` and declares `category.HOME`, so pressing home starts
 nothing — the system hands the live instance a fresh HOME intent, and an Activity ignoring it leaves whatever was on

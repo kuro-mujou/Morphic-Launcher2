@@ -16,8 +16,10 @@ import inkspire.morphic.core.icon.render.IconRenderManager
 import inkspire.morphic.core.model.RotationMode
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.feature.onboarding.OnboardingGate
+import inkspire.morphic.feature.shell.LauncherShell
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
@@ -55,7 +57,21 @@ class MainActivity : ComponentActivity() {
         setContent {
             CompositionLocalProvider(LocalIconRenderManager provides iconRenderManager) {
                 ProvideIconRecipes {
-                    OnboardingGate {
+                    OnboardingGate(
+                        // The first-run screen's picture of the launcher is the launcher itself, so it cannot
+                        // disagree with the home screen it previews. Composed here because `app` is the only module
+                        // that may name the shell to the onboarding feature.
+                        preview = { pagerState ->
+                            LauncherShell(
+                                homePresses = emptyFlow(),
+                                onOpenSettings = {},
+                                onOpenAppsSettings = {},
+                                onEditIcon = {},
+                                interactive = false,
+                                pagerState = pagerState,
+                            )
+                        },
+                    ) {
                         LauncherNavHost(homePresses = homePresses)
                     }
                 }

@@ -1,6 +1,6 @@
 # Onboarding Plan — a look in one tap, the rest when it is asked for
 
-**Status:** design locked (2026-09-08, author-confirmed); **O1–O2 built** (2026-09-14), the rest not. This is the *what and in what order*;
+**Status:** design locked (2026-09-08, author-confirmed); **O1–O3 built** (2026-09-14), the rest not. This is the *what and in what order*;
 the open questions at the end are real.
 
 **Amended 2026-09-14 by a survey of four shipping launchers** — see "What shipping launchers do". The locked
@@ -217,7 +217,7 @@ it: one large live preview, the four looks as named rows beneath, a tap on a row
 applies. Three of the four looks differ mainly in *the surface behind an edge*, so the preview shows HOME **and** that
 surface — a crossing that plays when a row is picked is the natural form, and it teaches the gesture the look binds.
 It costs a second tap against tier 1's one, and buys seeing a look before it is applied, which a tile applied on tap
-never offered. *Lands in O4; O3's lift is unchanged — one preview needs the same renderers four tiles would.*
+never offered. *Lands in O4, on the preview O3 built.*
 
 **A2 — land on home with one hint naming the bound edge.** After a look is applied, HOME shows a single hint at the edge
 it bound ("Swipe up for your apps"), read from `surface_register` so it cannot name an edge that is not bound. It goes
@@ -247,9 +247,9 @@ Android's Auto Backup restores the DataStore file and the Room database on a new
 *Lands in O1.*
 
 **A5 — real apps in the preview, blank cells while the cache is cold.** Answers open question 2. Mur drew the user's own
-apps on the first screen of a fresh install, so a warm-enough cache at first run is achievable in practice. Until
-`AppRepository` has emitted, the preview draws empty icon-shaped cells — never sample brand icons, which would show a
-home screen the user does not have. *Lands in O4.*
+apps on the first screen of a fresh install, so a warm-enough cache at first run is achievable in practice. The
+preview is the launcher itself (O3), so while the app cache is cold it shows what the launcher would — an empty grid,
+never sample brand icons, which would show a home screen the user does not have. *Built with O3.*
 
 **A6 — "Fill your dock" as a hub step.** `HomeViewModel.seedIfEmpty` leaves the dock empty on purpose, and its KDoc
 names what it waits for: dock apps chosen "with a picker" rather than guessed. Niagara's favorites step is that picker,
@@ -308,6 +308,28 @@ stored value untouched.
 consumer**, which is the rule rather than a convenience: a mockup drawn independently in onboarding would be the
 "two implementations kept honest by intention" hazard, and the user would choose a look that then rendered
 differently. `feature:onboarding` must not depend on `feature:settings`.
+
+> **Built 2026-09-14, as something else: the preview is the launcher.** The lift above assumed the picker would draw
+> mockups, and A1/A5 had since asked for real apps and a crossing; the settings previews are abstract editing diagrams,
+> so moving them would have delivered neither. Decided with the author: the first-run screen applies the look for real
+> and shows `LauncherShell` itself, laid out at the window's size and scaled down, so it cannot disagree with the home
+> screen it previews — there is no second renderer to keep honest.
+> - **`LauncherShell(interactive = false)` is the picture mode**: no swipe, back or home-button handling, no drag band,
+>   menu, prompts or widget listening, and **no frost** — the backdrop maps screen positions onto the wallpaper, so a
+>   scaled copy would sample the wrong part of it, and the side surface is read against the plain scrim instead.
+>   `pagerState` is hoisted so the screen plays the crossing by itself.
+> - **`app` hands the shell to `OnboardingGate` as a slot**, so `feature:onboarding` depends on neither `feature:shell`
+>   nor `feature:settings`.
+> - **The miniature is a punch-through hole.** HOME paints no background, so the hole shows the window's real
+>   wallpaper — at full size rather than scaled with the picture: true to the colors, not to the crop.
+> - **The spike found a hole in O1's rule, and `beginOnboarding` closes it.** Applying a look writes the register, and an
+>   absent flag beside a stored register reads as an install set up before the flag existed — so the gate closed on the
+>   preview's first write. The screen now stamps `completed = false` before it writes anything.
+> - **Known, and owed to O4:** the preview's ViewModels resolve against the Activity's store, since the gate is outside
+>   navigation, so they outlive the gate until the Activity goes. Home seeds its placements while being previewed — the
+>   arrangement the user then keeps, and the reason switching between looks that size HOME's grid differently would
+>   strand what the first seeded (`LookRepository.apply`'s precondition). Nothing on the screen is announced to
+>   TalkBack yet.
 
 **O4 — the picker.** `feature:onboarding` — a ViewModel, one live preview over four named rows (A1; A5 for what it
 draws), "Not now" = apply the recommended look. Replaces O1's stub, inside O1's gate.
