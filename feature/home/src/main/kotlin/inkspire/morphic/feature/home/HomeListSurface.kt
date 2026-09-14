@@ -410,6 +410,7 @@ internal fun HomeListSurface(
                     // rather than above both arms: it is sized against the grid a widget would land on, which
                     // differs between the two.
                     surfaceActions = listOf(MenuAction("Widgets") { widgetPickerOpen = true }),
+                    offerSetup = true,
                 )
             }
             // **Double tap on empty space → HOME's own double-tap action**, beside the long-press and gated the same

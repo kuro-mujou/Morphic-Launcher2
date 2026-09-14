@@ -45,6 +45,7 @@ import inkspire.morphic.data.settings.IconStudioWorkspace
 import inkspire.morphic.data.settings.Onboarding
 import inkspire.morphic.data.settings.OrientationSettings
 import inkspire.morphic.data.settings.SettingsRepository
+import inkspire.morphic.data.settings.SetupStep
 import inkspire.morphic.data.settings.SideBinding
 import inkspire.morphic.data.settings.SurfaceMetrics
 import inkspire.morphic.data.settings.SurfacePaging
@@ -383,6 +384,9 @@ internal class SettingsRepositoryImpl(
     override suspend fun completeOnboarding() = update(OnboardingSlice) { copy(completed = true) }
 
     override suspend fun dismissEdgeHint() = update(OnboardingSlice) { copy(edgeHintDismissed = true) }
+
+    override suspend fun dismissSetupStep(step: SetupStep) =
+        update(OnboardingSlice) { copy(dismissedSetupSteps = dismissedSetupSteps + step.name) }
 
     override suspend fun setCategoryTabEdge(edge: VerticalEdge) =
         update(AppsChromeSlice) { copy(categoryTabEdge = edge) }

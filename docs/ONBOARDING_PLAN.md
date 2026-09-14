@@ -1,6 +1,6 @@
 # Onboarding Plan — a look in one tap, the rest when it is asked for
 
-**Status:** design locked (2026-09-08, author-confirmed); **O1–O4b built** (2026-09-14), the rest not. This is the *what and in what order*;
+**Status:** design locked (2026-09-08, author-confirmed); **O1–O6 built** (2026-09-14), O7 not. This is the *what and in what order*;
 the open questions at the end are real.
 
 **Amended 2026-09-14 by a survey of four shipping launchers** — see "What shipping launchers do". The locked
@@ -140,6 +140,11 @@ it would eventually tell a user to pick a wallpaper they had already picked.
 
 **4. The hub lives in settings *and* on the home surface menu, and is one composable in both.** Settings is where
 someone goes to look for it; the home menu is where they are when they wonder what else this thing does.
+
+> **Amended by the author, 2026-09-14: one composable, in settings; a row on the home menu.** The home surface menu is
+> built from `MenuAction` rows (a label and a tap), so no panel can be drawn inside it. HOME's menu offers "Finish
+> setup" while the hub has a row, and it opens the settings index, where the hub is the first thing — one hub in one
+> place, reached from both.
 
 **5. No icon prewarm, no progress bar, no splash.** While the completion flag is unresolved the launcher composes
 **nothing** — and on a transparent `windowShowWallpaper` window that is not a blank screen, it is the wallpaper,
@@ -384,6 +389,27 @@ on the home surface menu, and it is not in a card with other steps. The state is
 means "ask, like this" — which is the shape `O5` turns into a list. Nothing here has to be deleted to build the hub;
 the row moves into it.
 
+> **O5 and O6, built together 2026-09-14.** A dismissal store with only the one step nobody may dismiss would have been
+> a model in a vacuum, so the hub arrived with four steps: set as default (never dismissible), choose a wallpaper,
+> choose an icon style, add a widget. Fill your dock (A6) waits on the arrangement key being plumbed to a place that can
+> read it.
+> - **`SetupSteps` in a new module, `data:setup`** — the first data module that reads others. Which steps are
+>   unfinished is one fact from four stores (the home role, `WallpaperState.image`, the icon recipe against
+>   `IconAppearance.Base`, `LayoutRepository.widgets()`) with two readers in two feature modules that cannot see each
+>   other; the rule deciding "done" is `pendingSetupSteps`, pure and tested, and the single instance also means both
+>   readers see the same refreshed home-role answer.
+> - **Dismissals are stored by name** in `Onboarding.dismissedSetupSteps`, read through `isDismissed`. A set of enums
+>   would fail to decode on a step a later build removed, and a failed decode resets the whole flag — reopening
+>   first-run setup over a working launcher.
+> - **The hub replaces the default-launcher row** at the top of `SettingsList`. Wallpaper and icon rows open their
+>   sections, the default row the system chooser, and the widget row HOME, where widgets are added; each row but the
+>   default carries a dismiss button.
+> - **The hub's list item is always present, first, even empty.** Added only once it had rows, it was inserted above
+>   the lazy list's first visible item and landed above the viewport — "Finish setup" opened a list scrolled past the
+>   hub.
+> - **"Finish setup" is appended by `LauncherMenuHost`** from a `finishSetup` action the shell sets while steps remain,
+>   and only on menus that pass `offerSetup` — HOME's two surfaces, not the app list's.
+
 **O7 — start over.** A settings action that clears the `onboarding` slice and re-arms the picker. Small, and it is
 how every slice above gets tested twice.
 
@@ -429,6 +455,7 @@ how every slice above gets tested twice.
    live only in settings? Decision 4 says both; it is the least-argued of the six. *Survey: Smart Launcher's
    default-launcher card on its own home is the nearest shipped equivalent, and being closable is what keeps it
    from reading as clutter — mild evidence for both.*
+   *Answered 2026-09-14 by the author: yes, as a "Finish setup" row rather than the hub itself — see decision 4.*
 4. **What happens to a look when the user has already customized?** "Start over" clears everything, but applying a
    look from settings later (a real want — it is how you try the others) overwrites the in-list slices silently.
    A confirm, a preview, or an undo?

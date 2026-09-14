@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,8 +36,11 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
  * implementations of one fact kept honest by intention, and it eventually tells a user to do something they have
  * already done.
  *
- * Generic over its content rather than over a step type, because there is one step today and a sealed hierarchy
- * built for one case has nothing to shape it. `O5` is where the steps become a list.
+ * Generic over its content rather than over a step type: the hub owns which step says what, and a row that knew the
+ * step type would be a second place deciding it.
+ *
+ * @param onDismiss puts the step away, drawn as a close button in place of the chevron — or null for a step that cannot
+ *   be put away, which keeps the chevron.
  */
 @Composable
 internal fun SetupRow(
@@ -44,6 +49,7 @@ internal fun SetupRow(
     supporting: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onDismiss: (() -> Unit)? = null,
 ) {
     val colors = LocalMorphicColors.current
     Row(
@@ -61,10 +67,16 @@ internal fun SetupRow(
             Text(text = supporting, style = MaterialTheme.typography.bodySmall, color = colors.contentMuted)
         }
         Spacer(Modifier.width(12.dp))
-        Icon(
-            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-            contentDescription = null,
-            tint = colors.contentMuted,
-        )
+        if (onDismiss != null) {
+            IconButton(onClick = onDismiss) {
+                Icon(imageVector = Icons.Filled.Close, contentDescription = "Dismiss $title", tint = colors.contentMuted)
+            }
+        } else {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = colors.contentMuted,
+            )
+        }
     }
 }

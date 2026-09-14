@@ -164,6 +164,9 @@ interface SettingsRepository {
     /** Records that HOME's hint about the bound edge has gone, for good — see [Onboarding.edgeHintDismissed]. */
     suspend fun dismissEdgeHint()
 
+    /** Puts a setup step away for good — see [Onboarding.dismissedSetupSteps]. Whether it may be is the caller's to check. */
+    suspend fun dismissSetupStep(step: SetupStep)
+
     /** Sets which edge the category pager's tab bar sits on. */
     suspend fun setCategoryTabEdge(edge: VerticalEdge)
 

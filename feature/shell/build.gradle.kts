@@ -29,6 +29,9 @@ dependencies {
 
     implementation(projects.data.wallpaper)
 
+    // Whether any setup step is left, for HOME's Finish setup row: the same answer the settings hub lists.
+    implementation(projects.data.setup)
+
     // `BackHandler`, so back closes an open side surface instead of leaving the launcher.
     implementation(libs.androidx.activity.compose)
 }

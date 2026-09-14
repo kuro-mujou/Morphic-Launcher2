@@ -724,6 +724,7 @@ internal fun HomePagerSurface(
                     // by *this* surface rather than by `HomeScreen` because the size labels it shows are measured
                     // against the grid a widget would land on, and only the surface drawing that grid knows it.
                     surfaceActions = listOf(MenuAction("Widgets") { widgetPickerOpen = true }),
+                    offerSetup = true,
                 )
             }
             // **Double tap on empty space → HOME's own double-tap action**, beside the long-press and gated the same

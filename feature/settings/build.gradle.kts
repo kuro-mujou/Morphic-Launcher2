@@ -15,6 +15,9 @@ dependencies {
     // The store it edits.
     implementation(projects.data.settings)
 
+    // The setup hub's steps, shared with HOME's menu so the two cannot disagree about what is left to set up.
+    implementation(projects.data.setup)
+
     // Resizing a grid is *two* writes, and this module owns both. Changing a count is a settings write; moving the
     // items that count displaces is a placement write, and only the actor that knows **which edge** changed can make
     // it — a surface re-reading the new size later can reflow, but it cannot tell a removed left column from a

@@ -1617,6 +1617,29 @@ goes for good on the first crossing to any side surface, or when tapped, and sho
   with Library put "← Swipe left for your apps" at the right edge. Restoring the previous install's data showed its own
   home with no hint. No crash in logcat. Not verified: TalkBack actually speaking it.
 
+**Settings opens on a setup hub, and HOME's menu offers "Finish setup" while it has anything in it.** `O5` and `O6` of
+the plan, together. The hub lists set as default, choose a wallpaper, choose an icon style and add a widget, each only
+while unfinished and not put away, and replaces the single default-launcher row above the settings index. Each row goes
+where its step is done — the system chooser, the Wallpaper and Icons sections, or HOME for widgets — and every row but
+the default carries a dismiss button.
+
+- **`SetupSteps` lives in a new module, `data:setup`**, the first data module that depends on other data modules. The
+  unfinished steps are one fact from four stores with two readers in feature modules that cannot see each other, so the
+  rule — `pendingSetupSteps`, pure and tested — is written once. Doneness is derived: the home role,
+  `WallpaperState.image`, the icon recipe against `IconAppearance.Base`, and `LayoutRepository.widgets()`.
+- **Only dismissals are stored**, by name, in `Onboarding.dismissedSetupSteps`: a name a later build no longer knows is
+  ignored, where an enum set would fail to decode and reset the flag. The default-launcher step is never dismissible.
+- **HOME's menu row** comes from `LauncherMenuHost.finishSetup`, which `OfferSetupOnMenu` sets while steps remain, and
+  only menus passing `offerSetup` carry it. It opens the settings index; the home menu holds rows, not panels, so the
+  hub itself lives only in settings (the plan's decision 4, amended).
+- **The hub's list item is present from the first frame, even empty.** Inserted once its steps arrived, it went above
+  the lazy list's anchor and off screen, so "Finish setup" opened a list already scrolled past it — found on the
+  emulator and fixed before commit.
+- **Verified on the emulator** on a cleared store after onboarding: HOME's long-press menu listed Widgets, Finish setup,
+  Settings; Finish setup opened settings with the four rows at the top; dismissing the icon style removed its row and
+  stored `["ICON_STYLE"]`, and it stayed gone after a relaunch; the wallpaper row opened the Wallpaper section. No crash
+  in logcat. Tests: `data:settings` 109, `data:setup` 5, `feature:settings` 42.
+
 **The home button works from everywhere, which it did not.** `MainActivity` had no `onNewIntent`, and that is the
 whole of the signal: the launcher is `launchMode="singleTask"` and declares `category.HOME`, so pressing home starts
 nothing — the system hands the live instance a fresh HOME intent, and an Activity ignoring it leaves whatever was on

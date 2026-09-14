@@ -85,6 +85,12 @@ class LauncherMenuHost(
         private set
 
     /**
+     * Where "Finish setup" goes, or null while there is nothing left to set up — set by the shell, which is what can
+     * read the setup steps. Offered only by a surface menu that asks for it (see [showSurface]).
+     */
+    var finishSetup: (() -> Unit)? by mutableStateOf(null)
+
+    /**
      * Opens the menu for an **app**: its shortcuts, then App info, Edit icon, [surfaceActions], and Uninstall.
      *
      * The middle is where a surface's own verbs go — after the ones that describe or
@@ -130,11 +136,23 @@ class LauncherMenuHost(
      * also why they are absent rather than disabled — a row that does nothing is worse than a row that is not there.
      *
      * There is no title: see [MenuRequest.title].
+     *
+     * @param offerSetup whether this menu carries "Finish setup", just above Settings, while [finishSetup] is set. Only
+     *   HOME asks: setup is about the launcher as a whole, and HOME is where a user wonders what else it does.
      */
-    fun showSurface(position: Offset, surfaceActions: List<MenuAction> = emptyList(), overFrost: Boolean = false) {
+    fun showSurface(
+        position: Offset,
+        surfaceActions: List<MenuAction> = emptyList(),
+        overFrost: Boolean = false,
+        offerSetup: Boolean = false,
+    ) {
         request = MenuRequest(
             anchor = MenuAnchor.Press(position),
-            actions = surfaceActions + MenuAction("Settings", onClick = onOpenSettings),
+            actions = buildList {
+                addAll(surfaceActions)
+                if (offerSetup) finishSetup?.let { add(MenuAction("Finish setup", onClick = it)) }
+                add(MenuAction("Settings", onClick = onOpenSettings))
+            },
             overFrost = overFrost,
         )
     }

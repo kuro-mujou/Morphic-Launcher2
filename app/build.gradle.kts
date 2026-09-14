@@ -94,6 +94,7 @@ dependencies {
     implementation(projects.data.layout)
     implementation(projects.core.navigation)
     implementation(projects.data.settings) // settingsModule, for startKoin
+    implementation(projects.data.setup) // setupModule, likewise
     implementation(projects.data.wallpaper) // wallpaperModule, likewise
     implementation(projects.data.widgets)   // widgetsModule, likewise
     implementation(projects.feature.shell)

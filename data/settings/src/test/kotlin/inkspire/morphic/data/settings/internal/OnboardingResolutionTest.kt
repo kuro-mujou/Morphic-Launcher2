@@ -1,6 +1,7 @@
 package inkspire.morphic.data.settings.internal
 
 import inkspire.morphic.data.settings.Onboarding
+import inkspire.morphic.data.settings.SetupStep
 import kotlinx.serialization.serializer
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -43,6 +44,26 @@ class OnboardingResolutionTest {
         val beforeTheHint = """{"completed":true}"""
 
         assertEquals(Onboarding.Completed, slice.resolve(stored = beforeTheHint, surfaceRegisterStored = true))
+    }
+
+    @Test
+    fun `a dismissed setup step survives a round trip, and a step this build does not know leaves setup finished`() {
+        val stored = """{"completed":true,"edgeHintDismissed":true,"dismissedSetupSteps":["WALLPAPER","RETIRED_STEP"]}"""
+
+        val read = slice.resolve(stored = stored, surfaceRegisterStored = true)
+
+        assertEquals(true, read.completed)
+        assertEquals(true, read.isDismissed(SetupStep.WALLPAPER))
+        assertEquals(false, read.isDismissed(SetupStep.ICON_STYLE))
+    }
+
+    @Test
+    fun `the default-launcher step is never dismissed, whatever is stored`() {
+        val stored = """{"completed":true,"dismissedSetupSteps":["DEFAULT_LAUNCHER"]}"""
+
+        val read = slice.resolve(stored = stored, surfaceRegisterStored = true)
+
+        assertEquals(false, read.isDismissed(SetupStep.DEFAULT_LAUNCHER))
     }
 
     @Test

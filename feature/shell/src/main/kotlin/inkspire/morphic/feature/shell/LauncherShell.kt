@@ -329,6 +329,7 @@ fun LauncherShell(
                 // nothing at all when no menu is open.
                 if (interactive) {
                     EdgeHintOverlay(pagerState)
+                    OfferSetupOnMenu(menuHost, onOpenSettings)
                     MenuOverlay(menuHost)
                     GestureServicePrompt()
                     DefaultLauncherPrompt()

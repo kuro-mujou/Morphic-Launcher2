@@ -1,7 +1,5 @@
 package inkspire.morphic.feature.settings
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -10,8 +8,6 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Home
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -19,13 +15,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import inkspire.morphic.core.designsystem.activity.launchSafely
 import inkspire.morphic.core.designsystem.component.MorphicGroupPanel
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.feature.settings.component.SettingsNavRow
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
-import inkspire.morphic.feature.settings.setup.SetupRow
+import inkspire.morphic.feature.settings.setup.SetupHub
+import inkspire.morphic.feature.settings.setup.SetupHubViewModel
 import org.koin.androidx.compose.koinViewModel
 
 /**
@@ -73,37 +69,36 @@ internal fun SettingsList(
     // the list having lost its place.
     val marked = selected?.let { it.parent ?: it }
 
-    // **The setup step is read here rather than passed in, unlike [homeLayout], and the asymmetry is the point.** The
+    // **The setup hub is read here rather than passed in, unlike [homeLayout], and the asymmetry is the point.** The
     // pairing is a parameter because the *app bar* is named from it too, and a list that resolved it separately could
-    // disagree with the title above it. Nothing else draws this row, so there is nothing for it to disagree with —
-    // and threading it through both pane composables would have added an argument each that neither reads.
-    val shell = koinViewModel<SettingsShellViewModel>()
-    val defaultLauncherRequest by shell.defaultLauncherRequest.collectAsStateWithLifecycle()
-    // Re-derived on every resume, because the ask is completed in a system dialog that reports nothing back: being
-    // shown again is the only moment we can learn the answer changed.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { shell.refreshDefaultLauncher() }
-    // **Started for a result, and the result is never read** — which is not ceremony, it is the only way the request
-    // works. `RequestRoleActivity` identifies its asker through `getCallingPackage()`, and that is populated only for
-    // an activity started *for a result*; launched plainly it reads null, logs "Package name cannot be null or
-    // empty", and finishes before drawing. No dialog, no error, nothing to catch — the row simply appears to do
-    // nothing. Re-deriving still belongs to the resume above, which is what also covers the pre-29 route, where the
-    // user finishes in a settings screen that reports nothing either way.
-    val roleRequest = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { }
+    // disagree with the title above it. Nothing else draws the hub, so there is nothing for it to disagree with — and
+    // threading it through both pane composables would have added an argument each that neither reads.
+    val setup = koinViewModel<SetupHubViewModel>()
+    val hub by setup.state.collectAsStateWithLifecycle()
+    // Re-derived on every resume, because the home-role step is completed in a system dialog that reports nothing
+    // back: being shown again is the only moment we can learn the answer changed. Here rather than in the hub, which is
+    // not composed while it is empty — and an empty hub is exactly the one that must learn the role was lost.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { setup.refresh() }
 
     LazyColumn(modifier = modifier, contentPadding = contentPadding) {
-        // **Above the index, and only while it is needed.** The top of this list is the most valuable space the app
-        // has, which is the argument against spending it on a permanent card: this row is a question, and a question
-        // that has been answered stops being drawn.
-        defaultLauncherRequest?.let { request ->
-            item(key = "setup-default-launcher") {
-                MorphicGroupPanel(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    SetupRow(
-                        icon = Icons.Outlined.Home,
-                        title = "Set as default launcher",
-                        supporting = "Press the home button and this launcher opens.",
-                        onClick = { roleRequest.launchSafely(request) },
-                    )
-                }
+        // **Above the index, and drawn only while it has a row.** The top of this list is the most valuable space the
+        // app has, which is the argument against spending it on a permanent card: the hub is a list of questions, and
+        // one with none left stops being drawn.
+        //
+        // **But the item itself is always there, first, even empty** — and that is what keeps the hub on screen. The
+        // steps arrive a moment after the list composes, and a lazy list keeps its first visible item where it is when
+        // an item is inserted *above* it: added only once it had rows, the hub landed above the viewport, and a user
+        // arriving from "Finish setup" opened on a list scrolled past the very thing they came for. An item present
+        // from the first frame grows downward instead.
+        item(key = "setup-hub") {
+            if (hub.steps.isNotEmpty()) {
+                SetupHub(
+                    state = hub,
+                    homeLayout = homeLayout,
+                    onOpenSection = onSelect,
+                    onDismiss = setup::dismiss,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
             }
         }
 
@@ -118,7 +113,7 @@ internal fun SettingsList(
                 Column(
                     modifier = Modifier
                         .padding(horizontal = 16.dp)
-                        .padding(top = if (index > 0 || defaultLauncherRequest != null) 16.dp else 0.dp),
+                        .padding(top = if (index > 0 || hub.steps.isNotEmpty()) 16.dp else 0.dp),
                 ) {
                     if (group.header != null) {
                         SettingsSectionHeader(group.header, spaceAbove = false)
