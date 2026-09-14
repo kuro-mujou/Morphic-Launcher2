@@ -1,6 +1,6 @@
 # Onboarding Plan — a look in one tap, the rest when it is asked for
 
-**Status:** design locked (2026-09-08, author-confirmed); **O1–O4 built** (2026-09-14), the rest not. This is the *what and in what order*;
+**Status:** design locked (2026-09-08, author-confirmed); **O1–O4b built** (2026-09-14), the rest not. This is the *what and in what order*;
 the open questions at the end are real.
 
 **Amended 2026-09-14 by a survey of four shipping launchers** — see "What shipping launchers do". The locked
@@ -354,6 +354,19 @@ draws), "Not now" = apply the recommended look. Replaces O1's stub, inside O1's 
 `onboarding` slice. It carries A3's sequence too: `DefaultLauncherPrompt` waits past the resume that closed the gate,
 so it never lands on the hint. **Verify on device:** apply each look in turn; the hint names that look's edge, is announced
 by TalkBack, and is gone after one crossing.
+
+> **Built 2026-09-14.** `EdgeHintOverlay` (`feature:shell`) puts one pill at the bound edge — "↑ Swipe up for your
+> apps", "← Swipe left…", with "with two fingers" when HOME keeps that swipe for an action — read from the stored
+> register, the bottom edge named first if several are bound. It goes on the first crossing to any side surface or when
+> tapped, shows only while HOME is at rest, is a polite live region, and is absent from the first-run preview.
+> - **The dismissal is `Onboarding.edgeHintDismissed`**, an additive field rather than the "dismissed step ids" the
+>   slice was first sketched with: the hint is not a hub step, and a set of strings would name it by spelling.
+>   `beginOnboarding` re-arms it, and an install set up before onboarding existed resolves to `Onboarding.Legacy` —
+>   finished, with no hint — rather than being pointed at edges it bound itself.
+> - **A3's sequence is `DefaultLauncherPrompt` holding back until the hint is dismissed.** "Never lands on the hint" is
+>   exactly that condition, and since dismissal happens within a visit, the first ask is always on a later resume than
+>   the one that finished setup. The cost, accepted: a user who never swipes and never taps the hint is not asked, and
+>   keeps only the settings row.
 
 **O5 — the hub.** `SetupHub`: derived steps, stored dismissals, one composable used by the settings list header and
 the home surface menu, gone when empty.

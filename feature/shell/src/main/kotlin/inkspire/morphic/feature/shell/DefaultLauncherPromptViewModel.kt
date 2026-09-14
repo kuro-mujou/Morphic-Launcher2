@@ -22,6 +22,10 @@ import kotlinx.coroutines.withContext
  * device offers a way to become it. The ask is stamped when the dialog is *shown*, not when it is answered, so coming
  * back from the system's own chooser — which resumes the launcher — never asks again, whatever the user chose there.
  *
+ * **It holds back while HOME's edge hint is up.** The first home after setup carries one hint, and a dialog over it would
+ * hide the only thing saying where the apps are. So the first ask comes on a resume after the hint has gone — which is
+ * also always a resume after the one that finished setup.
+ *
  * **Its own holder rather than members of `ShellViewModel`**, for [GestureServicePromptViewModel]'s reason: it shares
  * nothing with the shell's state, and lives in the shell only because the shell is above every surface.
  */
@@ -47,6 +51,7 @@ class DefaultLauncherPromptViewModel(
     fun askIfDue() {
         if (mutableRequest.value != null || checking?.isActive == true) return
         checking = viewModelScope.launch {
+            if (!settingsRepository.onboarding.first().edgeHintDismissed) return@launch
             val now = System.currentTimeMillis()
             if (!settingsRepository.defaultLauncherAsk.first().isDue(now)) return@launch
             val intent = withContext(Dispatchers.Default) {

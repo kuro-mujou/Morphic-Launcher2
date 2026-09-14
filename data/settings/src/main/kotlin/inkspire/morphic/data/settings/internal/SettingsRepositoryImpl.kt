@@ -377,9 +377,12 @@ internal class SettingsRepositoryImpl(
         .distinctUntilChanged()
         .flowOn(dispatchers.io)
 
-    override suspend fun beginOnboarding() = update(OnboardingSlice) { copy(completed = false) }
+    override suspend fun beginOnboarding() =
+        update(OnboardingSlice) { copy(completed = false, edgeHintDismissed = false) }
 
     override suspend fun completeOnboarding() = update(OnboardingSlice) { copy(completed = true) }
+
+    override suspend fun dismissEdgeHint() = update(OnboardingSlice) { copy(edgeHintDismissed = true) }
 
     override suspend fun setCategoryTabEdge(edge: VerticalEdge) =
         update(AppsChromeSlice) { copy(categoryTabEdge = edge) }

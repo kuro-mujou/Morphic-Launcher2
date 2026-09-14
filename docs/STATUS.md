@@ -1600,6 +1600,23 @@ to land, then finishes. There is no "Not now": with a look always applied, it wo
 - **Known:** the names are placeholders (plan question 1); the miniature is small on a phone under four two-line rows;
   the default-launcher dialog still lands on the first home, which is `O4b`'s.
 
+**The first home after setup says where the apps are, once.** `O4b` of the plan. `EdgeHintOverlay` (`feature:shell`)
+draws one pill at the edge the chosen look bound — "↑ Swipe up for your apps", "← Swipe left for your apps", with "with
+two fingers" when HOME keeps that swipe for an action — read from the stored register through `EdgeHintViewModel`. It
+goes for good on the first crossing to any side surface, or when tapped, and shows only while HOME is at rest.
+
+- **Stored as `Onboarding.edgeHintDismissed`**, an additive field. `beginOnboarding` re-arms it; an install set up
+  before onboarding existed resolves to `Onboarding.Legacy`, finished with no hint to show.
+- **`DefaultLauncherPrompt` holds back until the hint is gone**, which is the plan's A3 sequence: the dialog never
+  covers the hint, and its first ask is always a resume later than the one that finished setup. A user who neither
+  swipes nor taps the hint is not asked, and keeps the settings row.
+- **A polite live region, and absent from the first-run preview** — the shell only draws it when interactive.
+- **Verified on the emulator** on cleared stores: finishing with Classic showed "↑ Swipe up for your apps" at the bottom
+  with no dialog, exposed as a clickable text node; a swipe up opened the apps, the hint did not come back, and the
+  store read `{"completed":true,"edgeHintDismissed":true}`; the next launch asked to be the default launcher. Finishing
+  with Library put "← Swipe left for your apps" at the right edge. Restoring the previous install's data showed its own
+  home with no hint. No crash in logcat. Not verified: TalkBack actually speaking it.
+
 **The home button works from everywhere, which it did not.** `MainActivity` had no `onNewIntent`, and that is the
 whole of the signal: the launcher is `launchMode="singleTask"` and declares `category.HOME`, so pressing home starts
 nothing — the system hands the live instance a fresh HOME intent, and an Activity ignoring it leaves whatever was on

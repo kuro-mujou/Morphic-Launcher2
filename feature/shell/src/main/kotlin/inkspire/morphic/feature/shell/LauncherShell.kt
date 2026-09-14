@@ -328,6 +328,7 @@ fun LauncherShell(
                 // while it is up (it locks the surface swipe), so nothing may pan out from under it. It draws
                 // nothing at all when no menu is open.
                 if (interactive) {
+                    EdgeHintOverlay(pagerState)
                     MenuOverlay(menuHost)
                     GestureServicePrompt()
                     DefaultLauncherPrompt()

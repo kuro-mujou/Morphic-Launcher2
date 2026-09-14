@@ -142,7 +142,7 @@ interface SettingsRepository {
     /**
      * Whether first-run setup has been finished — see [Onboarding].
      *
-     * Emits [Onboarding.Default] on a fresh install, and [Onboarding.Completed] on one that stored a surface register
+     * Emits [Onboarding.Default] on a fresh install, and [Onboarding.Legacy] on one that stored a surface register
      * before this flag existed.
      */
     val onboarding: Flow<Onboarding>
@@ -153,11 +153,16 @@ interface SettingsRepository {
      * Not a no-op on a fresh install, where the flag already reads unfinished: that reading comes from the key being
      * *absent*, and an absent flag beside a stored surface register reads as finished. The first-run screen writes the
      * register to preview a look, so without this stamp the gate would close itself the moment it did.
+     *
+     * It re-arms HOME's edge hint as well, so a setup started over points out its new edge too.
      */
     suspend fun beginOnboarding()
 
     /** Records that first-run setup is finished. */
     suspend fun completeOnboarding()
+
+    /** Records that HOME's hint about the bound edge has gone, for good — see [Onboarding.edgeHintDismissed]. */
+    suspend fun dismissEdgeHint()
 
     /** Sets which edge the category pager's tab bar sits on. */
     suspend fun setCategoryTabEdge(edge: VerticalEdge)

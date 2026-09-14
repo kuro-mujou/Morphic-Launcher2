@@ -7,7 +7,8 @@ import inkspire.morphic.data.settings.Onboarding
  *
  * **Absent is not the same as fresh.** An install that bound its edges before the flag existed has no `onboarding`
  * key, and reading that as "not set up" would open the picker over a working launcher — whose one action overwrites
- * the register the user built. A stored register is the evidence that someone has been here.
+ * the register the user built. A stored register is the evidence that someone has been here — and that the edge hint
+ * would tell them nothing, which is why the answer is [Onboarding.Legacy] rather than a setup with a hint still to come.
  *
  * Only absence is answered this way. A stored `completed = false` means what it says — which is what lets starting over
  * re-open the picker on an install that has a register, and what the first-run screen stamps before it writes the
@@ -15,4 +16,4 @@ import inkspire.morphic.data.settings.Onboarding
  * closes on its first write.
  */
 internal fun SettingsSlice<Onboarding>.resolve(stored: String?, surfaceRegisterStored: Boolean): Onboarding =
-    if (stored == null && surfaceRegisterStored) Onboarding.Completed else decode(stored)
+    if (stored == null && surfaceRegisterStored) Onboarding.Legacy else decode(stored)

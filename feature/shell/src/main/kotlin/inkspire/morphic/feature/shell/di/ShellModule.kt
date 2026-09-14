@@ -1,6 +1,7 @@
 package inkspire.morphic.feature.shell.di
 
 import inkspire.morphic.feature.shell.DefaultLauncherPromptViewModel
+import inkspire.morphic.feature.shell.EdgeHintViewModel
 import inkspire.morphic.feature.shell.GestureServicePromptViewModel
 import inkspire.morphic.feature.shell.ShellViewModel
 import org.koin.core.module.dsl.viewModel
@@ -17,4 +18,5 @@ val shellModule = module {
     viewModel { ShellViewModel(get(), get(), get(), get(), get(), get(), get()) }
     viewModel { GestureServicePromptViewModel(get()) }
     viewModel { DefaultLauncherPromptViewModel(get(), get()) }
+    viewModel { EdgeHintViewModel(get()) }
 }

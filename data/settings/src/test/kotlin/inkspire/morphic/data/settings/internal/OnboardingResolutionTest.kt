@@ -20,8 +20,8 @@ class OnboardingResolutionTest {
     }
 
     @Test
-    fun `an install that stored a surface register before the flag existed counts as set up`() {
-        assertEquals(Onboarding.Completed, slice.resolve(stored = null, surfaceRegisterStored = true))
+    fun `an install that stored a surface register before the flag existed is set up, with no hint to show`() {
+        assertEquals(Onboarding.Legacy, slice.resolve(stored = null, surfaceRegisterStored = true))
     }
 
     @Test
@@ -36,5 +36,19 @@ class OnboardingResolutionTest {
         val finished = slice.encode(Onboarding.Completed)
 
         assertEquals(Onboarding.Completed, slice.resolve(stored = finished, surfaceRegisterStored = false))
+    }
+
+    @Test
+    fun `a flag stored before the hint existed still has the hint to come`() {
+        val beforeTheHint = """{"completed":true}"""
+
+        assertEquals(Onboarding.Completed, slice.resolve(stored = beforeTheHint, surfaceRegisterStored = true))
+    }
+
+    @Test
+    fun `a dismissed hint survives a round trip`() {
+        val dismissed = Onboarding(completed = true, edgeHintDismissed = true)
+
+        assertEquals(dismissed, slice.resolve(stored = slice.encode(dismissed), surfaceRegisterStored = true))
     }
 }
