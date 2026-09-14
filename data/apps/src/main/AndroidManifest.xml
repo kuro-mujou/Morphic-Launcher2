@@ -23,10 +23,25 @@
       list. Once L2 is the default home app (P9) LauncherApps is exempt from visibility filtering anyway;
       this keeps it working while L2 is still an ordinary app. Merges into the app manifest.
     -->
+    <!--
+      And package visibility for the **home app itself**, which `DefaultLauncherRole.isDefault` resolves to answer
+      whether that is us. Without this the answer is not merely missing, it is *inverted*, which is why it earns its
+      own note beside the one above: a launcher is one of the few kinds of app that does **not** declare
+      MAIN/LAUNCHER — it would then sit in its own app drawer — so the launcher query cannot see Pixel Launcher, Nova,
+      or any other. The resolution is filtered down to the only HOME activity we are allowed to see, which is *our
+      own*, so a launcher that is not the default concludes that it is, and nothing ever offers to make it the default.
+      Nothing errors and nothing is empty; the answer is simply wrong.
+
+      Narrow, like its neighbor: this exposes only activities answering MAIN/HOME, which on a device is a handful.
+    -->
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
         </intent>
     </queries>
 

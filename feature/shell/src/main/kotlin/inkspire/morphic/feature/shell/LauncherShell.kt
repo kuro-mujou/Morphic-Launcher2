@@ -319,6 +319,7 @@ fun LauncherShell(
                 // nothing at all when no menu is open.
                 MenuOverlay(menuHost)
                 GestureServicePrompt()
+                DefaultLauncherPrompt()
             }
         }
     }

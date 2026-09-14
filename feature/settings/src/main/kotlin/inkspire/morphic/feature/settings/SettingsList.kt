@@ -1,9 +1,6 @@
 package inkspire.morphic.feature.settings
 
-import android.content.ActivityNotFoundException
-import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -22,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import inkspire.morphic.core.designsystem.activity.launchSafely
 import inkspire.morphic.core.designsystem.component.MorphicGroupPanel
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.model.HomeLayout
@@ -140,15 +138,4 @@ internal fun SettingsList(
             }
         }
     }
-}
-
-/**
- * Launches [intent], or does nothing if no activity will take it.
- *
- * The request is checked for a receiver before the row that launches it is drawn — this covers the gap between that
- * check and the tap, which a package disabled in between is enough to open. A settings screen must not be able to
- * crash on a row it offered.
- */
-private fun ActivityResultLauncher<Intent>.launchSafely(intent: Intent) {
-    runCatching { launch(intent) }.onFailure { if (it !is ActivityNotFoundException) throw it }
 }

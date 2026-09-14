@@ -18,10 +18,12 @@ import inkspire.morphic.data.apps.DefaultAppShortcuts
 import inkspire.morphic.data.apps.DefaultAppUninstaller
 import inkspire.morphic.data.apps.DefaultGestureActionRunner
 import inkspire.morphic.data.apps.DefaultLauncherAppsWrapper
+import inkspire.morphic.data.apps.DefaultLauncherRole
 import inkspire.morphic.data.apps.GestureActionRunner
 import inkspire.morphic.data.apps.GestureServiceAccess
 import inkspire.morphic.data.apps.LauncherAppsRawIconSource
 import inkspire.morphic.data.apps.LauncherAppsWrapper
+import inkspire.morphic.data.apps.PlatformDefaultLauncherRole
 import inkspire.morphic.data.apps.PlatformGestureServiceAccess
 import inkspire.morphic.data.apps.PlatformScreenLock
 import inkspire.morphic.data.apps.PlatformSystemShade
@@ -36,7 +38,7 @@ import org.koin.dsl.module
  * Koin module for `data:apps`. The bindings are singletons: the wrapper holds long-lived system services,
  * and the repository fronts the shared cache. [AppInfoDao] and [AppDispatchers] are resolved from the
  * database/common modules, and `Context` is provided by the app at Koin start (as `DatabaseModule` expects).
- * [AppLauncher], [AppUninstaller], [AppInfoOpener], [AppShortcuts], [SystemShade], [ScreenLock] and
+ * [AppLauncher], [AppUninstaller], [AppInfoOpener], [AppShortcuts], [SystemShade], [ScreenLock], [DefaultLauncherRole] and
  * [GestureActionRunner] are thin stateless commands — singletons only to avoid re-allocating them, as is
  * [AppCategorizer]. [GestureServiceAccess] is a singleton for a real reason: it holds the blocked action that the
  * runner reports and the shell reads, so two instances would each see half of it.
@@ -52,6 +54,7 @@ val appsModule = module {
     single<SystemShade> { PlatformSystemShade() }
     single<ScreenLock> { PlatformScreenLock() }
     single<GestureServiceAccess> { PlatformGestureServiceAccess(get<Context>()) }
+    single<DefaultLauncherRole> { PlatformDefaultLauncherRole(get<Context>()) }
     single<GestureActionRunner> { DefaultGestureActionRunner(get(), get(), get(), get(), get()) }
 
     // **`createdAtStart` because nothing injects it — it exists to run.** Its whole job is a subscription, so

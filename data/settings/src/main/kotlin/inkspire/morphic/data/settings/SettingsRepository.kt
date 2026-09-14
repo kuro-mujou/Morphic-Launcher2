@@ -133,6 +133,12 @@ interface SettingsRepository {
     /** Sets what a double tap on HOME's empty space does; a null [action] makes it do nothing. */
     suspend fun setHomeDoubleTap(action: GestureAction?)
 
+    /** When the launcher last asked, unprompted, to be made the default home app — see [DefaultLauncherAsk]. */
+    val defaultLauncherAsk: Flow<DefaultLauncherAsk>
+
+    /** Records that the launcher asked to be made the default home app at [atMillis], epoch milliseconds. */
+    suspend fun setDefaultLauncherAskedAt(atMillis: Long)
+
     /** Sets which edge the category pager's tab bar sits on. */
     suspend fun setCategoryTabEdge(edge: VerticalEdge)
 

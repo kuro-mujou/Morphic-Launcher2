@@ -4,8 +4,8 @@ import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.model.HomeLayout
+import inkspire.morphic.data.apps.DefaultLauncherRole
 import inkspire.morphic.data.settings.SettingsRepository
-import inkspire.morphic.feature.settings.setup.DefaultLauncherRole
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted

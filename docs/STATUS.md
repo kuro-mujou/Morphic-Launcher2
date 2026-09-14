@@ -1474,9 +1474,17 @@ up calling the launcher something the home-app chooser does not.
 **The settings index has one row above it now, and it is the first piece of onboarding.** `O6`'s default-launcher
 step, pulled forward out of [docs/ONBOARDING_PLAN.md](ONBOARDING_PLAN.md) because it is the one gap a user hits on a
 fresh install and cannot work around — the APK declares `category.HOME`, so Morphic *appears* in the system chooser,
-and nothing had ever asked. `DefaultLauncherRole` (`feature:settings/setup`) wraps the two mechanisms: the role
+and nothing had ever asked. `DefaultLauncherRole` (`data:apps`) wraps the two mechanisms: the role
 request dialog from API 29, and the system's "Default home app" screen below it, each checked for a receiver before
 being offered.
+
+**The launcher also asks on its own.** `DefaultLauncherPrompt` (`feature:shell`) puts up a dialog when the launcher
+surface resumes without the role, at most once every three days — `DefaultLauncherAsk` in the `default_launcher_ask`
+slice, stamped when the dialog is *shown*, so returning from the system chooser never re-asks whatever was chosen
+there. It exists for a user who loses the role after choosing it, which the settings row alone left for them to
+notice. No boot receiver and no notification: an app cannot take the role back, only put the request in front of the
+user, and resuming is the first moment the user is looking at Morphic again. `DefaultLauncherRole` moved to `data:apps`
+with its HOME `<queries>` entry on that second consumer, and `launchSafely` to `core:designsystem/activity`.
 
 - **Doneness is derived, never recorded** — locked decision 3 of that plan, and this is the case that shows why. It
   is resolved from the HOME intent rather than asked of `RoleManager.isRoleHeld`, which exists only from API 29 while

@@ -36,7 +36,7 @@ to know exists. This is not an oversight; the default's own KDoc says so and nam
 Morphic from their app list gets the launcher surface without it being their home app, and nothing says so.
 
 > **Answered ahead of the rest, 2026-09-12.** `O6`'s first step is built: `DefaultLauncherRole` in
-> `feature:settings/setup` and a `SetupRow` above the settings index, drawn only while this launcher is not the home
+> `data:apps` and a `SetupRow` above the settings index, drawn only while this launcher is not the home
 > app. It was pulled forward because it is the one gap here a user hits on the first run and cannot work around, and
 > because it needs none of `O1`–`O5` — its doneness is derived, so there is no slice to read and no gate to pass. The
 > rest of this paragraph still stands: nothing says so *on the home surface*, which is `O5`'s half of decision 4.
@@ -116,6 +116,12 @@ which is what the launcher is about to show anyway. A splash would be an app's a
 that can fail for reasons outside the app, and its doneness is derivable — so it belongs where a failed or declined
 step can sit visibly unfinished rather than blocking the way in.
 
+> **Amended by the author, 2026-09-14: the launcher also asks on its own.** When the launcher surface resumes while
+> it is not the home app, `DefaultLauncherPrompt` (`feature:shell`) puts up a dialog — at most once every three days,
+> stamped in `default_launcher_ask` when shown. It stays a request rather than a gate: declining leaves the launcher
+> usable and the settings row in place. It is what a user sees when the role is lost after they chose it, which the
+> hub alone would leave for them to notice.
+
 ---
 
 ## The preset format, and what a look may not carry
@@ -135,6 +141,7 @@ A look writes **the slices that describe an arrangement**, and never the slices 
 | `icon_presets` | no | The user's saved library. A look is not entitled to replace what they made |
 | `icon_studio_background` | no | Workspace state — the paper, not the drawing |
 | `icon_studio_workspace` | no | Same |
+| `default_launcher_ask` | no | When this install last asked to be the home app — about the device, not the look |
 | `home_item_gestures` | no | Keyed by `GridItem`, i.e. by *this device's* installed apps. A shared look would carry gestures for apps the recipient does not have |
 | `onboarding` | no | A look that could mark setup complete could also un-mark it |
 

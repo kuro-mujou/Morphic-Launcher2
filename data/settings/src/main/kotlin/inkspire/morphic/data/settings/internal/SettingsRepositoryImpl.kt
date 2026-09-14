@@ -35,6 +35,7 @@ import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.settings.AlphabetStrip
 import inkspire.morphic.data.settings.AppsChrome
 import inkspire.morphic.data.settings.CardOverride
+import inkspire.morphic.data.settings.DefaultLauncherAsk
 import inkspire.morphic.data.settings.GridOverride
 import inkspire.morphic.data.settings.HomeGestures
 import inkspire.morphic.data.settings.HomeItemGestures
@@ -210,14 +211,21 @@ private val HomeItemGesturesSlice = SettingsSlice(
     default = HomeItemGestures.Default,
 )
 
-/** How the launcher's three pagers page: one key, one blob, sparse inside. */
-/** HOME's own swipe actions and the panel style — see [HomeGestures]. */
+/** HOME's own swipe and double-tap actions — see [HomeGestures]. */
 private val HomeGesturesSlice = SettingsSlice(
     name = "home_gestures",
     serializer = serializer<HomeGestures>(),
     default = HomeGestures.Default,
 )
 
+/** When the launcher last asked to be made the default home app — see [DefaultLauncherAsk]. */
+private val DefaultLauncherAskSlice = SettingsSlice(
+    name = "default_launcher_ask",
+    serializer = serializer<DefaultLauncherAsk>(),
+    default = DefaultLauncherAsk.Default,
+)
+
+/** How the launcher's three pagers page: one key, one blob, sparse inside. */
 private val SurfacePagingSlice = SettingsSlice(
     name = "surface_paging",
     serializer = serializer<SurfacePaging>(),
@@ -321,6 +329,11 @@ internal class SettingsRepositoryImpl(
         update(HomeGesturesSlice) { withSwipe(direction, action) }
 
     override suspend fun setHomeDoubleTap(action: GestureAction?) = update(HomeGesturesSlice) { copy(doubleTap = action) }
+
+    override val defaultLauncherAsk: Flow<DefaultLauncherAsk> = dataStore.read(DefaultLauncherAskSlice) { it }
+
+    override suspend fun setDefaultLauncherAskedAt(atMillis: Long) =
+        update(DefaultLauncherAskSlice) { copy(lastAskedAtMillis = atMillis) }
 
     override suspend fun setCategoryTabEdge(edge: VerticalEdge) =
         update(AppsChromeSlice) { copy(categoryTabEdge = edge) }
