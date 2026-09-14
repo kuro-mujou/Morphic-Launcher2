@@ -1508,6 +1508,29 @@ with its HOME `<queries>` entry on that second consumer, and `launchSafely` to `
   the About screen's whole argument. Showing the version and linking out achieves the same end, and the routes out
   wait on a website and a live listing that do not exist yet.
 
+**First run has a gate, so a fresh install can no longer reach a home with no way into the app list.** `O1` of
+[docs/ONBOARDING_PLAN.md](ONBOARDING_PLAN.md). `SurfaceRegister.Default` binds no edge on purpose, which left a fresh
+install with no gesture anywhere that opened APPS. `OnboardingGate` (`feature:onboarding`) wraps `LauncherNavHost` in
+`MainActivity` and composes one of three things from the `onboarding` slice: nothing while it is unread — the
+transparent window shows the wallpaper — the first-run screen while setup is unfinished, and the launcher once it is.
+The first-run screen is a stub offering one look, `PAGER_WITH_DOCK` with the paged app list behind the bottom edge,
+which `O4`'s picker replaces.
+
+- **A gate outside navigation, not a start destination.** As a `NavKey` the screen would be the stack's bottom entry,
+  which `goHome` pops *to*, and finishing would need a `resetTo` the `Navigator` does not have. Outside it, finishing
+  swaps what is composed, and "start over" (`O7`) will be one write.
+- **An absent flag on an install with a stored surface register reads as finished** (`OnboardingResolution`, tested).
+  Every install set up before the flag existed has no key, and reading that as fresh would put a screen whose one action
+  overwrites the register in front of a working launcher. Only a user's choice writes the register, which is what makes
+  it evidence. A stored `completed = false` still opens the gate.
+- **The register is written before the flag**, so a process death between the writes re-opens the gate over a look
+  already applied, rather than closing it on a launcher with no edge bound.
+- **Verified on the emulator both ways.** An uninstall and reinstall met the stub, applied it, landed on a seeded home,
+  and a swipe up opened the pager. Restoring the previous install's data — register stored, no flag — went straight to
+  its own home and its own bound list.
+- **Known, and owed to `O4b`:** on the first home after the gate closes, `DefaultLauncherPrompt` appears at once. That
+  is the collision the plan's A3 names; it covers nothing until the edge hint exists.
+
 **The home button works from everywhere, which it did not.** `MainActivity` had no `onNewIntent`, and that is the
 whole of the signal: the launcher is `launchMode="singleTask"` and declares `category.HOME`, so pressing home starts
 nothing — the system hands the live instance a fresh HOME intent, and an Activity ignoring it leaves whatever was on

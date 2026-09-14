@@ -43,6 +43,7 @@ import inkspire.morphic.data.settings.IconOverride
 import inkspire.morphic.data.settings.IconPreset
 import inkspire.morphic.data.settings.IconPresets
 import inkspire.morphic.data.settings.IconStudioWorkspace
+import inkspire.morphic.data.settings.Onboarding
 import inkspire.morphic.data.settings.OrientationSettings
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.settings.SideBinding
@@ -225,6 +226,13 @@ private val DefaultLauncherAskSlice = SettingsSlice(
     default = DefaultLauncherAsk.Default,
 )
 
+/** Whether first-run setup is finished — see [Onboarding]. Read through `resolve`, never bare: absence has two meanings. */
+private val OnboardingSlice = SettingsSlice(
+    name = "onboarding",
+    serializer = serializer<Onboarding>(),
+    default = Onboarding.Default,
+)
+
 /** How the launcher's three pagers page: one key, one blob, sparse inside. */
 private val SurfacePagingSlice = SettingsSlice(
     name = "surface_paging",
@@ -334,6 +342,20 @@ internal class SettingsRepositoryImpl(
 
     override suspend fun setDefaultLauncherAskedAt(atMillis: Long) =
         update(DefaultLauncherAskSlice) { copy(lastAskedAtMillis = atMillis) }
+
+    // **Two keys in one read, and the only slice that needs it**: an absent flag is answered from whether the register is
+    // stored (see `resolve`). Both come from the same `Preferences` snapshot, so the pair cannot be read torn.
+    override val onboarding: Flow<Onboarding> = dataStore.data
+        .map { prefs ->
+            OnboardingSlice.resolve(
+                stored = prefs[stringPreferencesKey(OnboardingSlice.name)],
+                surfaceRegisterStored = prefs[stringPreferencesKey(SurfaceRegisterSlice.name)] != null,
+            )
+        }
+        .distinctUntilChanged()
+        .flowOn(dispatchers.io)
+
+    override suspend fun completeOnboarding() = update(OnboardingSlice) { copy(completed = true) }
 
     override suspend fun setCategoryTabEdge(edge: VerticalEdge) =
         update(AppsChromeSlice) { copy(categoryTabEdge = edge) }

@@ -139,6 +139,17 @@ interface SettingsRepository {
     /** Records that the launcher asked to be made the default home app at [atMillis], epoch milliseconds. */
     suspend fun setDefaultLauncherAskedAt(atMillis: Long)
 
+    /**
+     * Whether first-run setup has been finished — see [Onboarding].
+     *
+     * Emits [Onboarding.Default] on a fresh install, and [Onboarding.Completed] on one that stored a surface register
+     * before this flag existed.
+     */
+    val onboarding: Flow<Onboarding>
+
+    /** Records that first-run setup is finished. */
+    suspend fun completeOnboarding()
+
     /** Sets which edge the category pager's tab bar sits on. */
     suspend fun setCategoryTabEdge(edge: VerticalEdge)
 

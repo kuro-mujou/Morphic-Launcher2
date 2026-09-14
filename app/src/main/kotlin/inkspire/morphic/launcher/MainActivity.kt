@@ -15,6 +15,7 @@ import inkspire.morphic.core.icon.compose.LocalIconRenderManager
 import inkspire.morphic.core.icon.render.IconRenderManager
 import inkspire.morphic.core.model.RotationMode
 import inkspire.morphic.data.settings.SettingsRepository
+import inkspire.morphic.feature.onboarding.OnboardingGate
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -54,7 +55,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             CompositionLocalProvider(LocalIconRenderManager provides iconRenderManager) {
                 ProvideIconRecipes {
-                    LauncherNavHost(homePresses = homePresses)
+                    OnboardingGate {
+                        LauncherNavHost(homePresses = homePresses)
+                    }
                 }
             }
         }

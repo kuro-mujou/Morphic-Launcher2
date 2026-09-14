@@ -1,10 +1,10 @@
 # Onboarding Plan — a look in one tap, the rest when it is asked for
 
-**Status:** design locked (2026-09-08, author-confirmed), **nothing built**. This is the *what and in what order*;
+**Status:** design locked (2026-09-08, author-confirmed); **O1 built** (2026-09-14), the rest not. This is the *what and in what order*;
 the open questions at the end are real.
 
 **Amended 2026-09-14 by a survey of four shipping launchers** — see "What shipping launchers do". The locked
-decisions are unchanged; what the survey suggests is under "Proposed amendments", and is **not author-confirmed**.
+decisions are unchanged; what the survey added is under "Amendments", **author-confirmed the same day**.
 
 **Covers:** what a fresh install does before the user has chosen anything, the one screen they meet, the preset
 format that screen applies, and the "finish setup" hub that carries every deferred decision afterwards.
@@ -108,7 +108,7 @@ applies something: there is no path that reaches home with no edge bound. A look
 the recommended one rather than leaving a launcher with no app list.
 
 **Tier 1 — one screen, one question, answered by looking.** Four tiles, each a live render of the arrangement it
-would apply. Tap → applied → home. No welcome page, no carousel, no progress bar. A1 proposes how
+would apply. Tap → applied → home. No welcome page, no carousel, no progress bar. A1 sets how
 this screen is drawn, and A2 what home shows next.
 
 **Tier 2 — the rest arrives later, in a hub.** A dismissible "Finish setup" card at the top of the settings list and
@@ -203,7 +203,7 @@ a place you go, not a drawer you pull.
 
 ---
 
-## Proposed amendments (2026-09-14, from the survey — not yet author-confirmed)
+## Amendments (2026-09-14, from the survey — author-confirmed)
 
 Each names the slice it lands in. None reopens a locked decision: A1 changes how decision 1's one screen is drawn, and
 A3 sequences decision 6's amendment against the gate.
@@ -231,7 +231,7 @@ screen-reader user finds by exploring, and those are the users with no other rou
 - *Copy.* Today it says "Morphic isn't your default launcher, so pressing home opens a different one." Add the two things
   Niagara's explainer says and ours does not: the current home screen keeps its layout, and this can be changed back in
   system settings. Both are true, and both answer the worry that stops the tap.
-*Lands in O1 (the gate the prompt reads) and O6.*
+*Lands in O4b (the sequence) and O6 (the copy).*
 
 **A4 — a fresh install is not an empty store.** `app` declares `allowBackup="true"` with no `dataExtractionRules`, so
 Android's Auto Backup restores the DataStore file and the Room database on a new device before the first launch.
@@ -264,9 +264,24 @@ Doneness is derived: the dock zone of the current arrangement holds any placemen
 destination; composes nothing while it is unresolved. A stub picker that applies `Classic` and completes. *Ships a
 launcher that is never unreachable* — everything after this is quality.
 **Verify on device:** fresh install → the wallpaper, then the stub, then a home screen whose bottom edge opens APPS.
-Then twice more: a **restored** install (A4 — the restored flag skips the stub, and nothing carried from the old
-phone holds back the default-launcher ask), and a fresh install opened from the app list, where
-`DefaultLauncherPrompt` stays down until the gate has closed (A3).
+Then a **restored** install (A4 — the restored flag skips the stub, and nothing carried from the old phone holds back
+the default-launcher ask).
+
+> **Built 2026-09-14, and four things differ from the paragraph above.**
+> - **A gate, not a start destination.** `OnboardingGate` wraps `LauncherNavHost` in `MainActivity`. As a `NavKey` the
+>   first-run screen would be the stack's bottom entry — the home button's `goHome` pops *to* it — and finishing would
+>   need a `resetTo` the `Navigator` does not have. Outside navigation, finishing swaps what is composed, and O7 becomes
+>   one write.
+> - **`feature:onboarding` exists from O1**, holding the stub, because a stub in `app` is the prototype-then-extract
+>   that CLAUDE.md rules out.
+> - **The slice holds `completed` only.** Dismissed step ids arrive with their first reader (O4b, O5).
+> - **An absent flag on an install with a stored surface register reads as completed** (`OnboardingResolution`).
+>   Otherwise every install configured before the flag existed — and every restore of a backup taken before it — would
+>   meet a first-run screen whose one action overwrites the register. A stored `completed = false` still opens the gate.
+>
+> **A3's sequencing moved to O4b.** While the gate is open the shell is not composed, so `DefaultLauncherPrompt` cannot
+> appear over the first-run screen; holding it past the resume that closed the gate matters only once there is a hint
+> for it to land on.
 
 **O2 — the look format.** `Look` (name + slice map), `LookRepository.apply`, the in/out list above enforced in one
 place, and the capture action in the dev harness. Tests: an unknown slice name in a look is ignored; no out-list key
@@ -278,12 +293,12 @@ consumer**, which is the rule rather than a convenience: a mockup drawn independ
 "two implementations kept honest by intention" hazard, and the user would choose a look that then rendered
 differently. `feature:onboarding` must not depend on `feature:settings`.
 
-**O4 — the picker.** `feature:onboarding` — its own module, its own `NavKey` (a module may declare its own; see
-`Routes.kt`), a ViewModel, four live-preview tiles (A1 proposes one preview and four rows instead; A5 for what it draws), "Not
-now" = apply the recommended look. Replaces O1's stub.
+**O4 — the picker.** `feature:onboarding` — a ViewModel, one live preview over four named rows (A1; A5 for what it
+draws), "Not now" = apply the recommended look. Replaces O1's stub, inside O1's gate.
 
 **O4b — the edge hint.** A2: one hint on HOME naming the edge the applied look bound, stored as a dismissal in the
-`onboarding` slice. **Verify on device:** apply each look in turn; the hint names that look's edge, is announced
+`onboarding` slice. It carries A3's sequence too: `DefaultLauncherPrompt` waits past the resume that closed the gate,
+so it never lands on the hint. **Verify on device:** apply each look in turn; the hint names that look's edge, is announced
 by TalkBack, and is gone after one crossing.
 
 **O5 — the hub.** `SetupHub`: derived steps, stored dismissals, one composable used by the settings list header and

@@ -95,6 +95,7 @@ dependencies {
     implementation(projects.data.wallpaper) // wallpaperModule, likewise
     implementation(projects.data.widgets)   // widgetsModule, likewise
     implementation(projects.feature.shell)
+    implementation(projects.feature.onboarding)
     implementation(projects.feature.settings)
     // Still direct deps despite `feature:shell` composing them: the dev harness hosts both screens itself, and the
     // playgrounds reach into `core:designsystem` primitives the shell doesn't expose.
