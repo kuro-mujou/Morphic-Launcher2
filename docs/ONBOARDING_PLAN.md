@@ -3,6 +3,9 @@
 **Status:** design locked (2026-09-08, author-confirmed), **nothing built**. This is the *what and in what order*;
 the open questions at the end are real.
 
+**Amended 2026-09-14 by a survey of four shipping launchers** — see "What shipping launchers do". The locked
+decisions are unchanged; what the survey suggests is under "Proposed amendments", and is **not author-confirmed**.
+
 **Covers:** what a fresh install does before the user has chosen anything, the one screen they meet, the preset
 format that screen applies, and the "finish setup" hub that carries every deferred decision afterwards.
 
@@ -69,6 +72,35 @@ its custom flow is escapable from step one. Keep the shape, delete the interroga
 
 ---
 
+## What shipping launchers do (surveyed 2026-09-14)
+
+Four launchers walked from a fresh install on the emulator, every screen captured: Mur 1.3.3, Nova, Niagara, Smart
+Launcher. Read the way L1 is read — for what to avoid as much as for what to take.
+
+| | First-run questions | Default-launcher ask | Ends on |
+|---|---|---|---|
+| **Mur** | Welcome → five-card feature carousel (a permission toggle inside one card) → a page cross → **five** "Setup Appearance" steps over one shared live preview | A button on the last screen | "All set" with an analytics opt-in, then home |
+| **Nova** | Welcome (with *Restore backup* and *Skip setup*) → three pages of settings rows: search, app drawer, icon shape | The **first** thing after "Get started", and again on "Go home" | A paywall, then home |
+| **Niagara** | A terms screen → **one** question: pick 4–8 favorites from the real app list | An explainer (what switching does, how to switch back) → the system dialog → a calm sheet if declined | "Give it a few days", a paywall, then its real home with **one** tooltip |
+| **Smart Launcher** | A tagline carousel → one screen of permission toggles, **on by default**, beside a terms checkbox | A dismissible card on its home | Home |
+
+**What the survey says about this plan.**
+
+- **The one-screen shape holds.** The two that ask least (Niagara, Smart Launcher) still land on a usable home; the two
+  that ask most ask what cannot be judged yet. Mur's layout-scale step went 1.0× → 1.2× with no visible change in its
+  own preview, and Nova's steps are settings rows under a progress bar — L1's interrogation, with a picture or without.
+- **One large live preview reads better than small tiles.** Mur's is the user's real apps, re-rendering the moment a
+  theme is picked, with the choices listed beneath it. Evidence for open question 2, and for A1.
+- **None of them teaches the gesture into the app list** except Mur's page cross, which asks for a model of edges before
+  a single swipe has been made. Niagara's one tooltip over the real home is the lighter answer, and it sits where the
+  gesture actually happens. A2.
+- **Two show a marketing carousel, two a paywall, two a terms gate.** None of them is a question the user came to
+  answer. See Rejected.
+- **The default-launcher ask ranges from first (Nova, twice) to last (Mur, Smart Launcher).** Niagara's is the one
+  worth reading: it says what switching does and that the old home screen survives, *before* the system dialog. A3.
+
+---
+
 ## The shape: three tiers
 
 **Tier 0 — a launcher nobody has to configure.** The picker is unskippable, but only because every way out of it
@@ -76,7 +108,8 @@ applies something: there is no path that reaches home with no edge bound. A look
 the recommended one rather than leaving a launcher with no app list.
 
 **Tier 1 — one screen, one question, answered by looking.** Four tiles, each a live render of the arrangement it
-would apply. Tap → applied → home. No welcome page, no carousel, no progress bar.
+would apply. Tap → applied → home. No welcome page, no carousel, no progress bar. A1 proposes how
+this screen is drawn, and A2 what home shows next.
 
 **Tier 2 — the rest arrives later, in a hub.** A dismissible "Finish setup" card at the top of the settings list and
 a row on the home surface menu, listing what has not been done — be the default launcher, pick a wallpaper, choose an
@@ -170,12 +203,70 @@ a place you go, not a drawer you pull.
 
 ---
 
+## Proposed amendments (2026-09-14, from the survey — not yet author-confirmed)
+
+Each names the slice it lands in. None reopens a locked decision: A1 changes how decision 1's one screen is drawn, and
+A3 sequences decision 6's amendment against the gate.
+
+**A1 — one preview and four named rows, not four tiles.** Four screen-shaped tiles do not fit a phone at a size worth
+choosing from: a 2×2 of 20:9 tiles 160dp wide is ~720dp tall before a title or a "Not now". That is the reason
+`SurfaceRegisterCross` already gives for dropping its mockups — at small sizes a mockup is a smudge. Mur's shape answers
+it: one large live preview, the four looks as named rows beneath, a tap on a row re-renders the preview, and a confirm
+applies. Three of the four looks differ mainly in *the surface behind an edge*, so the preview shows HOME **and** that
+surface — a crossing that plays when a row is picked is the natural form, and it teaches the gesture the look binds.
+It costs a second tap against tier 1's one, and buys seeing a look before it is applied, which a tile applied on tap
+never offered. *Lands in O4; O3's lift is unchanged — one preview needs the same renderers four tiles would.*
+
+**A2 — land on home with one hint naming the bound edge.** After a look is applied, HOME shows a single hint at the edge
+it bound ("Swipe up for your apps"), read from `surface_register` so it cannot name an edge that is not bound. It goes
+on the first crossing to any side surface, or when tapped away — a **dismissal**, which decision 3 already allows
+storing, in the `onboarding` slice. One hint, never a tour. It must be announced to TalkBack: a swipe is not something a
+screen-reader user finds by exploring, and those are the users with no other route to the app list. *New slice O4b.*
+
+**A3 — the default-launcher ask: after home has been seen, and said honestly.**
+- *Sequence.* `DefaultLauncherPrompt` sits in the shell above every surface and fires on resume, so on an install
+  opened from the app list it would land on top of the picker, or on A2's hint. It should stay down while the gate is
+  open and through the resume that closed it; the first ask is on a later resume. Nova's ask-before-anything, repeated
+  on the way out, is the pattern this avoids.
+- *Copy.* Today it says "Morphic isn't your default launcher, so pressing home opens a different one." Add the two things
+  Niagara's explainer says and ours does not: the current home screen keeps its layout, and this can be changed back in
+  system settings. Both are true, and both answer the worry that stops the tap.
+*Lands in O1 (the gate the prompt reads) and O6.*
+
+**A4 — a fresh install is not an empty store.** `app` declares `allowBackup="true"` with no `dataExtractionRules`, so
+Android's Auto Backup restores the DataStore file and the Room database on a new device before the first launch.
+*Not yet seen on a device — confirm with `adb shell bmgr` before O1 relies on it.* Three consequences:
+- A restored completion flag skips the picker. That is correct, and O1 should say so rather than discover it.
+- `default_launcher_ask` is restored too, so a new phone — where Morphic is certainly not the home app — waits out the
+  **old** phone's cooldown before asking. The preset table already calls that slice "about the device, not the look";
+  it should be excluded from backup for the same reason.
+- Restored home placements name apps Play has not reinstalled yet. Not onboarding's to fix, but O1's restored-install
+  check is where it would first show.
+*Lands in O1.*
+
+**A5 — real apps in the preview, blank cells while the cache is cold.** Answers open question 2. Mur drew the user's own
+apps on the first screen of a fresh install, so a warm-enough cache at first run is achievable in practice. Until
+`AppRepository` has emitted, the preview draws empty icon-shaped cells — never sample brand icons, which would show a
+home screen the user does not have. *Lands in O4.*
+
+**A6 — "Fill your dock" as a hub step.** `HomeViewModel.seedIfEmpty` leaves the dock empty on purpose, and its KDoc
+names what it waits for: dock apps chosen "with a picker" rather than guessed. Niagara's favorites step is that picker,
+and it is the one first-run question in the survey about the user's own things rather than configuration — which is
+why it belongs in the hub, where it can wait, and not beside the look. `AppPicker` (`core:designsystem`) exists.
+Doneness is derived: the dock zone of the current arrangement holds any placement. Shown only while HOME is
+`PAGER_WITH_DOCK`. *Lands in O6.*
+
+---
+
 ## Slices
 
 **O1 — the gate.** The `onboarding` slice (completion flag + dismissed step ids), read by `app` to choose the start
 destination; composes nothing while it is unresolved. A stub picker that applies `Classic` and completes. *Ships a
 launcher that is never unreachable* — everything after this is quality.
 **Verify on device:** fresh install → the wallpaper, then the stub, then a home screen whose bottom edge opens APPS.
+Then twice more: a **restored** install (A4 — the restored flag skips the stub, and nothing carried from the old
+phone holds back the default-launcher ask), and a fresh install opened from the app list, where
+`DefaultLauncherPrompt` stays down until the gate has closed (A3).
 
 **O2 — the look format.** `Look` (name + slice map), `LookRepository.apply`, the in/out list above enforced in one
 place, and the capture action in the dev harness. Tests: an unknown slice name in a look is ignored; no out-list key
@@ -188,14 +279,19 @@ consumer**, which is the rule rather than a convenience: a mockup drawn independ
 differently. `feature:onboarding` must not depend on `feature:settings`.
 
 **O4 — the picker.** `feature:onboarding` — its own module, its own `NavKey` (a module may declare its own; see
-`Routes.kt`), a ViewModel, four live-preview tiles, "Not now" = apply the recommended look. Replaces O1's stub.
+`Routes.kt`), a ViewModel, four live-preview tiles (A1 proposes one preview and four rows instead; A5 for what it draws), "Not
+now" = apply the recommended look. Replaces O1's stub.
+
+**O4b — the edge hint.** A2: one hint on HOME naming the edge the applied look bound, stored as a dismissal in the
+`onboarding` slice. **Verify on device:** apply each look in turn; the hint names that look's edge, is announced
+by TalkBack, and is gone after one crossing.
 
 **O5 — the hub.** `SetupHub`: derived steps, stored dismissals, one composable used by the settings list header and
 the home surface menu, gone when empty.
 
 **O6 — the steps.** Default launcher (`RoleManager.createRequestRoleIntent(ROLE_HOME)`, `ACTION_HOME_SETTINGS`
-below API 29; doneness by resolving the HOME intent), wallpaper, icon style, first widget — each deep-linking into
-its existing section.
+below API 29; doneness by resolving the HOME intent), wallpaper, icon style, first widget, fill your dock (A6) — each deep-linking into
+its existing section. The default-launcher dialog's copy, and when it may first appear, are A3.
 
 **The default-launcher step is built**, out of order and alone — see the note under finding 2. What exists is
 `DefaultLauncherRole` (both mechanisms, both API branches, doneness by resolving HOME) and one `SetupRow` rendered
@@ -222,6 +318,21 @@ how every slice above gets tested twice.
   It is the right long-term object and the slice-map format is deliberately a subset of it — but building it now
   makes onboarding wait on a format W6+ deferred, and the key-name seam lets the format grow later without a
   migration.
+- **A welcome page or feature carousel** (Mur, Smart Launcher). Tier 1 already excludes them; the survey adds that
+  Mur's "Next" skipped a card nobody had opened, so a carousel's content is not even reliably seen.
+- **A terms screen or an analytics opt-in** (Niagara, Smart Launcher, Mur). `PrivacyPolicy.kt` says the app collects
+  nothing and holds no `INTERNET` permission; a consent step would suggest the opposite. The policy stays in About.
+- **A paywall in the first run** (Nova, Niagara). Nothing is sold, and if that changes it is not onboarding's to show.
+- **A permission request in onboarding** (Mur's notification toggle inside a feature card; Smart Launcher's three
+  toggles, on by default). A permission is asked where its feature is turned on — `GestureServicePrompt` is the model.
+- **A settings wizard** (Nova's pages of rows, Mur's five appearance steps). The screens exist; walking them in order
+  before home is L1's `CustomStep` with better styling.
+- **A page cross in the first run** (Mur). The right *settings* screen and the wrong first question. A1's crossing and
+  A2's hint teach the same thing by showing it.
+- **A sheet after the system chooser is declined** (Niagara). The settings row and the next due ask already are the
+  "try again"; a second screen on top of a declined system dialog is a nag.
+- **Asking to be default before anything has been seen** (Nova). See A3.
+- **A multi-step tour.** One hint (A2) is the ceiling.
 
 ---
 
@@ -231,10 +342,20 @@ how every slice above gets tested twice.
    (L1's mistake), and they have to mean something to someone who has never used a third-party launcher.
 2. **Do the tiles preview the user's *real* apps, or sample icons?** Real is far more convincing and is what makes
    the choice feel like a choice — but it needs the app cache warm at the first moment the app has ever run.
+   *Proposed answer: A5.*
 3. **Does the hub belong on the home surface menu at all,** or does that menu stay about *this surface* and the hub
-   live only in settings? Decision 4 says both; it is the least-argued of the six.
+   live only in settings? Decision 4 says both; it is the least-argued of the six. *Survey: Smart Launcher's
+   default-launcher card on its own home is the nearest shipped equivalent, and being closable is what keeps it
+   from reading as clutter — mild evidence for both.*
 4. **What happens to a look when the user has already customized?** "Start over" clears everything, but applying a
    look from settings later (a real want — it is how you try the others) overwrites the in-list slices silently.
    A confirm, a preview, or an undo?
 5. **Does the picker eventually gain a fifth tile — "restore a shared look"?** That is the W6+ seam arriving, and it
-   is the reason the format is a slice map rather than a script.
+   is the reason the format is a slice map rather than a script. *Survey: Nova puts "Restore backup" as a quiet link
+   on its first screen rather than as a choice beside the others — the placement to copy. Moving to a new phone is Auto
+   Backup's job (A4), so this link would only ever be for a shared look.*
+6. **Does the list-shaped look get a favorites picker?** `Minimal` seeds `home_list_item` from the grid's reading
+   order, which is whatever `AppRepository` emits first — and a list is the look whose whole promise is *what you
+   actually use*. Niagara, a list launcher, makes that pick its only first-run question. Asking it here is a second
+   first-run screen for one look; not asking leaves that look's home arbitrary. A6 covers the dock; this is the list's
+   version, and it is undecided.
