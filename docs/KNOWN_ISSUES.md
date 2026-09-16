@@ -46,22 +46,6 @@ swipe fixed. From reading the code, not timed:
 
 ## Requested changes
 
-### HOME labels
-
-#### R1. Replace the label's shadow and backing pill with a glow
-
-Wanted: a glow behind the label text, and **both** of today's treatments removed:
-
-- the drop `Shadow` in `CellLabel` (`core:designsystem/cell/IconLabelCell.kt`: 60% background, 2px y-offset,
-  4px blur);
-- the rounded-pill backing `SpotTheme` draws behind content (`drawBacking`), whose alpha `inkOver` computes.
-
-The glow would take over the backing's job of making ink readable where the spot straddles light and dark. That means
-`inkOver`'s `backingAlpha` becomes the glow's strength, or goes away; decide which. Otherwise the reading is computed
-and never used. Reverses the "halo softens, backing lifts" split in `CellLabel`'s KDoc and `SpotTheme`'s. The
-adaptive-content-color section of `docs/DESIGN_SYSTEM.md` needs the same edit. The glow's color has to follow
-the ink's cross-fade in `SpotTheme`, or it snaps while the text fades.
-
 ### Context menu
 
 #### R6. Redesign the context menu

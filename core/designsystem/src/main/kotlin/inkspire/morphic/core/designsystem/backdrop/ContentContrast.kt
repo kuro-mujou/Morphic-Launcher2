@@ -110,7 +110,7 @@ fun resolveFilm(effect: BackdropEffect, filmLuminance: LuminanceMap?, fallback: 
             val washLuminance = wash.luminance()
             val cells = filmLuminance.toFloatArray()
             for (i in cells.indices) cells[i] = washedLuminance(cells[i], washLuminance, wash.alpha)
-            inkOver(cells).light
+            inkOver(cells)
         }
     }
     return Film(tone = tone, isDark = isDark, wash = wash)

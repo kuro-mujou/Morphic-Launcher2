@@ -118,9 +118,9 @@ fun Modifier.gridSnapMarkers(
     }
 }
 
-/** The ink for a marker covering [screen] — a label's rule, without the backing a 16dp mark has no room for. */
+/** The ink for a marker covering [screen] — a label's rule, applied to a 16dp mark. */
 private fun markerInk(surface: InkSurface, reader: InkReader, screen: Rect): Color =
-    if (reader.read(surface, screen).light) MorphicColors.Dark.content else MorphicColors.Light.content
+    if (reader.read(surface, screen)) MorphicColors.Dark.content else MorphicColors.Light.content
 
 /**
  * A footprint's size in logical cells — what [gridSnapMarkers] measures its falloff against.

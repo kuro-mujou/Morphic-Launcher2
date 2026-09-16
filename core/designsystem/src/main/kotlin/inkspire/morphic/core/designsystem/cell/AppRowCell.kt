@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 import inkspire.morphic.core.designsystem.backdrop.SpotTheme
+import inkspire.morphic.core.designsystem.backdrop.inkGlow
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.IconSizingRanges
@@ -263,7 +264,8 @@ fun AppRowCell(
                 SpotTheme {
                     Text(
                         text = app.label,
-                        style = labelStyle,
+                        // No glow under a caller's own color: that color means a fill of its own behind the row.
+                        style = if (labelColor == null) labelStyle.copy(shadow = inkGlow()) else labelStyle,
                         // **Overridable, for a row drawn on something other than that background.** A picker fills
                         // the chosen row with `accent`, and a label fixed to `content` then vanishes into it — the
                         // icon stays, the name goes, and the row reads as a blank bar. The caller knows what it
@@ -324,7 +326,7 @@ fun ActionRowCell(
             SpotTheme {
                 Text(
                     text = label,
-                    style = rowLabelStyle(metrics),
+                    style = rowLabelStyle(metrics).copy(shadow = inkGlow()),
                     color = LocalMorphicColors.current.content,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

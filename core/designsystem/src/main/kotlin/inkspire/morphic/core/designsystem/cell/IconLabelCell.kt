@@ -12,8 +12,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -21,6 +19,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 import inkspire.morphic.core.designsystem.backdrop.SpotTheme
+import inkspire.morphic.core.designsystem.backdrop.inkGlow
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 
 /**
@@ -30,8 +29,8 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
  * whole: a wallpaper is a photograph, and its mean says nothing about the pixels under any one label. On the APPS
  * surface or in an open collection it is whatever the *film* wants, because those subtrees re-theme themselves.
  *
- * The halo takes the resolved theme's background, so it always opposes the ink — a softening for the odd petal under a
- * letter. Where the ink alone cannot reach contrast, [SpotTheme] adds a backing; the halo is not asked to do that job.
+ * **A soft glow surrounds the text** ([inkGlow]): where the ink alone cannot reach contrast — a spot straddling light
+ * and dark — it is what separates the letters from the side that fights them.
  */
 @Composable
 internal fun CellLabel(
@@ -53,11 +52,7 @@ internal fun CellLabel(
             style = baseStyle.copy(
                 fontSize = fontSize,
                 lineHeight = lineHeight,
-                shadow = Shadow(
-                    color = colors.background.copy(alpha = 0.6f),
-                    offset = Offset(0f, 2f),
-                    blurRadius = 4f,
-                ),
+                shadow = inkGlow(),
             ),
             color = colors.content,
             textAlign = TextAlign.Center,

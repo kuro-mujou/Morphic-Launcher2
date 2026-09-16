@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import inkspire.morphic.core.designsystem.backdrop.SpotTheme
+import inkspire.morphic.core.designsystem.backdrop.inkGlow
 import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
 import inkspire.morphic.core.designsystem.menu.LocalMenuHost
 import inkspire.morphic.core.designsystem.surface.EmbeddedViewTouchFrame
@@ -110,7 +111,7 @@ internal fun WidgetCell(
             SpotTheme {
                 Text(
                     text = label,
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelMedium.copy(shadow = inkGlow()),
                     color = LocalMorphicColors.current.contentMuted
                 )
             }

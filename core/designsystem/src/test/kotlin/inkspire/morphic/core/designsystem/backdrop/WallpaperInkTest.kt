@@ -17,60 +17,31 @@ import org.junit.Test
 class WallpaperInkTest {
 
     @Test
-    fun `a bright spot takes dark ink and no backing`() {
-        val ink = inkOver(FloatArray(12) { 0.6f })
-
-        assertFalse(ink.light)
-        assertEquals(0f, ink.backingAlpha)
+    fun `a bright spot takes dark ink`() {
+        assertFalse(inkOver(FloatArray(12) { 0.6f }))
     }
 
     @Test
-    fun `a dark spot takes light ink and no backing`() {
-        val ink = inkOver(FloatArray(12) { 0.04f })
-
-        assertTrue(ink.light)
-        assertEquals(0f, ink.backingAlpha)
-    }
-
-    @Test
-    fun `a spot straddling light and dark gets a backing, and the backing reaches the target`() {
-        // Sky on one side, flowers on the other: neither ink reads everywhere.
-        val samples = FloatArray(20) { if (it < 10) 0.02f else 0.45f }
-
-        val ink = inkOver(samples.copyOf())
-
-        assertTrue(ink.backingAlpha > 0f)
-        assertTrue(ink.backingAlpha <= 0.6f)
+    fun `a dark spot takes light ink`() {
+        assertTrue(inkOver(FloatArray(12) { 0.04f }))
     }
 
     @Test
     fun `one bright speck does not flip a dark spot`() {
         val samples = FloatArray(20) { 0.03f }.also { it[7] = 0.95f }
 
-        val ink = inkOver(samples)
-
-        assertTrue(ink.light)
-        assertEquals(0f, ink.backingAlpha)
-    }
-
-    @Test
-    fun `the backing is just enough - more contrast needed means more backing`() {
-        val mild = inkOver(FloatArray(20) { if (it < 10) 0.02f else 0.25f })
-        val harsh = inkOver(FloatArray(20) { if (it < 10) 0.02f else 0.4f })
-
-        assertTrue(mild.light && harsh.light)
-        assertTrue(harsh.backingAlpha > mild.backingAlpha)
+        assertTrue(inkOver(samples))
     }
 
     @Test
     fun `a spot on the boundary keeps the ink it already shows, and a clear winner still flips it`() {
         // Scores close enough that a fresh reading picks one ink and the incumbent keeps the other.
         val boundary = FloatArray(20) { 0.18f }
-        val fresh = inkOver(boundary.copyOf()).light
+        val fresh = inkOver(boundary.copyOf())
 
-        assertEquals(!fresh, inkOver(boundary.copyOf(), current = !fresh).light)
-        assertTrue(inkOver(FloatArray(12) { 0.04f }, current = false).light)
-        assertFalse(inkOver(FloatArray(12) { 0.6f }, current = true).light)
+        assertEquals(!fresh, inkOver(boundary.copyOf(), current = !fresh))
+        assertTrue(inkOver(FloatArray(12) { 0.04f }, current = false))
+        assertFalse(inkOver(FloatArray(12) { 0.6f }, current = true))
     }
 
     @Test

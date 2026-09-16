@@ -9,22 +9,15 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onLayoutRectChanged
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toRect
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.designsystem.theme.MorphicColors
@@ -61,16 +54,11 @@ val LocalInkSurface = staticCompositionLocalOf<InkSurface?> { null }
  * **The spot is read from where the content is on screen, as it moves.** `onLayoutRectChanged` rather than
  * `onGloballyPositioned`, because the second does not reliably re-fire when a scroller moves a node — and the lists
  * scroll, while a pager swipe carries every label across the picture. The ink is snapshot state read in composition,
- * so content recomposes only while its ink *flips*; the backing's alpha is read in the draw phase, so a swipe that fades
- * it costs a redraw and nothing more.
+ * so content recomposes only while its ink *flips*.
  *
- * **A flip is a cross-fade of the whole palette, not a switch** — ink and backing color together, over the motion
+ * **A flip is a cross-fade of the whole palette, not a switch** — ink and glow color together, over the motion
  * scheme's effects spec. Switched on a boolean, a label swiped across a boundary blinked. The first reading snaps
  * instead, since fading in from the surface's verdict would animate every label into place each time one is composed.
- *
- * **The backing is a pill behind the content, outset past it**, in the ink's own palette's background — the soft lift
- * a spot straddling light and dark needs. Drawn here rather than by callers so the thing [inkOver] sizes and the thing
- * painted are one.
  *
  * **With no surface it does nothing and themes nothing**, which is every flat background and every settings preview.
  */
@@ -98,13 +86,11 @@ fun SpotTheme(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     }
     val colors = lerp(MorphicColors.Light, MorphicColors.Dark, lightness.value)
     CompositionLocalProvider(LocalMorphicColors provides colors) {
-        val backing = colors.background
         Box(
             modifier = modifier
                 .onLayoutRectChanged(throttleMillis = 0, debounceMillis = 0) { bounds ->
                     spot.read(surface, bounds.boundsInScreen.toRect())
-                }
-                .drawBehind { drawBacking(backing, spot.backingAlpha) },
+                },
             propagateMinConstraints = true,
         ) {
             content()
@@ -112,26 +98,10 @@ fun SpotTheme(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     }
 }
 
-/** A pill around this node, outset so the text does not touch its edge. Nothing at all when [alpha] is zero. */
-private fun DrawScope.drawBacking(color: Color, alpha: Float) {
-    if (alpha <= 0f) return
-    val dx = 6.dp.toPx()
-    val dy = 2.dp.toPx()
-    val height = size.height + dy * 2
-    drawRoundRect(
-        color = color.copy(alpha = alpha),
-        topLeft = Offset(-dx, -dy),
-        size = Size(size.width + dx * 2, height),
-        cornerRadius = CornerRadius(height / 2),
-    )
-}
-
-/** One [SpotTheme]'s last reading — split so the ink and the backing invalidate different phases. */
+/** One [SpotTheme]'s last reading. */
 @Stable
 private class InkSpot {
     var light by mutableStateOf<Boolean?>(null)
-        private set
-    var backingAlpha by mutableFloatStateOf(0f)
         private set
 
     /** Whether an ink has been applied, so the first one snaps rather than fading in. Plain: nothing redraws on it. */
@@ -139,14 +109,12 @@ private class InkSpot {
     private val reader = InkReader()
 
     fun read(surface: InkSurface, screen: Rect) {
-        val ink = reader.read(surface, screen, current = light)
-        light = ink.light
-        backingAlpha = ink.backingAlpha
+        light = reader.read(surface, screen, current = light)
     }
 }
 
 /**
- * Reads the [Ink] of a screen rectangle off an [InkSurface].
+ * Reads which ink a screen rectangle of an [InkSurface] wants — [inkOver]'s answer, true for light.
  *
  * **One buffer, reused**, so a label being swiped across the picture allocates nothing per frame. A rectangle partly off
  * the picture — a page mid-swipe — is read from the cells along the edge it hangs over, which is the picture it is about
@@ -156,7 +124,7 @@ internal class InkReader {
     private var scratch = FloatArray(64)
 
     /** @param current the ink the reader already shows — see [inkOver]. */
-    fun read(surface: InkSurface, screen: Rect, current: Boolean? = null): Ink {
+    fun read(surface: InkSurface, screen: Rect, current: Boolean? = null): Boolean {
         val map = surface.brightness.map
         val cells = surface.brightness.screenToMap(screen)
         val firstColumn = floor(cells.left).toInt().coerceIn(0, map.columns - 1)

@@ -104,7 +104,7 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
 - **What is left of the system is the hint alone**, for a wallpaper that cannot be read (another app's, a live one not
   ours): `WallpaperBrightness.Reported`. Dark text only when the mean is bright *and* at most 5% of the picture is
   dark, which a half-dark picture cannot earn on any device. No getter below API 31, so light text there — the safer
-  miss, since light chrome keeps its halo over a bright patch.
+  miss, since light text keeps its glow over a bright patch.
 - **`RotatingWallpaperService` still publishes its colors** (`onComputeColors` + `notifyColorsChanged`), for everything
   else on the device — status-bar contrast, other launchers. This launcher measures the pair's files itself.
 
@@ -271,18 +271,22 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
   `LauncherTheme` is now only HOME's starting point: `wantsLightInk` over the whole map, or the system's hint.
 - **The rule (`inkOver`) judges the worst patch, not the average.** Each ink is scored against the patch hardest for
   it — the 95th percentile for light ink, the 5th for dark (percentiles, so one petal does not decide) — and the better
-  one wins, ties to light. **Where neither reaches 4.5:1, a pill backing in the ink's own background is sized to lift
-  that patch to it**, in sRGB because that is where it is composited, capped at 60%. So a label straddling sky and
-  flowers gets exactly enough backing and one on plain sky gets none; a swipe fades it rather than toggling it. The
-  ink is read in composition (a label recomposes while it flips) and the backing alpha in the draw phase.
+  one wins, ties to light. The ink is read in composition, so a label recomposes only while it flips.
+- **Every label on a picture wears a soft glow, and its strength is constant** (`inkGlow`: a zero-offset shadow, 6dp
+  blur, 90% of the palette's background). It replaced two treatments: a 2px drop shadow, and a pill backing whose alpha
+  `inkOver` sized to lift a straddling spot to 4.5:1. The glow needs no sizing because it is the ink's *opposite* tone:
+  over a patch the ink already reads on it is close to the patch and barely shows, and over the side of a boundary that
+  fights the ink it is what separates the letters. Read from `LocalMorphicColors`, it cross-fades with the ink. Not
+  under a caller's own label color, which means a fill of its own (a selected picker row).
 - **A flip cross-fades, and it has to be earned.** Switched on a boolean, a label swiped across a boundary blinked, so
   `SpotTheme` blends the whole palette over the motion scheme's effects spec (the first reading snaps). And a spot keeps
   the ink it shows until the other scores 1.25× better (`inkOver`'s `current`), or a label parked on a boundary would
   cross-fade back and forth instead.
 - **This reverses a decision recorded here**: per-label sampling was "deliberately not built" as a wallpaper read per
   cell, and a strengthened halo was meant to carry the local variation instead. The cost was mis-stated — the picture
-  is measured once per change, and a label's reading is a handful of array reads — and the halo did not carry it: a
-  60%, 4px shadow does not rescue near-black text on dark flowers.
+  is measured once per change, and a label's reading is a handful of array reads — and a halo alone did not carry it: a
+  60%, 4px shadow does not rescue near-black text on dark flowers. The glow is paired with the per-spot ink, not
+  instead of it.
 - **The film is read once, not spot by spot.** `LocalInkSurface` is what `SpotTheme` reads, and only the shell provides
   one — the sharp wallpaper, for HOME. `OnFilm`, the menu, `OnPanel` and every sheet clear it, so text there takes its
   surface's single verdict. The blur evens the picture out enough that one ink reads everywhere on it, and per-spot ink
@@ -307,8 +311,6 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
   without setting `LocalOverFrost` — which would tell its own panel to fill flat — and over the film it does the
   opposite: the panel is flat, its scrim is a theme color, and re-theming would re-decide a question the scrim
   answers.
-- **Grid labels keep a halo struck from the resolved theme's background**, so it always opposes the ink. It softens
-  the odd bright speck under a letter; reaching contrast is the backing's job, not the halo's.
 - **`SurfaceBackdropLayer` opts out of `LocalOverFrost` and is not wrapped in `OnFilm`** — a film is not drawn *on* a
   film. Two of them stacking is the deliberate depth cue below.
 
