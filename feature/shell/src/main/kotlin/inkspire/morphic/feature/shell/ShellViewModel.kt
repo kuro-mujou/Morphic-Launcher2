@@ -6,10 +6,10 @@ import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.model.BackdropEffect
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DeviceConfiguration
+import inkspire.morphic.core.model.GestureAction
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridSlot
 import inkspire.morphic.core.model.Orientation
-import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.arrangementKey
 import inkspire.morphic.core.model.on
 import inkspire.morphic.core.model.wallpaper.LuminanceMap
@@ -198,14 +198,14 @@ class ShellViewModel(
     fun startShortcut(shortcut: AppShortcut) = appShortcuts.start(shortcut)
 
     /**
-     * Runs what a swipe in [direction] on HOME is set to — a swipe that began [startX] across the pager, 0 at the left.
-     * **Read as it fires**, like an item's gesture, so a swipe reassigned a moment ago does the new thing.
+     * Runs [action], the one a swipe on HOME is set to — a swipe that began [startX] across the pager, 0 at the left.
+     *
+     * **Handed the action rather than reading it again.** The shell already holds it, from the same store through
+     * [state], and a reassignment reaches that before the user can be back on HOME to swipe; reading the store here
+     * put a suspension between the finger's claim and the action.
      */
-    fun runHomeSwipe(direction: SwipeDirection, startX: Float) {
-        viewModelScope.launch {
-            val action = settingsRepository.homeGestures.first().swipes[direction] ?: return@launch
-            gestureActionRunner.run(action, startX)
-        }
+    fun runHomeSwipe(action: GestureAction, startX: Float) {
+        gestureActionRunner.run(action, startX)
     }
 
     /**

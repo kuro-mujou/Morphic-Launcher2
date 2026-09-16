@@ -65,6 +65,7 @@ import inkspire.morphic.core.designsystem.topaction.rememberTopActionState
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
+import inkspire.morphic.core.model.GestureAction
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.GridSlot
@@ -563,10 +564,10 @@ private fun ShellState.surfaceBindings(onOpenAppsSettings: (AppsLayout) -> Unit)
         )
     }
 
-/** HOME's own swipe actions, each handed to [run] with its direction and where across the pager it started. */
-private fun ShellState.swipeActions(run: (SwipeDirection, Float) -> Unit): Map<SwipeDirection, SwipeAction> =
-    homeGestures.swipes.keys.associateWith { direction ->
-        SwipeAction(homeOneFinger(direction.revealedEdge)) { startX -> run(direction, startX) }
+/** HOME's own swipe actions, each handed to [run] with where across the pager it started. */
+private fun ShellState.swipeActions(run: (GestureAction, Float) -> Unit): Map<SwipeDirection, SwipeAction> =
+    homeGestures.swipes.mapValues { (direction, action) ->
+        SwipeAction(homeOneFinger(direction.revealedEdge)) { startX -> run(action, startX) }
     }
 
 /**
