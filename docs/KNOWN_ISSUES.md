@@ -24,18 +24,6 @@ come from reading the code, not from a debugger.
 
 ## Defects
 
-### D2. The context menu is misaligned with what it opens from
-
-**What happens:** Reported only as "alignment", without the case. Before fixing, find out which surface, which anchor
-position (near an edge, the dock, a docked vs. anchored menu) and which orientation.
-
-**Where:** Placement is `menuPlacementFor` / `menuOffsetFor` / `dockedMenuOffsetFor` in
-`core:designsystem/menu/MenuAnchoring.kt`. Layout is `ContextMenu` in `core:designsystem/menu/ContextMenu.kt`.
-`ContextMenu` renders inline rather than in a `Popup` on purpose (a drag has to continue on the same pointer stream),
-so a fix must not "solve" alignment by moving it into one.
-
-Worth doing before R6, so the redesign is not built on a placement bug.
-
 ### D3. A label's ink snaps between light and dark with no transition
 
 **What happens:** A HOME label crossing a light/dark boundary in the wallpaper (a pager swipe, a scroll) switches color
@@ -119,33 +107,6 @@ path is slower on purpose and should not be mixed into the result.
 - **The settle after release** uses `spring(stiffness = Spring.StiffnessMediumLow)` with a long tail, and
   `FLING_THRESHOLD_PX` = 1000 is raw px/s, not dp, so on a dense screen a short flick is more likely to snap back.
 
-### D5. Pressing home with a side surface open does not return to HOME
-
-**What happens:** With a side surface open (APPS, or any bound edge), pressing home through system navigation should
-close the surface and show HOME. Reported as not doing so. The report does not say which navigation mode (three-button
-or gesture), and that is the first thing to find out.
-
-**What already exists:** This was built in 4ec9b35f (2026-09-12). `MainActivity.onNewIntent` emits to `homePresses` on
-a `CATEGORY_HOME` intent. `LauncherNavHost` pops pushed routes (`Navigator.goHome`), and the shell's `ReturnToHome`
-calls `SurfacePagerState.close()` while `openEdge != null`. The gates are not in the way: `interactive` is false only
-for the first-run preview, which is given `emptyFlow()`, and the real shell gets the live flow. **So check first that
-the device runs a build with that commit.**
-
-**If it does, where the cause appears to be:**
-
-1. **Gesture navigation may send no HOME intent to a home that is already in front.** On Android 10+ the home gesture
-   is animated by the system's recents provider, usually the OEM's own launcher, not this one. Whether it then hands a
-   third-party home that is already the top task a new intent is up to the device. The three-button home button goes
-   through the ordinary home intent. Working on buttons and failing on gestures points here. The fix is then a
-   different signal, not a change to `ReturnToHome`, so find out what the device delivers before designing one.
-2. **A press during a pan.** If home arrives while a finger is still dragging, or while a settle is running,
-   `surfacePagerGesture`'s release settles the pan after `close()` started, and the settle decides where it lands.
-   Only relevant if the failure happens mid-swipe rather than with the surface at rest.
-
-**How to see which:** Log in `onNewIntent` and in `ReturnToHome`'s collector, then press home once in each navigation
-mode with APPS open. No log in `onNewIntent` is (1). A log in both with the surface still open means `close()` is being
-overridden, which is (2) or something not listed here.
-
 ---
 
 ## Requested changes
@@ -183,7 +144,9 @@ Both change with it.
 
 Wanted: a better-looking menu. No direction given yet. Get one (a reference, or a mockup) before building. Scope is
 `MenuSurface`, `MenuRow`, `MenuHeader` and `ChevronMark` in `ContextMenu.kt`. The inline rendering and staging
-(`MenuStage`) are behavior, not look, and stay. After D2.
+(`MenuStage`) are behavior, not look, and stay. The menu's content is also misaligned (reported without the case); the
+redesign absorbs that rather than fixing it first. Placement is `MenuAnchoring.kt`, and it must not move into a `Popup`:
+a drag has to continue on the same pointer stream.
 
 ### Settings
 
