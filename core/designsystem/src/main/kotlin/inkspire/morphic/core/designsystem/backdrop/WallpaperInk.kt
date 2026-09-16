@@ -39,6 +39,9 @@ const val InkContrastTarget = 4.5f
 /** A backing past this stops reading as a soft lift and starts reading as a chip, so a spot is left short instead. */
 private const val MaxBackingAlpha = 0.6f
 
+/** How much better the other ink has to score before a spot that already shows one switches — see [inkOver]. */
+private const val InkHysteresis = 1.25f
+
 /** Which of a spot's cells count as its dark and bright ends — see [inkOver] for why not the extremes. */
 private const val LowPercentile = 0.05f
 private const val HighPercentile = 0.95f
@@ -55,13 +58,28 @@ private const val HighPercentile = 0.95f
  * **The backing is sized, not switched** — just opaque enough to lift that worst patch to [InkContrastTarget], computed
  * in sRGB because that is the space it is composited in. A spot the ink already reads on gets none, which keeps the
  * backing to spots that straddle a boundary, and a label swiped across one fades it rather than popping it.
+ *
+ * @param current the ink this spot already shows, or null for a first reading. The incumbent keeps winning until the
+ *   other ink scores [InkHysteresis] times better, so a label parked on a boundary does not flip on every frame.
  */
-fun inkOver(samples: FloatArray, count: Int = samples.size, palette: InkPalette = InkPalette.Morphic): Ink {
+fun inkOver(
+    samples: FloatArray,
+    count: Int = samples.size,
+    palette: InkPalette = InkPalette.Morphic,
+    current: Boolean? = null,
+): Ink {
     if (count <= 0) return Ink(light = true, backingAlpha = 0f)
     samples.sort(0, count)
     val dark = samples[((count - 1) * LowPercentile).roundToInt()]
     val bright = samples[((count - 1) * HighPercentile).roundToInt()]
-    return if (contrast(palette.lightInk, bright) >= contrast(palette.darkInk, dark)) {
+    val lightScore = contrast(palette.lightInk, bright)
+    val darkScore = contrast(palette.darkInk, dark)
+    val light = when (current) {
+        null -> lightScore >= darkScore
+        true -> lightScore * InkHysteresis >= darkScore
+        false -> lightScore > darkScore * InkHysteresis
+    }
+    return if (light) {
         Ink(light = true, backingAlpha = backingFor(bright, palette.lightInk, palette.lightBacking))
     } else {
         Ink(light = false, backingAlpha = backingFor(dark, palette.darkInk, palette.darkBacking))

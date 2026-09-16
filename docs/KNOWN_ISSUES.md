@@ -24,19 +24,6 @@ come from reading the code, not from a debugger.
 
 ## Defects
 
-### D3. A label's ink snaps between light and dark with no transition
-
-**What happens:** A HOME label crossing a light/dark boundary in the wallpaper (a pager swipe, a scroll) switches color
-instantly and often. It reads as flicker.
-
-**Where:** `SpotTheme` (`core:designsystem/backdrop/SpotTheme.kt`) switches `MorphicTheme(darkTheme = light)` on a
-boolean. That boolean is snapshot state set from `onLayoutRectChanged` with no throttle and no debounce. Nothing
-animates the resulting `content` color. The backing alpha already changes continuously; the ink does not.
-
-**Direction:** Animate the ink color, not the boolean. The ink is read in composition, so an `animateColorAsState`
-over `colors.content` is where it would go. Probably worth a little hysteresis too, so a label parked on a boundary
-does not oscillate. Fold this into R1 if that lands first: the glow's color has to follow the same animation.
-
 ### D4. A side surface starts following the finger only after ~1cm of travel
 
 **What happens:** Swiping up from HOME to open a side surface (APPS), the finger travels about **1cm** before the
@@ -124,7 +111,8 @@ Wanted: a glow behind the label text, and **both** of today's treatments removed
 The glow would take over the backing's job of making ink readable where the spot straddles light and dark. That means
 `inkOver`'s `backingAlpha` becomes the glow's strength, or goes away; decide which. Otherwise the reading is computed
 and never used. Reverses the "halo softens, backing lifts" split in `CellLabel`'s KDoc and `SpotTheme`'s. The
-adaptive-content-color section of `docs/DESIGN_SYSTEM.md` needs the same edit.
+adaptive-content-color section of `docs/DESIGN_SYSTEM.md` needs the same edit. The glow's color has to follow
+the ink's cross-fade in `SpotTheme`, or it snaps while the text fades.
 
 #### R2. Take automatic ink off the film; keep it on the wallpaper
 

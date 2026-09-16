@@ -274,7 +274,11 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
   one wins, ties to light. **Where neither reaches 4.5:1, a pill backing in the ink's own background is sized to lift
   that patch to it**, in sRGB because that is where it is composited, capped at 60%. So a label straddling sky and
   flowers gets exactly enough backing and one on plain sky gets none; a swipe fades it rather than toggling it. The
-  ink is read in composition (a label recomposes when it flips) and the backing alpha in the draw phase.
+  ink is read in composition (a label recomposes while it flips) and the backing alpha in the draw phase.
+- **A flip cross-fades, and it has to be earned.** Switched on a boolean, a label swiped across a boundary blinked, so
+  `SpotTheme` blends the whole palette over the motion scheme's effects spec (the first reading snaps). And a spot keeps
+  the ink it shows until the other scores 1.25× better (`inkOver`'s `current`), or a label parked on a boundary would
+  cross-fade back and forth instead.
 - **This reverses a decision recorded here**: per-label sampling was "deliberately not built" as a wallpaper read per
   cell, and a strengthened halo was meant to carry the local variation instead. The cost was mis-stated — the picture
   is measured once per change, and a label's reading is a handful of array reads — and the halo did not carry it: a

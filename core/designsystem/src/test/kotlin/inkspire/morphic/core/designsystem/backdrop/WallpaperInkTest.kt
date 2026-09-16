@@ -63,6 +63,17 @@ class WallpaperInkTest {
     }
 
     @Test
+    fun `a spot on the boundary keeps the ink it already shows, and a clear winner still flips it`() {
+        // Scores close enough that a fresh reading picks one ink and the incumbent keeps the other.
+        val boundary = FloatArray(20) { 0.18f }
+        val fresh = inkOver(boundary.copyOf()).light
+
+        assertEquals(!fresh, inkOver(boundary.copyOf(), current = !fresh).light)
+        assertTrue(inkOver(FloatArray(12) { 0.04f }, current = false).light)
+        assertFalse(inkOver(FloatArray(12) { 0.6f }, current = true).light)
+    }
+
+    @Test
     fun `a mid-gray picture that one color would call bright is not given dark ink by the system's verdict`() {
         assertTrue(WallpaperBrightness.Reported(supportsDarkText = false).wantsLightInk())
         assertFalse(WallpaperBrightness.Reported(supportsDarkText = true).wantsLightInk())

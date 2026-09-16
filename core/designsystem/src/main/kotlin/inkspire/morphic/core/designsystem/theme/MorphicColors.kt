@@ -9,6 +9,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 
 /**
  * Semantic color roles for the in-house design system. A token names a color by *purpose*, not value, so a
@@ -88,6 +89,31 @@ data class MorphicColors(
         )
     }
 }
+
+/**
+ * Every role of [start] blended toward [stop] by [fraction] (0 is [start], 1 is [stop]) — the palette partway through a
+ * theme flip, for text that crosses from one ink to the other and must not snap.
+ */
+fun lerp(start: MorphicColors, stop: MorphicColors, fraction: Float): MorphicColors = MorphicColors(
+    background = lerp(start.background, stop.background, fraction),
+    surface = lerp(start.surface, stop.surface, fraction),
+    surfaceElevated = lerp(start.surfaceElevated, stop.surfaceElevated, fraction),
+    scrim = lerp(start.scrim, stop.scrim, fraction),
+    content = lerp(start.content, stop.content, fraction),
+    contentMuted = lerp(start.contentMuted, stop.contentMuted, fraction),
+    contentDisabled = lerp(start.contentDisabled, stop.contentDisabled, fraction),
+    accent = lerp(start.accent, stop.accent, fraction),
+    onAccent = lerp(start.onAccent, stop.onAccent, fraction),
+    accentMuted = lerp(start.accentMuted, stop.accentMuted, fraction),
+    outline = lerp(start.outline, stop.outline, fraction),
+    divider = lerp(start.divider, stop.divider, fraction),
+    trackInactive = lerp(start.trackInactive, stop.trackInactive, fraction),
+    trackActive = lerp(start.trackActive, stop.trackActive, fraction),
+    thumb = lerp(start.thumb, stop.thumb, fraction),
+    focusRing = lerp(start.focusRing, stop.focusRing, fraction),
+    error = lerp(start.error, stop.error, fraction),
+    onError = lerp(start.onError, stop.onError, fraction),
+)
 
 /** The current [MorphicColors]; defaults to [MorphicColors.Dark]. Provide the right scheme via [MorphicTheme]. */
 val LocalMorphicColors = staticCompositionLocalOf { MorphicColors.Dark }
