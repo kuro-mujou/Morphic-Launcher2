@@ -210,7 +210,7 @@ internal fun WallpaperDetail(modifier: Modifier = Modifier) {
 }
 
 /**
- * The two wallpaper **modes**, side by side — the single image, and the rotating pair.
+ * The two wallpaper **modes** — the single image, and the rotating pair — paged, or side by side in a short window.
  *
  * A pager rather than two stacked groups because the modes are alternatives: whichever one is applied *is* the
  * wallpaper, and the other is a saved configuration waiting. Swiping between them says that; two headings do not. It
@@ -227,18 +227,7 @@ private fun WallpaperModePager(
     onPickPortrait: () -> Unit,
     onPickLandscape: () -> Unit,
 ) {
-    val pagerState = rememberPagerState(initialPage = if (state.rotatingActive) RotatingPage else SinglePage) {
-        PageCount
-    }
-    HorizontalPager(
-        state = pagerState,
-        // The picture plus the block of title and actions beneath it — the 128dp is that block's own height, and is
-        // not the screen's to take back however short it gets.
-        modifier = Modifier.height(modePreviewHeight() + 128.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp),
-        pageSpacing = 12.dp,
-        verticalAlignment = Alignment.Top,
-    ) { page ->
+    val modePage: @Composable (Int) -> Unit = { page ->
         if (page == SinglePage) {
             WallpaperModePage(
                 title = "Single wallpaper",
@@ -342,6 +331,39 @@ private fun WallpaperModePager(
                 },
             )
         }
+    }
+
+    // The picture plus the block of title and actions beneath it — the 128dp is that block's own height, and is not
+    // the screen's to take back however short it gets.
+    val height = modePreviewHeight() + 128.dp
+
+    // **Both modes at once in a short window.** A page there is the whole landscape width, so the picture sat small in
+    // the middle of it, the apply button against the edge, and the next page's title peeked in beside it — while the
+    // width holds both modes with room to spare, which says "alternatives" without a swipe.
+    if (currentDeviceConfiguration().isShortWindow) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 16.dp)
+                .height(height),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(Modifier.weight(1f)) { modePage(SinglePage) }
+            Box(Modifier.weight(1f)) { modePage(RotatingPage) }
+        }
+        return
+    }
+
+    val pagerState = rememberPagerState(initialPage = if (state.rotatingActive) RotatingPage else SinglePage) {
+        PageCount
+    }
+    HorizontalPager(
+        state = pagerState,
+        modifier = Modifier.height(height),
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        pageSpacing = 12.dp,
+        verticalAlignment = Alignment.Top,
+    ) { page ->
+        modePage(page)
     }
 }
 
@@ -758,11 +780,12 @@ private fun Drawable.toImageBitmap(): ImageBitmap {
  * button at the bottom of the page. Two literals kept in step by intention is the hazard this codebase keeps
  * rediscovering, and it had already bitten here — shrinking the pager alone cut "Design a wallpaper" in half.
  *
- * **Shorter on a short window.** At 200dp the picture plus its actions is 328dp, which is most of a phone in
- * landscape: one control filled the pane and the mode rows below it sat under the fold. Only the picture gives way.
+ * **Shorter on a short window.** At 200dp the picture plus its actions is 328dp, more than a phone in landscape has
+ * for the pane. Only the picture gives way, and not below 160dp: the two modes sit side by side there, and the rotating
+ * pair's portrait slot is this tall at the screen's own ratio — at 112dp it was ~50dp wide and its label broke in two.
  */
 @Composable
-private fun modePreviewHeight(): Dp = if (currentDeviceConfiguration().isShortWindow) 112.dp else 200.dp
+private fun modePreviewHeight(): Dp = if (currentDeviceConfiguration().isShortWindow) 160.dp else 200.dp
 
 private const val SinglePage = 0
 private const val RotatingPage = 1

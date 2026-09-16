@@ -56,15 +56,6 @@ Wanted: a better-looking menu. No direction given yet. Get one (a reference, or 
 redesign absorbs that rather than fixing it first. Placement is `MenuAnchoring.kt`, and it must not move into a `Popup`:
 a drag has to continue on the same pointer stream.
 
-### Settings
-
-#### R8. Fix phone landscape for five settings screens
-
-**What happens:** Five screens lay out badly on a phone in landscape: **Wallpaper** (`WallpaperDetail`), **Effects**
-(`EffectsDetail`), **Icons** (`IconsDetail` / `icons/`), **Screen manager** (`SurfaceRegisterDetail`) and
-**Home screen** (`HomeDetail`). Reported without specifics. Several of these have a live preview above their controls,
-and on a short, wide screen that likely leaves no room for the controls. Confirm per screen on the emulator.
-
 ### Wallpaper studio
 
 #### R11. Credit gart in the wallpaper studio

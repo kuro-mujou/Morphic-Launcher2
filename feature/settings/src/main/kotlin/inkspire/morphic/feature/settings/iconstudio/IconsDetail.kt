@@ -86,8 +86,12 @@ internal fun IconsDetail(modifier: Modifier = Modifier) {
                     .fillMaxHeight(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                DashboardAction("Edit all icons", AllSubtitle, Icons.Outlined.Palette, Modifier.weight(1f), editAll)
-                DashboardAction("Edit specific apps", OneSubtitle, Icons.Outlined.Apps, Modifier.weight(1f), editOne)
+                // Full width of the column, or each card is as wide as its own subtitle and the two disagree.
+                val card = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                DashboardAction("Edit all icons", AllSubtitle, Icons.Outlined.Palette, card, editAll)
+                DashboardAction("Edit specific apps", OneSubtitle, Icons.Outlined.Apps, card, editOne)
             }
             PresetsGrid(
                 modifier = Modifier

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -34,6 +35,7 @@ import inkspire.morphic.feature.settings.SettingsSection
 import inkspire.morphic.feature.settings.component.CompanionSide
 import inkspire.morphic.feature.settings.component.EditorCompanion
 import inkspire.morphic.feature.settings.component.GridEditor
+import inkspire.morphic.feature.settings.component.PictureBesideControls
 import inkspire.morphic.feature.settings.component.SettingsNavRow
 import inkspire.morphic.feature.settings.component.of
 import inkspire.morphic.feature.settings.label
@@ -81,6 +83,20 @@ internal fun HomeDetail(
     val device = currentDeviceConfiguration()
     LaunchedEffect(device) { viewModel.setDevice(device) }
 
+    // **The mockup beside the rows in a short window.** Above them on a phone in landscape it filled most of the
+    // height, and the rows it explains needed a scroll to reach.
+    if (device.isShortWindow) {
+        PictureBesideControls(
+            picture = { PairingCrossFade(state) { PairingMockup(it, Modifier.width(360.dp)) } },
+            modifier = modifier,
+        ) {
+            HomeLayoutSwitch(selected = state.layout, onSelect = viewModel::setLayout)
+            Spacer(Modifier.height(16.dp))
+            PairingCrossFade(state) { HomeZoneRows(it.layout, onOpenSection) }
+        }
+        return
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -89,24 +105,33 @@ internal fun HomeDetail(
     ) {
         HomeLayoutSwitch(selected = state.layout, onSelect = viewModel::setLayout)
         Spacer(Modifier.height(16.dp))
-
-        // **Cross-fade, not a pager.** The two pairings are mutually-exclusive states rather than pages sitting side
-        // by side, so there is nothing to travel between — and a horizontal pager here would compete with the sliders
-        // and grid editors on the panes it leads to, as well as being the segmented control a second time.
-        //
-        // Keyed on the whole state so the mockup re-draws when the extent resolves, not only when the pairing moves.
-        AnimatedContent(
-            targetState = state,
-            transitionSpec = { fadeIn(tween(SwapMs)) togetherWith fadeOut(tween(SwapMs)) },
-            label = "home-pairing",
-            modifier = Modifier.fillMaxWidth(),
-        ) { shown ->
+        PairingCrossFade(state) { shown ->
             Column {
-                PairingMockup(shown)
+                PairingMockup(shown, Modifier.fillMaxWidth())
                 Spacer(Modifier.height(16.dp))
                 HomeZoneRows(shown.layout, onOpenSection)
             }
         }
+    }
+}
+
+/**
+ * [content] for one pairing, cross-faded when the pairing changes.
+ *
+ * **Cross-fade, not a pager.** The two pairings are mutually-exclusive states rather than pages sitting side by side,
+ * so there is nothing to travel between — and a horizontal pager here would compete with the sliders and grid editors
+ * on the panes it leads to, as well as being the segmented control a second time.
+ *
+ * Keyed on the whole state so the mockup re-draws when the extent resolves, not only when the pairing moves.
+ */
+@Composable
+private fun PairingCrossFade(state: HomeHubState, content: @Composable (HomeHubState) -> Unit) {
+    AnimatedContent(
+        targetState = state,
+        transitionSpec = { fadeIn(tween(SwapMs)) togetherWith fadeOut(tween(SwapMs)) },
+        label = "home-pairing",
+    ) { shown ->
+        content(shown)
     }
 }
 
@@ -147,7 +172,7 @@ private fun HomeLayoutSwitch(selected: HomeLayout, onSelect: (HomeLayout) -> Uni
  * screen divides.
  */
 @Composable
-private fun PairingMockup(state: HomeHubState) {
+private fun PairingMockup(state: HomeHubState, modifier: Modifier) {
     val window = usableWindowArea(uiInsets)
     val edge = currentDeviceConfiguration().sideZoneEdge(state.layout)
     val extentDp = (state.sideExtentDp ?: state.layout.sideSlot.blueprint.extentDp ?: 0).toFloat()
@@ -163,7 +188,7 @@ private fun PairingMockup(state: HomeHubState) {
             fraction = window.sideZoneFraction(extentDp, edge),
             side = CompanionSide.of(edge),
         ),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier,
     )
 }
 

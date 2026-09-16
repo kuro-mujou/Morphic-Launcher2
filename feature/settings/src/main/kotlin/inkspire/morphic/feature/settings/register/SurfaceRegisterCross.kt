@@ -118,7 +118,7 @@ internal fun SurfaceRegisterCross(
     val cardSize = DpSize(cardWidth, cardHeight)
 
     Column(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

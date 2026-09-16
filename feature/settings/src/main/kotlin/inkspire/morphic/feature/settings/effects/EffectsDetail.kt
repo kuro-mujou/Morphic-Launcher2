@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -31,6 +32,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.backdrop.wallpaperTone
 import inkspire.morphic.core.designsystem.backdrop.washColor
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
@@ -42,6 +44,7 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.BackdropEffect
 import inkspire.morphic.core.model.BackdropTint
 import inkspire.morphic.core.model.Orientation
+import inkspire.morphic.feature.settings.component.PictureBesideControls
 import inkspire.morphic.feature.settings.component.SettingsSectionHeader
 import org.koin.androidx.compose.koinViewModel
 import kotlin.math.roundToInt
@@ -140,6 +143,30 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
     val draggingBlur = dragged != null && dragged?.blurStrength != state.effect.blurStrength
     val previewImage = if (draggingBlur) state.draggingImage else state.backdropImage
 
+    // **The chooser sits under the preview, unlabeled** in a tall window and beside it in a short one — either way the
+    // picture is what you came to look at, and this is the first thing you reach for to change it. An "Effect" heading
+    // over two buttons reading "Blur" and "Liquid glass" names the category they are already named by.
+    val controls: @Composable ColumnScope.() -> Unit = {
+        EffectControls(state, viewModel, onPreviewBlur = ::previewBlur, onPreviewGlass = ::previewGlass)
+    }
+    val preview: @Composable (Modifier) -> Unit = { previewModifier ->
+        BackdropPreview(
+            effect = previewed,
+            image = previewImage,
+            accent = state.backdropAccent,
+            modifier = previewModifier,
+        )
+    }
+
+    // **Beside, not above, in a short window.** Pinned above the controls on a phone in landscape it took half the
+    // height, and the tint swatches scrolled underneath it with only their labels showing below the picture.
+    if (currentDeviceConfiguration().isShortWindow) {
+        PictureBesideControls(picture = { preview(Modifier.width(360.dp)) }, modifier = modifier) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp), content = controls)
+        }
+        return
+    }
+
     LazyColumn(modifier = modifier.fillMaxSize()) {
         // **The preview comes first and carries no heading.** The app bar already reads "Effects" and a picture of a
         // frosted panel does not need to be told it is a preview — what it is is self-evident, and a word above it costs
@@ -159,11 +186,8 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
                 // became a 590dp letterbox — a shape no panel in the launcher has, previewing a material by showing
                 // it as something else. The cap is the widest a panel actually gets on a tall phone, so the picture
                 // stays the thing it is describing and the spare width goes to margin.
-                BackdropPreview(
-                    effect = previewed,
-                    image = previewImage,
-                    accent = state.backdropAccent,
-                    modifier = Modifier
+                preview(
+                    Modifier
                         .align(Alignment.CenterHorizontally)
                         .widthIn(max = 420.dp)
                         .padding(horizontal = 20.dp),
@@ -177,48 +201,56 @@ internal fun EffectsDetail(modifier: Modifier = Modifier) {
                     .fillMaxWidth()
                     .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                // **The chooser sits under the preview, unlabeled**, which is the order the eye wants: the picture is
-                // what you came to look at, and this is the first thing you reach for to change it. A "Effect" heading
-                // over two buttons reading "Blur" and "Liquid glass" names the category they are already named by.
-                //
-                // Below API 33 there is one entry, and a segmented control of one is a label — so the `if` is what
-                // keeps it from drawing as a single dead-looking button.
-                if (state.liquidGlassAvailable) {
-                    MorphicSegmentedButtons(
-                        options = EffectKind.entries.map { it.label },
-                        selectedIndex = state.effect.kind.ordinal,
-                        onSelect = { viewModel.select(EffectKind.entries[it]) },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                } else {
-                    Text(
-                        text = "Liquid glass is only available on Android 13 and above.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.contentMuted,
-                    )
-                }
-
-                // Exhaustive over the sealed type rather than over the chooser, so a new variant fails to compile here
-                // until it has controls — the same rule `AppsScreen` follows for an unbuilt layout.
-                when (val effect = state.effect) {
-                    is BackdropEffect.Blur -> BlurControls(
-                        effect = effect,
-                        // The swatches resolve their colors the way the renderer does, which needs the wallpaper's
-                        // accent — and they sit outside the preview, so it is handed to them rather than read.
-                        tone = wallpaperTone(state.backdropAccent?.let(::Color)),
-                        onEdit = viewModel::editBlur,
-                        onPreview = ::previewBlur,
-                    )
-
-                    is BackdropEffect.LiquidGlass -> GlassControls(
-                        effect = effect,
-                        onEdit = viewModel::editGlass,
-                        onPreview = ::previewGlass,
-                    )
-                }
-            }
+                content = controls,
+            )
         }
+    }
+}
+
+/**
+ * The chooser, then the controls belonging to whatever is chosen — one body for both of [EffectsDetail]'s arrangements.
+ */
+@Composable
+private fun ColumnScope.EffectControls(
+    state: EffectsState,
+    viewModel: EffectsViewModel,
+    onPreviewBlur: (BlurEdit) -> Unit,
+    onPreviewGlass: (GlassEdit) -> Unit,
+) {
+    // Below API 33 there is one entry, and a segmented control of one is a label — so the `if` is what keeps it from
+    // drawing as a single dead-looking button.
+    if (state.liquidGlassAvailable) {
+        MorphicSegmentedButtons(
+            options = EffectKind.entries.map { it.label },
+            selectedIndex = state.effect.kind.ordinal,
+            onSelect = { viewModel.select(EffectKind.entries[it]) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+    } else {
+        Text(
+            text = "Liquid glass is only available on Android 13 and above.",
+            style = MaterialTheme.typography.bodySmall,
+            color = LocalMorphicColors.current.contentMuted,
+        )
+    }
+
+    // Exhaustive over the sealed type rather than over the chooser, so a new variant fails to compile here until it has
+    // controls — the same rule `AppsScreen` follows for an unbuilt layout.
+    when (val effect = state.effect) {
+        is BackdropEffect.Blur -> BlurControls(
+            effect = effect,
+            // The swatches resolve their colors the way the renderer does, which needs the wallpaper's accent — and they
+            // sit outside the preview, so it is handed to them rather than read.
+            tone = wallpaperTone(state.backdropAccent?.let(::Color)),
+            onEdit = viewModel::editBlur,
+            onPreview = onPreviewBlur,
+        )
+
+        is BackdropEffect.LiquidGlass -> GlassControls(
+            effect = effect,
+            onEdit = viewModel::editGlass,
+            onPreview = onPreviewGlass,
+        )
     }
 }
 

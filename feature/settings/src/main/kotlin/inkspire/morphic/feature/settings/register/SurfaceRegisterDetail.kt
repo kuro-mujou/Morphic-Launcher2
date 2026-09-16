@@ -3,6 +3,7 @@ package inkspire.morphic.feature.settings.register
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -15,11 +16,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.component.MorphicGroupPanel
 import inkspire.morphic.core.model.AppsLayout
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.data.settings.SideBinding
 import inkspire.morphic.feature.settings.SettingsSection
+import inkspire.morphic.feature.settings.component.PictureBesideControls
 import inkspire.morphic.feature.settings.component.SettingsValueRow
 import inkspire.morphic.feature.settings.label
 import org.koin.androidx.compose.koinViewModel
@@ -65,30 +68,43 @@ internal fun SurfaceRegisterDetail(
     var picking by remember { mutableStateOf<HomeEdge?>(null) }
     var pickingTransition by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 20.dp),
-    ) {
+    val cross: @Composable (Modifier) -> Unit = { crossModifier ->
         SurfaceRegisterCross(
             homeLayout = state.register.homeLayout,
             bindings = state.register.sides,
             twoFingerEdges = state.twoFingerEdges,
             onPick = { picking = it },
             onOpenSettings = onOpenSection,
+            modifier = crossModifier,
         )
-
-        Spacer(Modifier.height(20.dp))
-
-        // The one setting that belongs to the crossing itself rather than to an edge — so it sits under the cross,
-        // not on it. A row that opens a modal, like the edges do, since six motions each want a line describing them.
+    }
+    // The one setting that belongs to the crossing itself rather than to an edge — so it sits under the cross, or
+    // beside it, not on it. A row that opens a modal, like the edges do, since six motions each want a line describing
+    // them.
+    val transitionRow: @Composable () -> Unit = {
         MorphicGroupPanel {
             SettingsValueRow(
                 label = "Switch animation",
                 value = state.register.transition.label,
                 onClick = { pickingTransition = true },
             )
+        }
+    }
+
+    // **The cross beside the row in a short window.** On a phone in landscape the cross alone is the pane's height, so
+    // stacked, the row under it was a scroll away.
+    if (currentDeviceConfiguration().isShortWindow) {
+        PictureBesideControls(picture = { cross(Modifier) }, modifier = modifier) { transitionRow() }
+    } else {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 20.dp),
+        ) {
+            cross(Modifier.fillMaxWidth())
+            Spacer(Modifier.height(20.dp))
+            transitionRow()
         }
     }
 
