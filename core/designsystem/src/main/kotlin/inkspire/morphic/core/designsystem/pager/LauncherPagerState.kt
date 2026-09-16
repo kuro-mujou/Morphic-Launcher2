@@ -147,16 +147,23 @@ class LauncherPagerState(
         normalizeWrapPosition()
     }
 
-    /** Release with velocity: advance one page past the fling threshold, else settle to the nearest. */
-    suspend fun flingHorizontal(velocityPx: Float) {
+    /**
+     * Release with velocity: advance one page past the fling threshold, else settle to the nearest.
+     *
+     * @param velocityPx the release velocity, in px/s.
+     * @param flingThresholdPx the speed, in px/s, past which a release advances a page.
+     * @param maxVelocityPx the most of the release speed, in px/s, the settle carries on with.
+     *   Both thresholds are pixels because [velocityPx] is, resolved from dp by the caller, which has the density.
+     */
+    suspend fun flingHorizontal(velocityPx: Float, flingThresholdPx: Float, maxVelocityPx: Float) {
         if (pageSize <= 0 || pageCount <= 1) return
         val current = positionAnimatable.value
         val target = when {
-            velocityPx < -PAGE_FLING_THRESHOLD -> floor(current).toInt() + 1
-            velocityPx > PAGE_FLING_THRESHOLD -> ceil(current).toInt() - 1
+            velocityPx < -flingThresholdPx -> floor(current).toInt() + 1
+            velocityPx > flingThresholdPx -> ceil(current).toInt() - 1
             else -> current.roundToInt()
         }
-        val capped = velocityPx.coerceIn(-MAX_FLING_VELOCITY, MAX_FLING_VELOCITY)
+        val capped = velocityPx.coerceIn(-maxVelocityPx, maxVelocityPx)
         positionAnimatable.animateTo(
             targetValue = clampIfBounded(target.toFloat()),
             animationSpec = pagerSpring,
@@ -211,9 +218,6 @@ class LauncherPagerState(
     }
 
     private companion object {
-        const val PAGE_FLING_THRESHOLD = 400f
-        const val MAX_FLING_VELOCITY = 4000f
-
         /** Visual overscroll ceiling, in page widths (the rubber-band asymptote). */
         const val MAX_OVERSCROLL_PAGES = 0.16f
 

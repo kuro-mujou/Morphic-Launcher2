@@ -20,6 +20,7 @@ import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.swipeDirectionOf
 import kotlinx.coroutines.CoroutineScope
@@ -42,7 +43,11 @@ import kotlin.math.roundToInt
  *
  * One per gesture, and it needs no synchronization — every caller is the pointer loop on the main thread.
  */
-private class PanPump(private val scope: CoroutineScope, private val state: SurfacePagerState) {
+private class PanPump(
+    private val scope: CoroutineScope,
+    private val state: SurfacePagerState,
+    private val flingThresholdPx: Float,
+) {
 
     private var pending = 0f
     private var job: Job? = null
@@ -83,8 +88,8 @@ private class PanPump(private val scope: CoroutineScope, private val state: Surf
         scope.launch {
             join()
             when (axis) {
-                PanAxis.HORIZONTAL -> state.settleX(startPage, velocity)
-                PanAxis.VERTICAL -> state.settleY(startPage, velocity)
+                PanAxis.HORIZONTAL -> state.settleX(startPage, velocity, flingThresholdPx)
+                PanAxis.VERTICAL -> state.settleY(startPage, velocity, flingThresholdPx)
             }
         }
     }
@@ -247,6 +252,9 @@ fun Modifier.surfacePagerGesture(
     val bands = rememberSystemGestureBands()
     pointerInput(state, itemClaim, bands) {
         val touchSlop = viewConfiguration.touchSlop
+        // **In dp, resolved here** — a raw px/s threshold is a slower finger on a dense screen and a faster one on a
+        // sparse screen. 400dp/s is Compose's own pager fling threshold.
+        val flingThresholdPx = 400.dp.toPx()
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             if (!enabled()) return@awaitEachGesture
@@ -277,7 +285,7 @@ fun Modifier.surfacePagerGesture(
             var accY = 0f
             val tracker = VelocityTracker()
 
-            val pump = PanPump(scope, state)
+            val pump = PanPump(scope, state, flingThresholdPx)
 
             while (true) {
                 val event = awaitPointerEvent(PointerEventPass.Initial)

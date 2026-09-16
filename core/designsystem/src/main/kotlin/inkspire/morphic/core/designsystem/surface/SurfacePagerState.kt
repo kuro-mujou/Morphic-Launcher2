@@ -14,6 +14,7 @@ import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.SwipeDirection
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 /**
  * State for [SurfacePager]: the HOME surface's pan position toward its side surfaces, plus the pan operations
@@ -175,17 +176,24 @@ class SurfacePagerState {
      * Releases a horizontal drag: springs to whichever page the [settleTarget] rule picks (fling past
      * threshold, or dragged past [SETTLE_FRACTION]), from where the drag started.
      *
+     * **The spring starts at the finger's speed**, not at rest — started still, a flick braked to nothing on release
+     * and then set off again, which read as the surface letting go of the finger. See [settleVelocity] for the cap.
+     *
      * @param start the integer page the drag began on (`0`, `-1`, or `+1`).
      * @param velocityPx release velocity in px/s, its sign flipped by the caller so it matches the pan
      *   direction (finger flinging right → pan decreasing).
+     * @param flingThresholdPx the release speed, in px/s, past which a fling advances a page however short the drag.
+     *   Pixels because [velocityPx] is, and resolved from dp by the caller, which has the density.
      */
-    suspend fun settleX(start: Float, velocityPx: Float) {
-        animX.animateTo(settleTarget(start, animX.value, velocityPx, minX, maxX), settleSpring)
+    suspend fun settleX(start: Float, velocityPx: Float, flingThresholdPx: Float) {
+        val target = settleTarget(start, animX.value, velocityPx, flingThresholdPx, minX, maxX)
+        animX.animateTo(target, settleSpring, settleVelocity(animX.value, target, velocityPx, viewportWidth))
     }
 
     /** Vertical counterpart of [settleX]. */
-    suspend fun settleY(start: Float, velocityPx: Float) {
-        animY.animateTo(settleTarget(start, animY.value, velocityPx, minY, maxY), settleSpring)
+    suspend fun settleY(start: Float, velocityPx: Float, flingThresholdPx: Float) {
+        val target = settleTarget(start, animY.value, velocityPx, flingThresholdPx, minY, maxY)
+        animY.animateTo(target, settleSpring, settleVelocity(animY.value, target, velocityPx, viewportHeight))
     }
 
     /**
@@ -227,8 +235,26 @@ class SurfacePagerState {
 }
 
 /**
+ * The pan speed a settle from [current] to [target] starts at: the release velocity in pan units per second, capped so
+ * the spring cannot overshoot.
+ *
+ * **The cap is what makes handing the velocity over safe.** A critically damped spring overshoots its target once the
+ * speed toward it passes `ω × distance` (ω = √stiffness), and an overshoot here is not a wobble: past 0 it shows the
+ * opposite edge's surface, past ±1 a gap beyond the one it is opening. Speed *away* from the target (a drag released
+ * backwards short of the settle fraction) is kept, and simply turns around.
+ */
+private fun settleVelocity(current: Float, target: Float, velocityPx: Float, viewportPx: Int): Float {
+    if (viewportPx <= 0) return 0f
+    val velocity = velocityPx / viewportPx
+    val towardTarget = (target - current) * velocity > 0f
+    if (!towardTarget) return velocity
+    val cap = sqrt(Spring.StiffnessMediumLow) * abs(target - current)
+    return velocity.coerceIn(-cap, cap)
+}
+
+/**
  * Picks the page a released drag lands on, one page at most from [start]:
- * - a fling past [FLING_THRESHOLD_PX] in the drag's direction advances one page;
+ * - a fling past [flingThresholdPx] in the drag's direction advances one page;
  * - otherwise a drag past [SETTLE_FRACTION] of a page commits, and a smaller drag snaps back.
  *
  * The result is clamped to `[start-1, start+1]` (a single-page move) and then to the axis bounds.
@@ -237,12 +263,13 @@ private fun settleTarget(
     start: Float,
     current: Float,
     velocityPx: Float,
+    flingThresholdPx: Float,
     min: Float,
     max: Float,
 ): Float {
     val dragged = current - start
     val flingDir = if (velocityPx > 0f) 1f else -1f
-    val flungPastThreshold = abs(velocityPx) > FLING_THRESHOLD_PX && dragged * flingDir >= 0f
+    val flungPastThreshold = abs(velocityPx) > flingThresholdPx && dragged * flingDir >= 0f
     val target = when {
         flungPastThreshold -> start + flingDir
         dragged > SETTLE_FRACTION -> start + 1f
@@ -253,9 +280,6 @@ private fun settleTarget(
 }
 
 private const val SETTLE_FRACTION = 0.25f
-
-/** Fling speed (px/s) above which a release advances a page regardless of how far it was dragged. */
-private const val FLING_THRESHOLD_PX = 1000f
 
 /** Remembers a [SurfacePagerState] for the lifetime of the composition. */
 @Composable

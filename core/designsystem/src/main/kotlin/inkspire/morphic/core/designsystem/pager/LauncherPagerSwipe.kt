@@ -9,6 +9,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
+import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.surface.LocalItemSwipeClaim
 import inkspire.morphic.core.model.swipeDirectionOf
 import kotlinx.coroutines.launch
@@ -40,6 +41,10 @@ fun Modifier.launcherPagerSwipe(
     val itemClaim = LocalItemSwipeClaim.current
     pointerInput(state, itemClaim) {
         val touchSlop = viewConfiguration.touchSlop
+        // **In dp, resolved here**: a raw px/s threshold is a slower finger on a dense screen and a faster one on a
+        // sparse one. The values are the old 400 and 4000 px/s at ~2.6x density, so a phone there pages as it did.
+        val flingThresholdPx = 150.dp.toPx()
+        val maxFlingVelocityPx = 1500.dp.toPx()
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
             if (!enabled()) return@awaitEachGesture
@@ -72,7 +77,9 @@ fun Modifier.launcherPagerSwipe(
                 if (!change.pressed) {
                     if (horizontal) {
                         change.consume()
-                        scope.launch { state.flingHorizontal(tracker.calculateVelocity().x) }
+                        scope.launch {
+                            state.flingHorizontal(tracker.calculateVelocity().x, flingThresholdPx, maxFlingVelocityPx)
+                        }
                         flung = true
                     }
                     break

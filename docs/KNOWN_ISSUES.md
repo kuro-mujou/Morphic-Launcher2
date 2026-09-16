@@ -24,23 +24,7 @@ come from reading the code, not from a debugger.
 
 ## Defects
 
-### D6. Other swipe paths may lag
-
-**What happens:** Not reported. Found while tracing D4, the surface-swipe stall that composing side slots ahead of the
-swipe fixed. From reading the code, not timed:
-
-- **System-panel actions** (`ShadePull.NOTIFICATIONS` / `QUICK_SETTINGS` / `BY_SIDE`) replay a finger stroke through
-  the accessibility service (`MorphicGestureService.swipeDownFromTop`): `SWIPE_MS` 200ms, and for quick settings two
-  strokes with `SETTLE_MS` 350ms between them, about 750ms before it starts expanding. `ShadePull.PULL_DOWN`
-  (`GLOBAL_ACTION_NOTIFICATIONS`) has no stroke and is the control. Shorten the durations by testing on the devices
-  `SystemShade` names; a stroke too short is read as a tap.
-- **Every swipe action** goes through `ShellViewModel.runHomeSwipe`, which re-reads `homeGestures.first()` from
-  DataStore before running the action the shell already holds. Probably milliseconds; pass the action in instead.
-- **A swipe that starts on an icon** is recognized at 20dp instead of ~8dp, and `ItemGestureMachine` fires
-  `EdgeAction` on **Up**. Firing on release was deliberate (letting go early cancels), so changing it is a design
-  decision.
-- **The settle after release** uses `spring(stiffness = Spring.StiffnessMediumLow)` with a long tail, and
-  `FLING_THRESHOLD_PX` = 1000 is raw px/s, not dp, so on a dense screen a short flick is more likely to snap back.
+None open.
 
 ---
 
