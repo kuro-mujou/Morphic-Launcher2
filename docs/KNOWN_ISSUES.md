@@ -114,18 +114,6 @@ and never used. Reverses the "halo softens, backing lifts" split in `CellLabel`'
 adaptive-content-color section of `docs/DESIGN_SYSTEM.md` needs the same edit. The glow's color has to follow
 the ink's cross-fade in `SpotTheme`, or it snaps while the text fades.
 
-#### R2. Take automatic ink off the film; keep it on the wallpaper
-
-Wanted: text over the **blurred film** (APPS, an open collection, the menu over HOME) stops choosing its color spot by
-spot. The blur already evens out the picture enough that one color is readable everywhere on it. Per-spot ink stays
-where it earns its cost, straight on the wallpaper on HOME.
-
-**Where:** The film publishes itself as an `InkSurface` (the film's blurred picture plus its wash) through
-`LocalInkSurface`, which is what turns `SpotTheme` on there. Providing `null` inside the film makes `SpotTheme` do
-nothing, and the surface's single verdict (`OnFilm`) takes over. This reverses "four backgrounds, each text reads its
-own spot" in `docs/DESIGN_SYSTEM.md` → "Adaptive content color", and `InkSurface`'s KDoc says two surfaces exist.
-Both change with it.
-
 ### Context menu
 
 #### R6. Redesign the context menu

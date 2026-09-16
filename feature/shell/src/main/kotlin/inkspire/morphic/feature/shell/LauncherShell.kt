@@ -589,7 +589,6 @@ private fun shellBackdrop(state: ShellState, windowSize: IntSize): BackdropState
     windowSize = windowSize,
     filmImage = state.backdropImages.film,
     luminanceMap = state.measuredLuminance(),
-    filmLuminanceMap = state.backdropImages.filmLuminance,
 )
 
 @Composable

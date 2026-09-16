@@ -17,7 +17,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import inkspire.morphic.core.designsystem.backdrop.LocalInkSurface
 import inkspire.morphic.core.designsystem.backdrop.LocalOverFrost
-import inkspire.morphic.core.designsystem.backdrop.filmInkSurface
 import inkspire.morphic.core.designsystem.backdrop.filmIsDark
 import inkspire.morphic.core.designsystem.surface.LocalSurfaceGestureLock
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
@@ -204,17 +203,15 @@ fun MenuOverlay(host: LauncherMenuHost) {
         // be the film's too, even though the wallpaper directly around the menu may be the opposite brightness. That
         // is the case a single global wallpaper reading gets wrong every time — a black menu over a bright wallpaper.
         //
-        // **And the rows read their own spot of that material**, which is what the film's single verdict could not do:
-        // a menu over dark water on a bright wallpaper is a dark panel, whatever the film is on average. Over the film
-        // the panel is flat, so there is no picture under the rows and no surface to read.
+        // Either way the rows take that one verdict rather than reading their own spot: the frost is blurred enough
+        // that one ink reads across it, and over the film the panel is flat.
         if (request.overFrost) {
             CompositionLocalProvider(LocalOverFrost provides true, LocalInkSurface provides null) {
                 RequestedMenu(request = request, onDismiss = host::dismiss)
             }
         } else {
-            val film = filmInkSurface()
             LauncherTheme(darkTheme = filmIsDark()) {
-                CompositionLocalProvider(LocalInkSurface provides film) {
+                CompositionLocalProvider(LocalInkSurface provides null) {
                     RequestedMenu(request = request, onDismiss = host::dismiss)
                 }
             }

@@ -89,8 +89,8 @@ fun filmTone(): Color = LocalFilm.current?.tone ?: Color.Unspecified
  *
  * **Its darkness is the worst-patch rule over the whole washed film, not its mean against a crossover.** A film is the
  * wallpaper blurred, and a blurred sky over water is still bright above and dark below; a mean put dark text over the
- * water on four of the six effects. Text that reads its own spot ([SpotTheme]) does better than either — this is the
- * answer for everything on the film that does not.
+ * water on four of the six effects. It is the answer for all text on the film: the blur evens the picture out enough
+ * that one ink reads everywhere on it, so nothing there reads its own spot.
  *
  * @param filmLuminance the film picture's own luminance map, or **null when there is no picture to sample**. A film
  *   with nothing to sample is its own flat scrim, and a scrim is a theme color — so it already contrasts the enclosing
@@ -117,17 +117,6 @@ fun resolveFilm(effect: BackdropEffect, filmLuminance: LuminanceMap?, fallback: 
 }
 
 /**
- * The film as an [InkSurface], or null outside the shell or with no measured film — for a surface drawn *on* the film
- * whose text should read its own spot of it.
- */
-@Composable
-fun filmInkSurface(): InkSurface? {
-    val brightness = LocalBackdrop.current?.film?.brightness
-    val wash = LocalFilm.current?.wash ?: Color.Transparent
-    return remember(brightness, wash) { brightness?.let { InkSurface(it, wash) } }
-}
-
-/**
  * Declares that [content] is drawn **on the full-screen film**: it must not frost itself again, and it must be themed
  * against the film rather than against the wallpaper.
  *
@@ -137,18 +126,18 @@ fun filmInkSurface(): InkSurface? {
  * someone picks a wash that crosses the threshold. The set of surfaces needing each is identical, so there is one
  * declaration and no way to get half of it.
  *
+ * **Text on the film takes the film's one verdict, not its own spot** — [LocalInkSurface] is cleared, so a
+ * [SpotTheme] inside does nothing. Per-spot ink stays on HOME's sharp wallpaper, where a label can cross a real edge.
+ *
  * **Not for the layer that *draws* the film**, which is `SurfaceBackdropLayer` and is neither on one nor themed by
  * one — see its own opt-out.
  */
 @Composable
 fun OnFilm(content: @Composable () -> Unit) {
-    // Already over a frost, this is either a sheet that fills flat or a film compounding another — neither is the one
-    // picture-and-wash the film's surface describes, so text there takes the film's whole-screen verdict.
-    val surface = if (LocalOverFrost.current) null else filmInkSurface()
     LauncherTheme(darkTheme = filmIsDark()) {
         CompositionLocalProvider(
             LocalOverFrost provides true,
-            LocalInkSurface provides surface,
+            LocalInkSurface provides null,
             content = content,
         )
     }

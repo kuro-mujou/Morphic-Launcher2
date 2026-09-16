@@ -35,10 +35,8 @@ import kotlin.math.floor
 /**
  * **A picture that text sits straight on**, read spot by spot: its luminance map, and the wash painted over it.
  *
- * Two of them exist, and which one is behind a piece of text is a fact about where it is composed: the **wallpaper**
- * on HOME (no wash), and the **film** on APPS, in a collection and in the menu over HOME (the film's blurred picture
- * and the film's wash). A frosted panel or a flat scrim is neither — there is one tone under the text and the enclosing
- * theme already answers for it — so it provides none.
+ * One exists: the **wallpaper** on HOME, with no wash. The film, a frosted panel and a flat scrim provide none — the
+ * blur or the flat tone evens out what is under the text, and the enclosing theme already answers for it.
  *
  * @param wash the color painted over the picture, alpha included; `Color.Transparent` for none.
  */

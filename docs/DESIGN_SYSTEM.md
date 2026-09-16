@@ -259,7 +259,7 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
   | Background | Who themes it | Reading |
   |---|---|---|
   | the wallpaper (HOME) | `SpotTheme`, per spot; `LauncherShell` for the rest | `inkOver` the cells under it |
-  | the film (APPS, collections, sheets, menu) | `SpotTheme` on the film; `OnFilm` for the rest | the film's own map, washed |
+  | the film (APPS, collections, sheets, menu) | `OnFilm`, once for the whole film | `inkOver` the film's own map, washed |
   | a panel (container tiles) | `OnPanel` | the wallpaper's mean washed at the **user's** own tint |
   | a solid color (settings) | its own zone | `isSystemInDarkTheme()` |
 
@@ -283,16 +283,13 @@ geometry, the derive-vs-store split, insets, packaging — stayed in
   cell, and a strengthened halo was meant to carry the local variation instead. The cost was mis-stated — the picture
   is measured once per change, and a label's reading is a handful of array reads — and the halo did not carry it: a
   60%, 4px shadow does not rescue near-black text on dark flowers.
-- **The film is two-toned too, so it is read the same way** — `LocalInkSurface` is what `SpotTheme` reads, and which
-  picture that is depends on where the text is composed. The shell provides the sharp wallpaper for HOME; `OnFilm` and
-  the menu over HOME provide the **film's own blurred picture** (`WallpaperRepository.luminanceOf`, measured as it is
-  emitted) under the film's wash; `OnPanel`, a flat sheet over a frost and a menu over the film provide none, since
-  there is one tone under the text and the enclosing theme answers. Before this, a 0.6 blur of a sky over water put
-  dark labels over the water on APPS, and dark text in a dark menu, on four of the six effects.
-  - **The film's remaining whole-screen verdict (`Film.isDark`) is `inkOver` over the washed film map**, not its mean
-    against the crossover, for everything on the film that does not read a spot — search, headers, sheet text.
-  - **A film over a frost reads no surface**: a sheet over APPS fills flat and a collection over APPS compounds two
-    washes, and neither is the one picture-and-wash the film's map describes.
+- **The film is read once, not spot by spot.** `LocalInkSurface` is what `SpotTheme` reads, and only the shell provides
+  one — the sharp wallpaper, for HOME. `OnFilm`, the menu, `OnPanel` and every sheet clear it, so text there takes its
+  surface's single verdict. The blur evens the picture out enough that one ink reads everywhere on it, and per-spot ink
+  over a film cost a reading per label for a flip the eye read as flicker rather than as legibility.
+  - **That verdict (`Film.isDark`) is `inkOver` over the washed film map** (`WallpaperRepository.luminanceOf`), not its
+    mean against the crossover — a 0.6 blur of a sky over water is still bright above and dark below, and a mean put
+    dark labels over the water on four of the six effects.
 - **The mean is left for the container tile alone** (`OnPanel`), which is a small washed tone rather than a picture.
 - **`OnFilm` is one call for two facts, because they are one fact.** A surface arriving over the film must not frost
   itself again *and* must be themed against the film; the sets needing each are identical, and the second is the half
