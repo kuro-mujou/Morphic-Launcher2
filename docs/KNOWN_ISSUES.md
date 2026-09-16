@@ -173,10 +173,6 @@ and on a short, wide screen that likely leaves no room for the controls. Confirm
 
 After R7, since that change moves the padding these layouts are built from.
 
-#### R9. Rename the gestures heading "On home" to "Home gesture"
-
-`SettingsSectionHeader("On home", …)` in `feature:settings/gestures/GesturesDetail.kt`. The string only.
-
 ### Wallpaper studio
 
 #### R11. Credit gart in the wallpaper studio

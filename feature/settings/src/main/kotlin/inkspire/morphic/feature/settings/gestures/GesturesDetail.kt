@@ -60,7 +60,7 @@ internal fun GesturesDetail(
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
     ) {
-        SettingsSectionHeader("On home", spaceAbove = false)
+        SettingsSectionHeader("Home gesture", spaceAbove = false)
         MorphicGroupPanel {
             SwipeDirection.entries.forEach { direction ->
                 SettingsValueRow(
