@@ -144,20 +144,6 @@ studio fixes (the W11 passes). Do not start it on a studio still being reworked.
 harvested source, not a Gradle dependency, so the AboutLibraries list in About does **not** pick it up on its own. The
 credit needs a license entry there as well as the note in the studio. `docs/GART_HARVEST.md` records what was taken.
 
-### APPS surface
-
-#### R12. Dark shades under the status bar and navigation bar on APPS
-
-Wanted: two translucent black gradients, one under the status bar and one over the navigation bar, so content
-scrolling beneath the bars stays readable. On four APPS layouts: **vertical list**, **vertical grid**,
-**category pager**, **category card**. Not on the APPS pager, which is not on the list.
-
-**Where:** Nothing in `feature:apps` reads `statusBars` or `navigationBars` today. The layouts inset through `uiInsets`.
-Size each shade from the real bar inset. A dp guess leaves a strip on gesture navigation, where the navigation bar is
-thin. The shades are chrome over the film, so they belong in one place `AppsScreen` draws once. Written into each
-layout, it would be four copies. `MainActivity` sets both bars scrimless and turns navigation-bar contrast off, so the
-system will not draw one of these for us.
-
 ---
 
 Firebase, in-app updates and the paywall moved to their own plan: [FIREBASE_PAYWALL_PLAN.md](FIREBASE_PAYWALL_PLAN.md).

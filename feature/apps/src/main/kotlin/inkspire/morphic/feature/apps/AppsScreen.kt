@@ -287,6 +287,9 @@ fun AppsScreen(
                 }
                 if (search.edge == VerticalEdge.BOTTOM) field()
             }
+            // Over everything, once for the surface rather than per layout — the pager is the one that does not scroll
+            // under the bars.
+            if (layout != AppsLayout.PAGER) BarShades()
         }
     }
 }

@@ -30,6 +30,15 @@ import androidx.compose.runtime.staticCompositionLocalOf
 val LocalSurfacePresented = compositionLocalOf { true }
 
 /**
+ * **Whether the side surface a composable sits in is fully open and not moving** — for chrome drawn over the screen's
+ * edges rather than over the content, which reads as stuck to the pane if it is visible while the pane travels.
+ *
+ * Provided per side slot by [SurfacePager]; HOME's slot does not provide it. **Defaults to true**, for
+ * [LocalSurfacePresented]'s reason: outside a pager a composable is as settled as its host.
+ */
+val LocalSurfaceSettled = compositionLocalOf { true }
+
+/**
  * **Hands a drag lifted on a side surface back to HOME**: the shell closes this surface, and the *same* uninterrupted
  * gesture carries on over home's grids.
  *

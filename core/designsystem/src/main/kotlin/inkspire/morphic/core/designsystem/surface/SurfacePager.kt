@@ -109,6 +109,7 @@ fun SurfacePager(
         // The other, coarser question — *composed* rather than *presented* — read the same way and for the same
         // reason. It flips at zero where the one above flips at a half.
         val engagedEdges by remember(state) { derivedStateOf { state.engagedEdges } }
+        val settledEdge by remember(state) { derivedStateOf { state.settledEdge } }
         // Keeps each slot's `rememberSaveable` state alive across being un-composed, keyed by edge. The standard
         // mechanism (it is what a nav host uses), and what makes the composition gate above free rather than a
         // trade: a drawer comes back on the page it was left on.
@@ -144,6 +145,7 @@ fun SurfacePager(
                 CompositionLocalProvider(
                     LocalScrollEdgeSlot provides state.sideScroll.getValue(edge),
                     LocalSurfacePresented provides (openEdge == edge),
+                    LocalSurfaceSettled provides (settledEdge == edge),
                 ) {
                     slotState.SaveableStateProvider(edge) { binding.content() }
                 }
