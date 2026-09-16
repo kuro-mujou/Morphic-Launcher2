@@ -1908,18 +1908,20 @@ is not decoration:
 - The host is `LauncherMenuHost` / `LocalMenuHost` / `MenuOverlay` — renamed from `ItemMenuHost` in the same change
   that gave it a second kind of menu, since **one host** is what keeps "both open at once" unrepresentable.
 
-**A side slot is composed only while it is needed, and that is an ANR fix rather than a tidy-up.** `SurfacePager`
-used to compose every bound slot at all times. With one binding that was invisible; with **four** it was five seconds
-of dropped input on a weak device — four whole APPS surfaces, four sets of cells, all baking icons at once. Three
-things caused it together and all three are fixed, which is worth knowing because only the first is about the pager:
-- **The slot gate.** Composition begins the instant a swipe moves off HOME (`SurfacePagerState.engagedEdges`, which
-  flips at *zero* where `openEdge` flips at a half — content has to exist before it can be seen) and ends when the pan
-  settles back. `retainedEdges` is the exception the drag needs: the shell pins the edge an eject came from,
-  synchronously inside `EjectToHome` — the one instant the answer is both needed and still true — and releases it when
-  the drag ends. Each slot is wrapped in a `SaveableStateHolder.SaveableStateProvider`, so a drawer closed and
-  reopened is on the page it was left on; without that the gate would be paid for in the thing a launcher is judged on.
-  The cost that remains is real and accepted: the first frame of a swipe now composes a surface, where before it was
-  already there.
+**Side slots are composed ahead of the swipe, one per frame, and that balance is an ANR fix and a latency fix at
+once.** `SurfacePager` used to compose every bound slot in one go. With one binding that was invisible; with **four** it
+was five seconds of dropped input on a weak device — four whole APPS surfaces, four sets of cells, all baking icons at
+once. Three things caused it together and all three are fixed, which is worth knowing because only the first is about
+the pager:
+- **The slot warm-up.** For a while the fix was to compose a slot only once a swipe moved off HOME
+  (`SurfacePagerState.engagedEdges`) and drop it when the pan settled back. That moved the cost onto the swipe's first
+  frame, and on device that frame stalled 100–200ms: frames recorded at 10fps showed the pan starting at slop, the
+  screen holding still while the finger ran a quarter of the screen ahead, then jumping to catch up (D4 in
+  `KNOWN_ISSUES.md`, confirmed by keeping the slot composed, which made it smooth). So slots are now warmed after HOME
+  is up, **one edge per frame**, and stay composed; the stagger is what keeps it from being the ANR again. A slot off
+  screen is composed but **not drawn** until `engagedEdges` includes it. `retainedEdges` is still the exception the drag
+  needs: the shell pins the edge an eject came from, synchronously inside `EjectToHome`, which also covers a slot not
+  yet warmed. Each slot keeps its state in a `SaveableStateHolder.SaveableStateProvider`.
 - **`IconRenderManager.get` coalesces concurrent bakes.** A plain `cache.get() ?: bake()` is a thundering herd — every
   caller arriving before the first bake finishes repeats the whole load-parse-composite and allocates a bitmap the
   next `put` immediately makes garbage. That allocation *was* the `HeapTaskDaemon` at 57% in the trace. It is now

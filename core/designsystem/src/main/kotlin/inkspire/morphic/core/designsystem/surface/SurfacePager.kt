@@ -5,12 +5,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
@@ -18,6 +22,7 @@ import androidx.compose.ui.unit.IntOffset
 import inkspire.morphic.core.model.HomeEdge
 import inkspire.morphic.core.model.SurfaceTransition
 import inkspire.morphic.core.model.SwipeDirection
+import kotlinx.coroutines.android.awaitFrame
 import kotlin.math.roundToInt
 
 /**
@@ -34,15 +39,19 @@ import kotlin.math.roundToInt
  * `Map<HomeEdge, …>` slot rather than the real HOME/APPS layouts — the harness drops plain boxes in, the shell drops
  * the real screens in.
  *
- * **A side slot is composed only while its surface is on screen at all, or while [retainedEdges] holds it.** This
- * used to compose every bound slot at all times, which was invisible with one binding and an ANR with four: each is
- * a whole APPS surface, and four of them meant four sets of cells all baking icons at once on a device that could
- * not afford one. Composition now begins the instant a swipe moves off HOME ([SurfacePagerState.engagedEdges]) —
- * before any of the surface is visible, so it has a frame to exist in — and ends when the pan settles back.
+ * **Every side slot is composed ahead of the swipe that reveals it, one per frame.** Composing a slot on the swipe's
+ * first frame stalled that frame for 100–200ms on device — a whole APPS surface, laid out and theming its cells — so
+ * the finger ran ahead and the surface jumped to catch it. So the slots are warmed after HOME is up, **one edge per
+ * frame**, and stay composed. The stagger is what keeps this from being the ANR it once was: composing every bound slot
+ * in one frame, with four bound, was five seconds of dropped input on a weak device (the icon baking that compounded
+ * it is coalesced and core-capped in `IconRenderManager`, independently of this).
  *
- * Each slot's UI state survives that (`rememberSaveable` inside it, keyed per edge by a `SaveableStateHolder`), so
- * a drawer closed and re-opened is on the page it was left on. Without it the gate would be paid for in exactly the
- * thing a launcher is judged on.
+ * **A slot off screen is composed but not drawn** — HOME redrawing must not re-record four surfaces nobody can see. It
+ * draws from the frame a swipe moves off HOME ([SurfacePagerState.engagedEdges]), and until it is warmed that is also
+ * the frame it composes in, which is the old cost paid at most once per edge.
+ *
+ * Each slot's UI state is held per edge by a `SaveableStateHolder`, so a slot whose binding changes and returns is on
+ * the page it was left on.
  *
  * **Each slot reports where its content is scrolled**, through a [ScrollEdgeSlot] provided here and read by the
  * gesture — which is what makes [OneFingerSwipe.AT_EDGE] a real hand-off rather than a synonym for
@@ -55,10 +64,10 @@ import kotlin.math.roundToInt
  * @param sideContent the binding for each swipeable edge. Absent edge = not swipeable.
  * @param swipeActions what a one-finger swipe on HOME does in each direction that has an action, instead of opening
  *   the edge it reveals. Absent direction = the swipe behaves as [sideContent] says.
- * @param retainedEdges edges to keep composed regardless of the pan. **The drag toolkit's "keep a source surface
- *   composed while a drag from it is in flight" rule, which the caller owns because only it knows about drags:** an
- *   app lifted in the drawer and ejected onto HOME is still tracked by the lifted cell's own pointer stream, so
- *   disposing that cell as the surface slides away would kill the gesture mid-flight.
+ * @param retainedEdges edges to keep composed regardless of the pan, even before they are warmed. **The drag toolkit's
+ *   "keep a source surface composed while a drag from it is in flight" rule, which the caller owns because only it
+ *   knows about drags:** an app lifted in the drawer and ejected onto HOME is still tracked by the lifted cell's own
+ *   pointer stream, so disposing that cell as the surface slides away would kill the gesture mid-flight.
  * @param enabled whether a swipe may switch surfaces at all. False while something on screen has a better use for
  *   the finger — an open folder, an item held down with its menu up — which the shell resolves through
  *   [SurfaceGestureLock] rather than by trying to out-consume the item gestures. See [surfacePagerGesture].
@@ -114,6 +123,16 @@ fun SurfacePager(
         // mechanism (it is what a nav host uses), and what makes the composition gate above free rather than a
         // trade: a drawer comes back on the page it was left on.
         val slotState = rememberSaveableStateHolder()
+        // The edges composed ahead of a swipe — see the class note. Keyed on the bound set, so an edge bound later
+        // warms the same way; a warmed edge that is unbound is simply skipped by the loop below.
+        var warmedEdges by remember { mutableStateOf(emptySet<HomeEdge>()) }
+        LaunchedEffect(sideContent.keys) {
+            for (edge in sideContent.keys - warmedEdges) {
+                // One frame for HOME (or the previous slot) to finish, then this slot composes in the next.
+                awaitFrame()
+                warmedEdges = warmedEdges + edge
+            }
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -130,13 +149,15 @@ fun SurfacePager(
         // Between the two, and with no `surfaceSlide` of its own — see [overlay].
         overlay()
         for ((edge, binding) in sideContent) {
-            // Not composed at all until the surface is at least partly on screen, or the caller has asked for it to
-            // be kept — see the class note. Everything below, including the slot's own state, is absent until then.
-            if (edge !in engagedEdges && edge !in retainedEdges) continue
+            // Composed once warmed, or earlier if a swipe or the caller needs it first — see the class note.
+            if (edge !in warmedEdges && edge !in engagedEdges && edge !in retainedEdges) continue
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .surfaceTransform(state, transition, edge)) {
+                    .surfaceTransform(state, transition, edge)
+                    // The derived set, read in the draw phase: it changes twice a pan, where the pan itself changes
+                    // every frame, so an idle slot is not re-recorded while another one crosses.
+                    .drawWithContent { if (edge in engagedEdges || edge in retainedEdges) drawContent() }) {
                 // **A composed surface is not necessarily an on-screen one**, which is what
                 // [LocalSurfacePresented] exists to say: a slot stays composed through the whole of a pan and, when
                 // [retainedEdges] holds it, for the whole of a drag lifted on it. Anything that must belong to

@@ -24,62 +24,10 @@ come from reading the code, not from a debugger.
 
 ## Defects
 
-### D4. A side surface starts following the finger only after ~1cm of travel
+### D6. Other swipe paths may lag
 
-**What happens:** Swiping up from HOME to open a side surface (APPS), the finger travels about **1cm** before the
-surface starts to move. Other launchers move their drawer after a few millimeters, so the surface looks attached to
-the finger from the start. Reported by the author on device. It has not been measured yet; see the last paragraph.
-
-**What 1cm means:** The pan claims at the platform touch slop, about 8dp (~1.3mm on a phone), and on the claiming
-event it applies the travel past slop (`pastSlop` in `SurfacePagerGesture.kt`). So the finger should be only the slop
-ahead of the surface. About 1cm is roughly 60dp, six to eight times the slop. The recognition threshold does not
-account for it. Either the claim comes late, or the pan moves on time and the surface is not *drawn* on time.
-
-**Ruled out by reading:**
-
-- **The drag math.** `dragXBy`/`dragYBy` are a linear `px / viewport` with no resistance or dead zone.
-- **The transition.** The default is `SurfaceTransition.SLIDE` (`SurfaceRegister`), a plain offset. The other five
-  transitions fade or scale (`SurfaceSlotTransform.kt`), and some of those do hide early travel, so confirm which
-  transition the device was set to when this was seen.
-- **`SurfaceGestureLock`, on empty wallpaper.** Its claimants on HOME are an item only from `ShowMenu`/`BeginDrag`
-  (`LauncherItemGestures`), an open menu (`MenuHost`), a widget container for its whole press, and an embedded widget
-  view until it declines. None of them holds a claim at the down on empty space. A swipe that *starts on a widget* is
-  the exception: the pan waits for the claim to drop, so on a widget this is expected, and worse.
-
-**Where the cause appears to be:**
-
-1. **The side surface is not composed until the pan moves (main suspect).** `SurfacePager` skips a side slot while
-   `edge !in engagedEdges && edge !in retainedEdges`, and `engagedEdges` is empty until the pan is past exactly zero.
-   So the first drag event after slop is the one that composes APPS: its layout (lazy grid/list, category pages), its
-   state, its icon loads, and the frost overlay starting to fade in. That frame is long. The finger keeps moving while
-   it runs, and the surface appears already behind. Content that loads asynchronously (icon bitmaps) arrives a few
-   frames later still, so the surface can move while still visibly empty. `rememberSaveableStateHolder` restores a
-   slot's state, which makes un-composing it look free, but it is not free on the first frame of every swipe. Read
-   `SurfacePager`'s class note for why side surfaces are gated before changing it.
-2. **The pump starts a coroutine for the first step.** `PanPump.add` runs the first `snapTo` in `scope.launch`, which
-   dispatches rather than runs inline, so the claiming event's drag can land a frame later. At most one frame (~16ms),
-   so it does not explain 1cm alone, but it adds to (1).
-3. **The frost is drawn over the same frames.** `SurfaceBackdropLayer`'s blur starts as soon as `progress` leaves
-   zero. If building its first render effect or capture is expensive, it lands on the same frame as (1).
-
-**Cheap experiments that separate them:**
-
-- **Pass the APPS edge in `retainedEdges` permanently** (shell side, one line, not for commit). If the lag is gone,
-  (1) is confirmed and the fix is composing the surface ahead of the swipe: at rest after HOME settles, or at the
-  down. The gap between the down and slop is short, so composing at the down only helps if composition is warm.
-- **Set the transition to SLIDE and the frost off** to isolate (3).
-- **Profile the first frame** with a Perfetto trace, or Profile HWUI rendering, over one swipe. A composition spike
-  on the claiming frame is (1).
-
-**Measuring it:** The author will record a video with the pointer visible and split it into frames. For readable
-numbers: turn on **Developer options → Pointer location**, so the trail and the finger's coordinates are drawn on
-every frame, and record at the display's refresh rate. Then count frames from the first frame the pointer moves to
-the first frame the surface's edge moves, and read the pointer's travel off the overlay at that frame. Both the delay
-(frames × frame time) and the distance (px ÷ density = dp) come out, and the frame where the surface first *appears*
-(composed but not yet drawn) shows which suspect it is. Repeat once with the finger starting on a widget, since that
-path is slower on purpose and should not be mixed into the result.
-
-**Other swipe paths, not the one reported** (from reading the code, not timed):
+**What happens:** Not reported. Found while tracing D4, the surface-swipe stall that composing side slots ahead of the
+swipe fixed. From reading the code, not timed:
 
 - **System-panel actions** (`ShadePull.NOTIFICATIONS` / `QUICK_SETTINGS` / `BY_SIDE`) replay a finger stroke through
   the accessibility service (`MorphicGestureService.swipeDownFromTop`): `SWIPE_MS` 200ms, and for quick settings two
