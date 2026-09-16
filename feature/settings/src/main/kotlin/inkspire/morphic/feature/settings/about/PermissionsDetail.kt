@@ -47,7 +47,7 @@ internal fun PermissionsDetail(modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(20.dp),
+            .padding(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 20.dp),
     ) {
         MorphicGroupPanel {
             state.permissions.forEach { permission -> PermissionRow(permission) }

@@ -65,7 +65,7 @@ internal fun AboutDetail(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(20.dp),
+            .padding(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 20.dp),
     ) {
         Text(
             text = state.label,

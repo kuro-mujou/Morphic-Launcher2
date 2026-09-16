@@ -150,28 +150,12 @@ a drag has to continue on the same pointer stream.
 
 ### Settings
 
-#### R7. Settings panes stop padding their own top edge
-
-**What happens:** Every text-style detail pane pads itself `20.dp` on all four sides inside its scroll. That is
-`AboutDetail`, `PermissionsDetail`, `PrivacyPolicyDetail`, `EffectsDetail`, `ExtrasDetail`, `GesturesDetail`,
-`HomeDetail`, `OrientationDetail` and `SurfaceRegisterDetail`, each with `.padding(20.dp)`. The pane already sits
-under a top app bar with plenty of air, so the top 20dp doubles a gap that was not needed.
-
-**Wanted:** The outermost padding leaves the shared shape and moves into each screen's own components, so each screen
-decides its own edges. The top padding goes, or is cut back.
-
-**Where it must not break:** The inset rules in CLAUDE.md. Bars are content padding and never layout padding, and
-which sides get insets is the shell's call (`insetSides`). This padding is separate from the insets. Keep them
-separate so the landscape work in R8 does not re-add a bar inset by hand.
-
 #### R8. Fix phone landscape for five settings screens
 
 **What happens:** Five screens lay out badly on a phone in landscape: **Wallpaper** (`WallpaperDetail`), **Effects**
 (`EffectsDetail`), **Icons** (`IconsDetail` / `icons/`), **Screen manager** (`SurfaceRegisterDetail`) and
 **Home screen** (`HomeDetail`). Reported without specifics. Several of these have a live preview above their controls,
 and on a short, wide screen that likely leaves no room for the controls. Confirm per screen on the emulator.
-
-After R7, since that change moves the padding these layouts are built from.
 
 ### Wallpaper studio
 

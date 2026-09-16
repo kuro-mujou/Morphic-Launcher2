@@ -85,7 +85,7 @@ internal fun HomeDetail(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(20.dp),
+            .padding(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 20.dp),
     ) {
         HomeLayoutSwitch(selected = state.layout, onSelect = viewModel::setLayout)
         Spacer(Modifier.height(16.dp))
