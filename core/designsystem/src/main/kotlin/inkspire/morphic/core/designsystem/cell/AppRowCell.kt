@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -17,12 +16,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
+import inkspire.morphic.core.designsystem.backdrop.InkLabel
 import inkspire.morphic.core.designsystem.backdrop.SpotTheme
-import inkspire.morphic.core.designsystem.backdrop.inkGlow
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.IconSizingRanges
@@ -262,17 +260,16 @@ fun AppRowCell(
                 // On HOME's list the label sits on the wallpaper, so it is themed by the spot under it; on a film or a
                 // sheet `SpotTheme` does nothing and the surface's own theme stands.
                 SpotTheme {
-                    Text(
+                    InkLabel(
                         text = app.label,
+                        style = labelStyle,
                         // No glow under a caller's own color: that color means a fill of its own behind the row.
-                        style = if (labelColor == null) labelStyle.copy(shadow = inkGlow()) else labelStyle,
+                        glow = labelColor == null,
                         // **Overridable, for a row drawn on something other than that background.** A picker fills
                         // the chosen row with `accent`, and a label fixed to `content` then vanishes into it — the
                         // icon stays, the name goes, and the row reads as a blank bar. The caller knows what it
                         // painted underneath; this cell cannot.
                         color = labelColor ?: LocalMorphicColors.current.content,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
@@ -324,12 +321,10 @@ fun ActionRowCell(
                 Spacer(modifier = Modifier.width(16.dp))
             }
             SpotTheme {
-                Text(
+                InkLabel(
                     text = label,
-                    style = rowLabelStyle(metrics).copy(shadow = inkGlow()),
+                    style = rowLabelStyle(metrics),
                     color = LocalMorphicColors.current.content,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }

@@ -7,20 +7,17 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
+import inkspire.morphic.core.designsystem.backdrop.InkLabel
 import inkspire.morphic.core.designsystem.backdrop.SpotTheme
-import inkspire.morphic.core.designsystem.backdrop.inkGlow
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 
 /**
@@ -30,7 +27,7 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
  * whole: a wallpaper is a photograph, and its mean says nothing about the pixels under any one label. On the APPS
  * surface or in an open collection it is whatever the *film* wants, because those subtrees re-theme themselves.
  *
- * **A soft glow surrounds the text** ([inkGlow]): where the ink alone cannot reach contrast — a spot straddling light
+ * **A soft glow surrounds the text** ([InkLabel]): where the ink alone cannot reach contrast — a spot straddling light
  * and dark — it is what separates the letters from the side that fights them.
  */
 @Composable
@@ -47,21 +44,13 @@ internal fun CellLabel(
         fontSize * 1.2f
     }
     SpotTheme(modifier) {
-        val colors = LocalMorphicColors.current
-        Text(
+        // An `InkLabel` rather than a `Text`: a derived cell is exactly tight, so px rounding can leave the label a
+        // pixel short of its line, and a squeezed or ellipsized `Text` clips its glow into a hard rectangle.
+        InkLabel(
             text = label,
-            style = baseStyle.copy(
-                fontSize = fontSize,
-                lineHeight = lineHeight,
-                shadow = inkGlow(),
-            ),
-            color = colors.content,
-            // A derived cell is exactly tight, so px rounding can leave the label a pixel short of its line. Text
-            // squeezed at all clips everything it draws to its box, the glow included, so it is never squeezed.
-            modifier = Modifier.wrapContentHeight(unbounded = true),
+            style = baseStyle.copy(fontSize = fontSize, lineHeight = lineHeight),
+            color = LocalMorphicColors.current.content,
             textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
     }
 }
