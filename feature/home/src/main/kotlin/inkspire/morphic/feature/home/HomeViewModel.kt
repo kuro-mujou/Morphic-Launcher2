@@ -527,7 +527,7 @@ class HomeViewModel(
                         appRepository.refresh()
                         refreshed = true
                     }
-                    seedIfEmpty(key, configs.getValue(HomeZone.MAIN))
+                    seedIfEmpty(key, configs)
                 }
         }
         // **The vertical list's first-run default: the grid, flattened.** Seeded when the layout is *chosen* rather
@@ -1251,40 +1251,29 @@ class HomeViewModel(
     }
 
     /**
-     * First-run default: with nothing placed, lay the first apps onto the grid in reading order — one app per
-     * *visual* cell, left→right, top→bottom. Fills all but the **last visual row**, so the page keeps slack.
-     * This matters: the free-placement push engine rearranges by shoving occupants into empty cells, so a
-     * 100%-full page can't be rearranged at all (every drop but the origin reads INVALID). Overflowing a truly
-     * full page onto the next page is future work; for now the seed simply doesn't pack the grid. Idempotent —
-     * a persisted layout short-circuits it.
+     * **First-run default: a curated handful of apps, chosen by the job they do rather than by name.**
      *
-     * Each app occupies a whole visual cell, which is `cellMultiplier` logical cells on each axis; visual
-     * coordinates are scaled by the multiplier so the stored placements are in the grid's logical space (and so
-     * a future sub-cell item can sit between them without any migration).
+     * [FirstRunLayout] holds the arrangement — which roles go in the dock, which on the first page, in what order —
+     * and this reads it against the device. What it must not do is pin a package: the browser is a different app on
+     * every phone, so the roles are resolved through `AppRepository.rolesFor` and anything this device has no answer
+     * for is simply left out.
      *
-     * **Only [HomeZone.MAIN] is seeded — the dock deliberately starts empty.** An app lives in exactly one place,
-     * so seeding the dock would mean carving apps out of this list, and picking *which* apps belong in a dock is a
-     * presentation default worth getting right on its own (with a picker) rather than guessing here. Until then the
-     * dock is filled by dragging an app into it, which is the flow that needs proving first.
+     * Idempotent, and in both directions: a persisted layout short-circuits it, and a run that resolves nothing
+     * writes nothing, so a seed reached before the app cache is warm asks again rather than latching on a blank
+     * layout. [appRepository] is refreshed before the first call so the common case never needs that second chance.
+     *
+     * **Both zones are seeded, whichever pairing is showing.** The dock's grid is resolved either way, so filling it
+     * while the vertical list is on screen means it is already the user's if they ever switch to the pager.
      */
-    private suspend fun seedIfEmpty(key: ArrangementKey, config: GridConfig) {
+    private suspend fun seedIfEmpty(key: ArrangementKey, configs: Map<HomeZone, GridConfig>) {
         if (layoutRepository.placements(key).first().isNotEmpty()) return
-        val mult = config.cellMultiplier
-        val seedRows = (config.visualRows - 1).coerceAtLeast(1)
-        val apps = appRepository.observeApps().first().take(seedRows * config.visualCols)
-        val moves = apps.mapIndexed { index, app ->
-            LayoutChange.Move(
-                item = GridItem.App(app.componentKey),
-                to = GridPlacement(
-                    page = 0,
-                    row = (index / config.visualCols) * mult,
-                    col = (index % config.visualCols) * mult,
-                    rowSpan = mult,
-                    colSpan = mult,
-                ),
-                zone = HomeZone.MAIN,
-            )
-        }
+        val resolved = appRepository.rolesFor(FirstRunLayout.Roles)
+        val moves = FirstRunLayout.plan(
+            resolved = resolved,
+            dock = configs.getValue(HomeZone.DOCK),
+            main = configs.getValue(HomeZone.MAIN),
+        )
+        if (moves.isEmpty()) return
         layoutRepository.apply(key, moves)
     }
 

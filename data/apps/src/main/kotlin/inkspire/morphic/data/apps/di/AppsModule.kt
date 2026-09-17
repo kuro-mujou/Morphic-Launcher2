@@ -32,21 +32,25 @@ import inkspire.morphic.data.apps.SystemShade
 import inkspire.morphic.data.apps.category.AppCategorizer
 import inkspire.morphic.data.apps.category.AssetCategoryMapping
 import inkspire.morphic.data.apps.category.CategoryMapping
+import inkspire.morphic.data.apps.role.AppRoleResolver
+import inkspire.morphic.data.apps.role.PlatformAppRoleResolver
 import org.koin.dsl.module
 
 /**
  * Koin module for `data:apps`. The bindings are singletons: the wrapper holds long-lived system services,
  * and the repository fronts the shared cache. [AppInfoDao] and [AppDispatchers] are resolved from the
  * database/common modules, and `Context` is provided by the app at Koin start (as `DatabaseModule` expects).
- * [AppLauncher], [AppUninstaller], [AppInfoOpener], [AppShortcuts], [SystemShade], [ScreenLock], [DefaultLauncherRole] and
- * [GestureActionRunner] are thin stateless commands — singletons only to avoid re-allocating them, as is
- * [AppCategorizer]. [GestureServiceAccess] is a singleton for a real reason: it holds the blocked action that the
+ * [AppLauncher], [AppUninstaller], [AppInfoOpener], [AppShortcuts], [SystemShade], [ScreenLock],
+ * [DefaultLauncherRole] and [GestureActionRunner] are thin stateless commands — singletons only to avoid
+ * re-allocating them, as are [AppCategorizer] and the [AppRoleResolver] the repository resolves roles through.
+ * [GestureServiceAccess] is a singleton for a real reason: it holds the blocked action that the
  * runner reports and the shell reads, so two instances would each see half of it.
  */
 val appsModule = module {
     single<LauncherAppsWrapper> { DefaultLauncherAppsWrapper(get<Context>()) }
+    single<AppRoleResolver> { PlatformAppRoleResolver(get<Context>()) }
     single<RawIconSource> { LauncherAppsRawIconSource(get()) }
-    single<AppRepository> { AppRepositoryImpl(get(), get(), get(), get<ApplicationScope>()) }
+    single<AppRepository> { AppRepositoryImpl(get(), get(), get(), get(), get<ApplicationScope>()) }
     single<AppLauncher> { DefaultAppLauncher(get()) }
     single<AppUninstaller> { DefaultAppUninstaller(get<Context>(), get()) }
     single<AppInfoOpener> { DefaultAppInfoOpener(get()) }

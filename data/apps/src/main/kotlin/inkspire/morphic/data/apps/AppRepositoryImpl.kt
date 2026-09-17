@@ -3,11 +3,15 @@ package inkspire.morphic.data.apps
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
 import inkspire.morphic.core.database.dao.AppInfoDao
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.data.apps.mapper.toAppInfo
 import inkspire.morphic.data.apps.mapper.toEntity
+import inkspire.morphic.data.apps.role.AppRole
+import inkspire.morphic.data.apps.role.AppRoleResolver
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -35,6 +39,7 @@ internal class AppRepositoryImpl(
     private val launcherApps: LauncherAppsWrapper,
     private val appInfoDao: AppInfoDao,
     private val dispatchers: AppDispatchers,
+    private val roleResolver: AppRoleResolver,
     scope: CoroutineScope,
 ) : AppRepository {
 
@@ -81,5 +86,28 @@ internal class AppRepositoryImpl(
         // **Replace, not upsert** — see [AppRepository.refresh]. One transaction, so no reader ever sees the
         // moment between the old contents and the new (`AppInfoDao.replaceAll`).
         appInfoDao.replaceAll(entities)
+    }
+
+    /**
+     * **The cache decides what is placeable; the resolver only decides who.** A role's packages come back ordered
+     * best-first, and the first of them that the cache knows wins — so an app answering `ACTION_DIAL` from a
+     * component the user can never tap is skipped rather than pinned as an icon that opens nothing.
+     *
+     * Reading the cache first also makes the common failure cheap: with nothing cached there is nothing to place,
+     * and the binder calls are never made.
+     */
+    override suspend fun rolesFor(roles: Collection<AppRole>): Map<AppRole, ComponentKey> {
+        val byPackage = observeApps().first()
+            .filterNot { it.isWorkProfile }
+            .groupBy { it.componentKey.packageName }
+        if (byPackage.isEmpty()) return emptyMap()
+        // Package-manager queries are blocking binder calls, exactly as in [refresh].
+        return withContext(dispatchers.io) {
+            roles.mapNotNull { role ->
+                roleResolver.packagesFor(role)
+                    .firstNotNullOfOrNull { byPackage[it]?.firstOrNull()?.componentKey }
+                    ?.let { component -> role to component }
+            }.toMap()
+        }
     }
 }

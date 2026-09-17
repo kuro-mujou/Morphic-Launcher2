@@ -1,6 +1,8 @@
 package inkspire.morphic.data.apps
 
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.ComponentKey
+import inkspire.morphic.data.apps.role.AppRole
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -39,4 +41,20 @@ interface AppRepository {
      * alive the repository keeps itself in step (see the implementation) and nobody has to poll.
      */
     suspend fun refresh()
+
+    /**
+     * The launchable component holding each of [roles] on this device, with a role nothing answers **absent** from
+     * the map rather than mapped to null.
+     *
+     * A read over the installed set like the flows above, not a command: it asks which of the apps this repository
+     * already mirrors is the browser, the dialer, the camera. Resolution happens against the platform every call and
+     * is deliberately not cached — the answer changes when the user picks a different default in the system's own
+     * settings, and nothing tells us when they do.
+     *
+     * Personal profile only; a work profile's copy of an app is never a device-wide default.
+     *
+     * **Two roles can return the same component** — one app is routinely both the camera and the gallery. Collapsing
+     * that is the caller's, since only the caller knows which of the two placements should win.
+     */
+    suspend fun rolesFor(roles: Collection<AppRole>): Map<AppRole, ComponentKey>
 }

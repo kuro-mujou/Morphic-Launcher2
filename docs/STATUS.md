@@ -214,8 +214,22 @@ the launcher's home surface.
   resolver), one `handleDrop`, one `HomeItemCell`. The dock takes apps, folders and (later) widgets, merges into
   folders, and hosts folders that open, reorder, and hand apps in and out like any other — the folder hand-offs are
   continuous across it (closing a folder drops its zone, so the drag lands on whichever grid is beneath).
-  **The dock starts empty** — an app lives in exactly one place, so seeding it would carve apps out of the main
-  area, and *which* apps belong there is a default worth a picker; fill it by dragging.
+  **The dock is seeded with four roles** — phone, messaging, browser, camera (`FirstRunLayout`), which is what AOSP's
+  `default_workspace.xml` and Pixel both put there. It used to start empty on the grounds that *which* apps belong in
+  a dock is a default worth deciding properly; that is what `FirstRunLayout` decides.
+- **First run places a curated handful, resolved by role rather than by name** (`FirstRunLayout` in `feature:home`,
+  `AppRepository.rolesFor` + `AppRoleResolver` in `data:apps`). Dock: phone, messaging, browser, camera. Page 0:
+  store, email, gallery, clock, calendar, calculator, maps, music, settings — nine icons on a page that holds twenty,
+  because the APPS surface holds the rest and a page seeded to the brim is one the user has to clear before it is
+  theirs. **The block sits against the dock and the spare rows are at the top**, which is where a widget goes; the
+  short row is the *first* one, so nine over four columns is 1 + 4 + 4 rather than stranding a lone icon above the
+  dock. The spare room doubles as the push engine's slack. **No package name is ever written down**: each role is an ordered ladder of intents (the `CATEGORY_APP_*`
+  declaration first, then what the app declared it can *open*), resolved against the device, user's default first —
+  the same shape AOSP's `<resolve>` blocks use. Resolution picks a **package**, and the component comes from the app
+  cache, because a role activity is usually not the MAIN/LAUNCHER one (`ACTION_DIAL` lands on `DialtactsActivity`).
+  An unanswered role closes up behind it; one app answering two roles is placed once, dock first. Needs no `<queries>`
+  of its own — visibility already covers everything with a launcher entry, which is exactly the set that has an icon
+  to pin. Prior installs are untouched: the seed only runs into an empty arrangement.
 - **An item carries its zone; a placement alone is not a location.** Each zone is its own coordinate space, so dock
   cell (0,0) and main cell (0,0) are the same `GridPlacement` value in different places. `HomeItem.zone` (mirroring
   `PlacedItem`) is what disambiguates them, and the zone is part of *identifying* a target, not just of writing the
