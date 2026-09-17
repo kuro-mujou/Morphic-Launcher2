@@ -171,6 +171,39 @@ Wanted: a paywall, in a module of its own.
 **Testing a real purchase** needs the product created in Play Console, a build on an internal testing track, and the
 tester's account added as a license tester. A local debug build reaches Play and reads "not for sale".
 
+### The purchase screen's shape (wanted 2026-09-18, not built)
+
+Today the screen is a title, the two plans and a button. Wanted instead: the **trial timeline** — a hero, then a
+vertical track of three dated stops (today, the reminder, the first charge), then the plans and the button. It is the
+layout Play's own guidance pushes, and it earns its space by answering "when am I charged" before the user has to ask,
+which is the question that stops a trial being started.
+
+What each stop may say is bounded by what the app can actually back:
+
+- **Today — what unlocks.** This is the benefit line, and it is the one part that cannot be written yet: see "What is
+  paid" above. The timeline makes the gap louder than the current screen does, since naming what you get today is the
+  layout's first beat. **So this shape lands after the first gate, not before.**
+- **The reminder — Google Play's, and said to be Play's.** There is no server, no account and no scheduled
+  notification in this app, and the privacy policy published to Play says exactly that. "We'll send you a reminder" is
+  the reference layout's line and it is a promise this app structurally cannot keep; "Google Play reminds you before
+  the trial ends" is the same reassurance and is true.
+- **The charge day — a real date, derived.** `FreeTrial` carries Play's `count` + `unit`, so the stop is
+  `LocalDate.now().plus(count, unit)` and the calendar does the month arithmetic. Do **not** flatten the trial to days
+  to phrase it ("7 days from now"): the unit is kept unconverted precisely so a one-month trial is never called 30, and
+  a date derived through the calendar keeps that intact while reading concretely.
+
+Two states the reference layout has no answer for, because it shows one plan and assumes a trial:
+
+- **No trial.** Play returns only offers the user is **eligible** for, so `freeTrial` is null for anyone who has
+  subscribed before. The timeline has no story then and must not be faked into one — that install falls back to the
+  plan picker as it is today.
+- **Two plans.** The timeline describes the **selected** plan and re-renders when the selection changes, since the
+  charge date and the price both move with it.
+
+**The hero is a real home screen**, not stock illustration: shaped icons over a wallpaper, which is the product. A
+color-saturated graphic would also fight the monochrome chrome — on this screen as everywhere else, the wallpaper and
+the icons carry the color.
+
 ---
 
 ## Privacy: lands in the same change that turns collection on
