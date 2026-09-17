@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,6 +56,9 @@ internal fun CellLabel(
                 shadow = inkGlow(),
             ),
             color = colors.content,
+            // A derived cell is exactly tight, so px rounding can leave the label a pixel short of its line. Text
+            // squeezed at all clips everything it draws to its box, the glow included, so it is never squeezed.
+            modifier = Modifier.wrapContentHeight(unbounded = true),
             textAlign = TextAlign.Center,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
