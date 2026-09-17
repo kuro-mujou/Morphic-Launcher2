@@ -92,9 +92,9 @@ root Gradle project name `Launcher2`.
 
 - **`core:*`** — `model` (plain Kotlin data shapes), `common` (DI + coroutine plumbing), `database`
   (Room), `icon`, `designsystem` (Compose), `navigation`.
-- **`data:*`** — `apps`, `icons`, `layout` (the highest-logic module — placement engine), `settings`,
-  `widgets`. Each exposes repositories the UI consumes.
-- **`feature:*`** — `home`, `apps`, `settings`, `shell`. One module **per surface**, not per look: `apps` is the
+- **`data:*`** — `apps`, `billing` (the Play subscription), `icons`, `layout` (the highest-logic module — placement
+  engine), `settings`, `widgets`. Each exposes repositories the UI consumes.
+- **`feature:*`** — `home`, `apps`, `settings`, `shell`, `paywall` (the subscription's purchase screen). One module **per surface**, not per look: `apps` is the
   whole APPS surface and picks its arrangement from `AppsLayout` internally, which is why L1's separate
   `appdrawer` + `applibrary` modules are gone rather than ported.
 - **`app`** — the launcher application shell.

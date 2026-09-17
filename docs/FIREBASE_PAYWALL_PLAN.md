@@ -1,11 +1,11 @@
 # Firebase and paywall plan
 
 Covers analytics, crash reporting, remote config, updates and the paywall: everything that makes the launcher talk to
-a Google service or take money. None of it exists yet. There is no Firebase, no Play library, no billing dependency
-and no premium flag anywhere in the build.
+a Google service or take money. Firebase and the update channels do not exist yet. The subscription and its purchase
+screen do (`data:billing`, `feature:paywall`); nothing is gated by it yet.
 
-**Status: scoping.** The Firebase products and both update channels are decided enough to build. The paywall is not:
-it has nothing to gate until what is paid is decided (see [Paywall](#paywall)).
+**Status:** the Firebase products and both update channels are decided enough to build. The paywall's purchase path is
+built; what it gates is not decided (see [Paywall](#paywall)).
 
 **Two install channels shape all of it.** The launcher is installed from Play, and also sideloaded by users on custom
 ROMs with no Google Play services. Anything that needs Play services (In-App Updates, Play Billing) has an answer for
@@ -137,29 +137,39 @@ UI is a row in About, plus a HOME-menu entry while an update is urgent. The "Fin
 
 Wanted: a paywall, in a module of its own.
 
-**Open — decide before building anything:**
+**Decided (2026-09-17):**
 
-- **What is paid.** The paywall has nothing to gate until this is decided. Candidates are implied by the product
-  direction (the icon, wallpaper and widget studios; community theme sharing), but none has been chosen.
-- **How a locked feature appears.** "Absent, not disabled" means a control that does nothing must not be shown. A
-  locked feature is a different case: it *does* something, which is opening the paywall. So a visible lock is
-  defensible, but it is a deliberate exception to the rule and should be recorded as one in CLAUDE.md, not decided
-  separately on each screen.
-- **One-time purchase or subscription.** This changes what the entitlement stream has to handle: expiry, grace
-  periods, restore.
-- **Users without Play services cannot pay through Play Billing.** They get the paid features free, have no way to
-  buy, or pay through another processor with its own license check. That is a real product decision, because the
-  web-channel users are exactly the ones Play Billing cannot reach. And Play's payments policy forbids steering *Play*
-  users to an outside payment, so any outside route is web-channel only, gated the same way as the web update offer.
+- **A subscription**, one product with **monthly and yearly** base plans. The purchase screen shows whatever offers Play
+  returns for those two periods, including an eligible free trial.
+- **A locked feature is usable, and gated on save.** A studio opens and can be played with; applying or saving the
+  result opens the paywall. That keeps "absent, not disabled" intact: the control does exactly what it says until the
+  moment it would keep something. Record it in CLAUDE.md when the first gate lands.
+- **Google Play Billing brings `INTERNET`.** Billing 9.1 depends on Google's diagnostics transport, which declares
+  `INTERNET` and `ACCESS_NETWORK_STATE`. The privacy policy was rewritten to say so rather than stripping the
+  permissions; Firebase will need `INTERNET` anyway.
 
-**Shape, proposed:**
+**Still open:**
 
-- `data:billing`: the entitlement **repository** (a stream of what the user owns, backed by Play Billing) and the
-  purchase **command**, as two types. Purchasing is a side effect, and folding it onto the repository is what L1 did
-  with launch.
-- `feature:paywall`: the screen, with its own ViewModel.
-- `app` only assembles, per the feature-module rule. A gated feature depends on `data:billing` for the entitlement and
-  never on `feature:paywall`. It asks the shell to navigate there.
+- **What is paid.** Nothing is gated yet; candidates are the icon, wallpaper and widget studios and community sharing.
+- **Users without Play services.** Either the paid features are free for them, or they are locked with no way to buy.
+  Undecided. Until it is, such an install just sees the purchase screen's "Google Play isn't available" state, and it
+  must be answered before the first gate ships, since a gate has to do *something* with `Entitlement.Unavailable`.
+  Any outside payment route would be web-channel only, gated like the web update offer.
+
+**Built:**
+
+- `data:billing`: `SubscriptionRepository` (plans for sale, and the `Entitlement`) and `SubscriptionPurchaser` (opens
+  Play's purchase sheet), both implemented by one `PlaySubscription` over one `BillingClient`. Nothing is cached:
+  Play keeps purchases on the device. Every purchase is acknowledged on the next read, since Play refunds one left
+  unacknowledged for three days. The product ID is a **placeholder, `morphic_premium`**, until the product exists
+  in Play Console; a mismatch is silent, Play just reports nothing for sale.
+- `feature:paywall`: the purchase screen, reached from a row at the top of settings. It lists no benefits until what
+  is paid is decided.
+- `app` only assembles. A gated feature will depend on `data:billing` for the entitlement and never on
+  `feature:paywall`; it asks the shell to navigate there.
+
+**Testing a real purchase** needs the product created in Play Console, a build on an internal testing track, and the
+tester's account added as a license tester. A local debug build reaches Play and reads "not for sale".
 
 ---
 

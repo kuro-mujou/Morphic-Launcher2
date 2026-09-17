@@ -47,6 +47,9 @@ turbine = "1.2.1"
 # Logging
 timber = "5.0.1"
 
+# Play Billing — the subscription. Play requires v8+ for new apps and updates from 2026-08-31.
+play-billing = "9.1.0"
+
 # Drag-to-reorder for LazyColumn (auto-scroll + live push)
 reorderable = "2.4.3"
 
@@ -110,6 +113,9 @@ androidx-navigation3-ui = { module = "androidx.navigation3:navigation3-ui", vers
 
 # Logging
 timber = { module = "com.jakewharton.timber:timber", version.ref = "timber" }
+
+# Play Billing (the `-ktx` artifact carries the suspend wrappers and depends on the base library)
+play-billing-ktx = { module = "com.android.billingclient:billing-ktx", version.ref = "play-billing" }
 
 # Drag-to-reorder
 reorderable = { module = "sh.calvin.reorderable:reorderable", version.ref = "reorderable" }

@@ -90,6 +90,7 @@ dependencies {
     implementation(projects.core.designsystem)
     implementation(projects.core.model)
     implementation(projects.data.apps)
+    implementation(projects.data.billing) // billingModule, for startKoin
     implementation(projects.data.icons)
     implementation(projects.data.layout)
     implementation(projects.core.navigation)
@@ -99,6 +100,7 @@ dependencies {
     implementation(projects.data.widgets)   // widgetsModule, likewise
     implementation(projects.feature.shell)
     implementation(projects.feature.onboarding)
+    implementation(projects.feature.paywall)
     implementation(projects.feature.settings)
     // Still direct deps despite `feature:shell` composing them: the dev harness hosts both screens itself, and the
     // playgrounds reach into `core:designsystem` primitives the shell doesn't expose.

@@ -116,6 +116,14 @@ private val PermissionNotes = mapOf(
     android.Manifest.permission.READ_EXTERNAL_STORAGE to "The same, on Android 12 and older.",
     android.Manifest.permission.REQUEST_DELETE_PACKAGES to
         "Asks Android to uninstall an app you drag off the home screen. Android shows its own confirmation.",
+    // The three below arrive with Google Play Billing: BILLING from the library itself, the network pair from the
+    // diagnostics library it depends on. None is used by the launcher's own code.
+    "com.android.vending.BILLING" to "Lets Google Play show Morphic Premium's prices and handle a subscription.",
+    android.Manifest.permission.INTERNET to
+        "Declared by Google Play's billing library, which sends diagnostics about purchases to Google. " +
+        "The launcher's own code sends nothing.",
+    android.Manifest.permission.ACCESS_NETWORK_STATE to
+        "Declared by the same Google library, so it only tries to send when there is a connection.",
 )
 
 /** @see PermissionNotes — the suffix of the signature permission androidx.core names after the host package. */

@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.HomeLayout
@@ -57,8 +58,24 @@ internal fun SettingsNavRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = LocalMorphicColors.current
     val meta = section.meta(homeLayout)
+    SettingsNavRow(meta.title, meta.icon, selected, showChevron, onClick, modifier)
+}
+
+/**
+ * The same row for a destination that is not a section — one that leaves settings, such as the subscription screen.
+ * It is never [selected] in practice, since nothing it opens sits beside the list.
+ */
+@Composable
+internal fun SettingsNavRow(
+    title: String,
+    icon: ImageVector,
+    selected: Boolean,
+    showChevron: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalMorphicColors.current
     val content = if (selected) colors.onAccent else colors.content
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -68,10 +85,10 @@ internal fun SettingsNavRow(
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 14.dp),
     ) {
-        Icon(imageVector = meta.icon, contentDescription = null, tint = content)
+        Icon(imageVector = icon, contentDescription = null, tint = content)
         Spacer(Modifier.width(16.dp))
         Text(
-            text = meta.title,
+            text = title,
             style = MaterialTheme.typography.bodyLarge,
             color = content,
             modifier = Modifier.weight(1f),

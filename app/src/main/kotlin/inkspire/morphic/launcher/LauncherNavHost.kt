@@ -5,6 +5,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import androidx.navigation3.runtime.EntryProviderScope
+import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
@@ -18,6 +20,8 @@ import inkspire.morphic.feature.home.containersettings.ContainerSettingsRoute
 import inkspire.morphic.feature.home.containersettings.ContainerSettingsScreen
 import inkspire.morphic.feature.home.gestureaction.GestureActionDestination
 import inkspire.morphic.feature.home.gestureaction.GestureActionRoute
+import inkspire.morphic.feature.paywall.PaywallRoute
+import inkspire.morphic.feature.paywall.PaywallScreen
 import inkspire.morphic.feature.settings.SettingsRoute
 import inkspire.morphic.feature.settings.SettingsScreen
 import inkspire.morphic.feature.settings.SettingsSection
@@ -101,44 +105,7 @@ fun LauncherNavHost(homePresses: Flow<Unit>, modifier: Modifier = Modifier) {
                         onChosen = { navigator.goBack() },
                     )
                 }
-                entry<SettingsRoute> { route ->
-                    SettingsScreen(
-                        onBack = { navigator.goBack() },
-                        onAssignHomeSwipe = { direction -> navigator.goTo(GestureActionRoute.HomeSwipe(direction)) },
-                        onAssignHomeDoubleTap = { navigator.goTo(GestureActionRoute.HomeDoubleTap) },
-                        initialSection = route.section,
-                        initialLayout = route.layout,
-                    )
-                }
-                entry<WallpaperCropRoute> { route ->
-                    WallpaperCropScreen(
-                        uri = route.uri,
-                        target = route.target,
-                        onDone = { navigator.goBack() },
-                    )
-                }
-                entry<WallpaperCaptureRoute> {
-                    WallpaperCaptureScreen(
-                        onDone = { navigator.goBack() },
-                    )
-                }
-                entry<IconStudioRoute.Global> { route ->
-                    IconStudioScreen(
-                        route = route,
-                        onBack = { navigator.goBack() },
-                    )
-                }
-                entry<IconStudioRoute.App> { route ->
-                    IconStudioScreen(
-                        route = route,
-                        onBack = { navigator.goBack() },
-                    )
-                }
-                entry<WallpaperStudioRoute> {
-                    WallpaperStudioScreen(
-                        onBack = { navigator.goBack() },
-                    )
-                }
+                settingsEntries(navigator)
                 entry<ContainerSettingsRoute.Icon> { route ->
                     ContainerSettingsScreen(
                         route = route,
@@ -152,6 +119,59 @@ fun LauncherNavHost(homePresses: Flow<Unit>, modifier: Modifier = Modifier) {
                     )
                 }
             },
+        )
+    }
+}
+
+/**
+ * Settings and the full-screen destinations reached from it.
+ *
+ * Split out of [LauncherNavHost] as a group rather than for length alone: every key here is declared by the module that
+ * owns its screen, and together they are what the settings surface can open.
+ */
+private fun EntryProviderScope<NavKey>.settingsEntries(navigator: Navigator) {
+    entry<SettingsRoute> { route ->
+        SettingsScreen(
+            onBack = { navigator.goBack() },
+            onAssignHomeSwipe = { direction -> navigator.goTo(GestureActionRoute.HomeSwipe(direction)) },
+            onAssignHomeDoubleTap = { navigator.goTo(GestureActionRoute.HomeDoubleTap) },
+            onOpenPaywall = { navigator.goTo(PaywallRoute) },
+            initialSection = route.section,
+            initialLayout = route.layout,
+        )
+    }
+    entry<WallpaperCropRoute> { route ->
+        WallpaperCropScreen(
+            uri = route.uri,
+            target = route.target,
+            onDone = { navigator.goBack() },
+        )
+    }
+    entry<WallpaperCaptureRoute> {
+        WallpaperCaptureScreen(
+            onDone = { navigator.goBack() },
+        )
+    }
+    entry<IconStudioRoute.Global> { route ->
+        IconStudioScreen(
+            route = route,
+            onBack = { navigator.goBack() },
+        )
+    }
+    entry<IconStudioRoute.App> { route ->
+        IconStudioScreen(
+            route = route,
+            onBack = { navigator.goBack() },
+        )
+    }
+    entry<PaywallRoute> {
+        PaywallScreen(
+            onBack = { navigator.goBack() },
+        )
+    }
+    entry<WallpaperStudioRoute> {
+        WallpaperStudioScreen(
+            onBack = { navigator.goBack() },
         )
     }
 }

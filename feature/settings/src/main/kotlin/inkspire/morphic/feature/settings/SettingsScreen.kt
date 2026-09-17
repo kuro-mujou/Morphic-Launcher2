@@ -96,12 +96,14 @@ private val SettingsSection?.paneDepth: Int
  * @param onAssignHomeSwipe opens the action picker for a swipe on HOME — a destination `feature:home` declares, which
  *   is why it arrives from `app` rather than through the navigator here.
  * @param onAssignHomeDoubleTap the same, for a double tap on HOME's empty space.
+ * @param onOpenPaywall opens the subscription screen, which `feature:paywall` declares — `app` again.
  */
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
     onAssignHomeSwipe: (SwipeDirection) -> Unit,
     onAssignHomeDoubleTap: () -> Unit,
+    onOpenPaywall: () -> Unit,
     modifier: Modifier = Modifier,
     initialSection: SettingsSection? = null,
     initialLayout: AppsLayout? = null,
@@ -144,6 +146,7 @@ fun SettingsScreen(
                 onSelect = { selected = it; appsLayout = null },
                 detail = detail,
                 onBack = onBack,
+                onOpenPaywall = onOpenPaywall,
                 modifier = modifier,
             )
         } else {
@@ -154,6 +157,7 @@ fun SettingsScreen(
                 onCloseDetail = { selected = selected?.parent },
                 detail = detail,
                 onBack = onBack,
+                onOpenPaywall = onOpenPaywall,
                 modifier = modifier,
             )
         }
@@ -175,6 +179,7 @@ private fun SettingsSinglePane(
     onCloseDetail: () -> Unit,
     onBack: () -> Unit,
     detail: @Composable (SettingsSection, WindowInsetsSides) -> Unit,
+    onOpenPaywall: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalMorphicColors.current
@@ -223,6 +228,7 @@ private fun SettingsSinglePane(
                     highlightSelected = false,
                     showChevron = true,
                     insetSides = WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
+                    onOpenPaywall = onOpenPaywall,
                     modifier = Modifier
                         .fillMaxSize()
                         .background(colors.background),
@@ -244,6 +250,7 @@ private fun SettingsTwoPane(
     onCloseChild: (() -> Unit)?,
     onBack: () -> Unit,
     detail: @Composable (SettingsSection, WindowInsetsSides) -> Unit,
+    onOpenPaywall: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalMorphicColors.current
@@ -277,6 +284,7 @@ private fun SettingsTwoPane(
                 highlightSelected = true,
                 showChevron = false,
                 insetSides = WindowInsetsSides.Start + WindowInsetsSides.Bottom,
+                onOpenPaywall = onOpenPaywall,
                 modifier = Modifier
                     .width(360.dp)
                     .fillMaxHeight()

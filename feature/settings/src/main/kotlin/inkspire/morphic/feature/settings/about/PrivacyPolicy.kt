@@ -57,13 +57,14 @@ internal data class PrivacyPolicyDocument(
 
 internal val PrivacyPolicy = PrivacyPolicyDocument(
     title = "Privacy Policy",
-    effective = "12 September 2026",
-    lede = "Morphic Launcher collects nothing and sends nothing. It has no account, no ads, no analytics and no " +
-        "crash reporting. It does not request the Android INTERNET permission, so it cannot transmit data anywhere " +
-        "even in principle — the operating system enforces this, and you can check it yourself on the About screen.",
+    effective = "17 September 2026",
+    lede = "Morphic Launcher collects nothing about you. It has no account, no server, no ads, no analytics and no " +
+        "crash reporting. The one thing that involves another company is Morphic Premium, the optional " +
+        "subscription: Google Play handles it, and Google Play's billing library talks to Google.",
     blocks = listOf(
         PolicyBlock.Paragraph(
-            "Everything below describes what the app reads on your device, and why. None of it leaves your device.",
+            "Everything below describes what the app reads on your device, and why. None of it leaves your device, " +
+                "apart from what the Morphic Premium section describes.",
         ),
 
         PolicyBlock.Heading("What the app accesses on your device"),
@@ -103,7 +104,37 @@ internal val PrivacyPolicy = PrivacyPolicyDocument(
                 "without it.",
         ),
 
-        PolicyBlock.Heading("Two things handled by others, not by us"),
+        PolicyBlock.Heading("Morphic Premium and Google Play"),
+        PolicyBlock.Paragraph(
+            "Morphic Premium is an optional subscription, sold and managed entirely by Google Play. To show its prices " +
+                "and to check whether you are subscribed, the app asks the Google Play app on your device.",
+        ),
+        PolicyBlock.Bullets(
+            listOf(
+                PolicyBullet(
+                    term = "Your payment.",
+                    text = "Google processes it. The app never sees your payment details, name or email address.",
+                ),
+                PolicyBullet(
+                    term = "What we receive.",
+                    text = "Whether you hold the subscription, and the order details Google Play provides to every " +
+                        "developer, such as an order number, the plan, the price, the date and the country. We use " +
+                        "them only to handle purchases, refunds and tax records.",
+                ),
+                PolicyBullet(
+                    term = "Google's billing library.",
+                    text = "The app includes Google Play Billing Library, which sends diagnostic information about " +
+                        "purchases to Google. This is why the app declares the INTERNET permission; the launcher's " +
+                        "own code sends nothing. Google's use of it is governed by Google's privacy policy.",
+                ),
+                PolicyBullet(
+                    term = "Canceling.",
+                    text = "You can cancel at any time in Google Play's subscription settings.",
+                ),
+            ),
+        ),
+
+        PolicyBlock.Heading("Two more things handled by others, not by us"),
         PolicyBlock.Bullets(
             listOf(
                 PolicyBullet(
@@ -123,8 +154,8 @@ internal val PrivacyPolicy = PrivacyPolicyDocument(
 
         PolicyBlock.Heading("Data we collect"),
         PolicyBlock.Paragraph(
-            "None. There is no server, no account, no identifier, no telemetry and no third-party SDK that collects " +
-                "anything. Nothing is shared or sold, because nothing is gathered in the first place.",
+            "None, beyond the order details Google Play provides if you subscribe (see Morphic Premium above). There " +
+                "is no server, no account, no identifier and no telemetry of our own. Nothing is shared or sold.",
         ),
 
         PolicyBlock.Heading("Children"),

@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.WorkspacePremium
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -47,6 +49,7 @@ import org.koin.androidx.compose.koinViewModel
  * @param highlightSelected true in two-pane, where [selected] is on screen beside this.
  * @param showChevron true in single-pane, where a tap opens a new pane.
  * @param insetSides the edges whose system bars / cutout this list keeps its rows clear of.
+ * @param onOpenPaywall opens the subscription screen, a destination outside settings.
  */
 @Composable
 internal fun SettingsList(
@@ -56,6 +59,7 @@ internal fun SettingsList(
     highlightSelected: Boolean,
     showChevron: Boolean,
     insetSides: WindowInsetsSides,
+    onOpenPaywall: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val contentPadding = uiInsets
@@ -102,18 +106,34 @@ internal fun SettingsList(
             }
         }
 
-        settingsGroups.forEachIndexed { index, group ->
-            item(key = "group-${group.header ?: index}") {
+        // Its own panel above the groups: it opens a screen outside settings rather than a section of it.
+        item(key = "premium") {
+            MorphicGroupPanel(
+                Modifier
+                    .padding(horizontal = 16.dp)
+                    .padding(top = if (hub.steps.isNotEmpty()) 16.dp else 0.dp),
+            ) {
+                SettingsNavRow(
+                    title = "Morphic Premium",
+                    icon = Icons.Outlined.WorkspacePremium,
+                    selected = false,
+                    showChevron = showChevron,
+                    onClick = onOpenPaywall,
+                )
+            }
+        }
+
+        settingsGroups.forEach { group ->
+            item(key = "group-${group.header ?: group.sections.first()}") {
                 // **The break between two groups is paid here, not by the heading.** A heading that pays its own separates
                 // nothing when a group has none: `About` is one unheaded row, and welded to the bottom of the panel above it
                 // would read as one more of that panel's rows wearing a different corner radius. What the eye is reading is
                 // the gap between two *panels*, which is this list's to give whether or not a word sits in it. The first group
-                // takes none when it is first — it is already under the app bar — and pays it
-                // like any other once the setup row is above it.
+                // is never first: the Premium panel is always above it.
                 Column(
                     modifier = Modifier
                         .padding(horizontal = 16.dp)
-                        .padding(top = if (index > 0 || hub.steps.isNotEmpty()) 16.dp else 0.dp),
+                        .padding(top = 16.dp),
                 ) {
                     if (group.header != null) {
                         SettingsSectionHeader(group.header, spaceAbove = false)

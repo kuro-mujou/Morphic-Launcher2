@@ -6,6 +6,7 @@ import inkspire.morphic.core.common.di.commonModule
 import inkspire.morphic.core.database.di.databaseModule
 import inkspire.morphic.core.icon.di.iconModule
 import inkspire.morphic.data.apps.di.appsModule
+import inkspire.morphic.data.billing.di.billingModule
 import inkspire.morphic.data.icons.di.iconsModule
 import inkspire.morphic.data.layout.di.layoutModule
 import inkspire.morphic.data.settings.di.settingsModule
@@ -15,6 +16,7 @@ import inkspire.morphic.data.widgets.di.widgetsModule
 import inkspire.morphic.feature.apps.di.appsSurfaceModule
 import inkspire.morphic.feature.home.di.homeModule
 import inkspire.morphic.feature.onboarding.di.onboardingModule
+import inkspire.morphic.feature.paywall.di.paywallModule
 import inkspire.morphic.feature.settings.di.settingsSurfaceModule
 import inkspire.morphic.feature.shell.di.shellModule
 import inkspire.morphic.launcher.di.launcherModule
@@ -34,6 +36,7 @@ class LauncherApplication : Application() {
                 commonModule,
                 databaseModule,
                 appsModule,
+                billingModule,
                 iconModule,
                 iconsModule,
                 layoutModule,
@@ -46,6 +49,7 @@ class LauncherApplication : Application() {
                 settingsSurfaceModule,
                 shellModule,
                 onboardingModule,
+                paywallModule,
                 launcherModule,
             )
         }
