@@ -1,12 +1,14 @@
 # CLAUDE.md
 
-Working guidance for **Morphic Launcher 2** — an Android launcher, mid-rewrite.
+Working guidance for **Morphic Launcher 2** — an Android launcher.
 
 ## What this project is
 
-A ground-up rewrite of Morphic Launcher (**"L1"**), aimed at a codebase that is clean at every layer.
-It is a **refactor, not a re-type**: L1 runs, but it is fragile and smell-ridden, so it is the reference
-to measure against and improve on — never the thing to copy.
+An Android launcher, rewritten from the ground up out of Morphic Launcher (**"L1"**) and now standing on
+its own. **That rewrite is done and L1 is retired**: it is not a reference, not an answer key, and not
+something to compare against or port from. Where a rule below explains itself by naming what L1 got
+wrong, that sentence is kept because it is the *reason* for the rule — never as an instruction to go
+and read it.
 
 **[docs/REWRITE_PLAN.md](docs/REWRITE_PLAN.md)** is the source of truth for *what* to build and *in what
 order*; read it before anything structural. Module state and the record of how each piece arrived:
@@ -26,15 +28,6 @@ order*; read it before anything structural. Module state and the record of how e
   commit waits for that confirmation.
 - **State the decisions in the summary** — what was chosen, what was rejected, and why. That is what a
   diff cannot show; it belongs in the summary rather than spread through the code as commentary.
-
-### Reading L1
-
-- **Never port L1 verbatim.** Per piece: understand what it does and *why* → question the design
-  (duplicated? honest name? right layer?) → fix the smell here. Never delete L1; it is the answer key.
-- **Locate it before assuming a path.** L1 is a sibling of this repo — `../Morphic-Launcher` on one
-  machine, `../launcher` on the other. Run `ls ..` when it is first needed. A wrong guess fails
-  silently: a missing directory reads as "L1 has nothing on this", so the comparison this rule exists
-  to force is skipped rather than reported.
 
 ### Writing code
 
