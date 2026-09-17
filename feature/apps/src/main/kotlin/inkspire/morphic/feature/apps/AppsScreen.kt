@@ -230,8 +230,8 @@ fun AppsScreen(
                         .fillMaxWidth()
                         .weight(1f)
                         // What the field took, taken off what the content sees — for the layouts that pad
-                        // themselves. `appsContentPadding` reads the insets raw, which is why the two scrolling
-                        // layouts are told the same thing through `insetSides` instead.
+                        // themselves. The two scrolling layouts are also told it through `insetSides`, which is what
+                        // lets the A–Z strip's end edge be taken off as well.
                         .consumeWindowInsets(search.consumed),
                 ) {
                     val contentSides = search.contentSides(stripped = strip != null)
@@ -287,9 +287,6 @@ fun AppsScreen(
                 }
                 if (search.edge == VerticalEdge.BOTTOM) field()
             }
-            // Over everything, once for the surface rather than per layout — the pager is the one that does not scroll
-            // under the bars.
-            if (layout != AppsLayout.PAGER) BarShades()
         }
     }
 }
@@ -391,9 +388,8 @@ private class SearchChrome(
 ) {
 
     /**
-     * Which bars a **scrolling** layout still owes its content: everything the surface's own chrome has not already
-     * taken for it. Those layouts read the insets raw, as *content* padding so rows scroll under the bars, which is
-     * precisely what consumption cannot reach — so they are told instead.
+     * Which bars a **scrolling** layout still crops its content by: everything the surface's own chrome has not already
+     * taken for it. The strip's end edge is not something consumption says, so they are told instead.
      *
      * @param stripped whether the A–Z strip has a column on the end edge. It pads itself there, exactly as a pinned
      *   field pads its own, and content that reserved the same bar would leave a phantom band between the two.

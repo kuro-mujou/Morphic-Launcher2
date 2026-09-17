@@ -1,9 +1,12 @@
 package inkspire.morphic.feature.apps.layout
 
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -18,6 +21,7 @@ import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.grid.derivedCell
 import inkspire.morphic.core.designsystem.grid.fitCols
+import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
 import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.model.AppInfo
@@ -54,7 +58,9 @@ import inkspire.morphic.feature.apps.layout.alphabet.alphabetDim
  * @param metrics this grid's icon sizing, resolved from `GridSlot.APPS_SCROLL`'s blueprint and the user's overrides.
  *   Its `iconPercent` is spent on the cell **height** here, so the cell itself is drawn with the metrics `derivedCell`
  *   hands back rather than with these.
- * @param insetSides which bars this layout reserves room for. Everything but the edges the surface's chrome took for
+ * **Cropped inside the bars**, as the category pager and card are — see `AppsVerticalList`.
+ *
+ * @param insetSides which bars this layout crops itself by. Everything but the edges the surface's chrome took for
  *   itself — a pinned search field's, and the end when the A–Z rail has a column there. Each pads itself, and content
  *   that reserved the same bar would leave a phantom band beside it.
  * @param cols how many columns across — resolved from the same slot's blueprint and overrides, and passed rather than
@@ -79,9 +85,8 @@ fun AppsVerticalGrid(
     modifier: Modifier = Modifier,
 ) {
     val gestureConfig = rememberAppsGestureConfig()
-    // Content padding, not layout padding, so rows scroll under the bars rather than stopping short of them — the
-    // same inset the list applies, and now carrying the grid's own margin alongside the system's.
-    val contentPadding = appsContentPadding(horizontalPadding, insetSides)
+    // The bars crop the layout below; only the grid's own margin is content padding, as on the list.
+    val contentPadding = PaddingValues(horizontal = horizontalPadding)
 
     // The list's report, one layout over: a swipe back to HOME across a TOP or BOTTOM binding hands off to the pan
     // only once this grid is against the end it is being pulled toward.
@@ -94,10 +99,15 @@ fun AppsVerticalGrid(
         // Measured here rather than inside the item, because a cell's height comes from its *width* and only the
         // grid knows that: `GridCells.Fixed` divides whatever is left after the content padding, so the same
         // subtraction has to happen here to name one column's width.
-        BoxWithConstraints(modifier.fillMaxSize()) {
-            // Subtracting the *whole* content padding, margin included: `GridCells.Fixed` divides what is left after
-            // it, so a column named against any other width would be a column the grid never draws.
-            val usableWidth = maxWidth - contentPadding.horizontalExtent()
+        // The crop sits outside the measurement, so `maxWidth` is already clear of the bars.
+        BoxWithConstraints(
+            modifier
+                .fillMaxSize()
+                .windowInsetsPadding(uiInsets.only(insetSides)),
+        ) {
+            // Subtracting the margin too: `GridCells.Fixed` divides what is left after the content padding, so a
+            // column named against any other width would be a column the grid never draws.
+            val usableWidth = maxWidth - horizontalPadding * 2
             // **The stored count, clamped to what this width can actually draw** — the scrolling twin of the
             // `fitGridConfig` read home's pager does, and the only piece of grid resolution that belongs here rather
             // than in `AppsScreen`: it needs the measured width, which only this layout has. Without it, raising the

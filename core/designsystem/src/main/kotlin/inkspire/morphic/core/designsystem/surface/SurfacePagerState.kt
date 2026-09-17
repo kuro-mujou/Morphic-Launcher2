@@ -108,20 +108,6 @@ class SurfacePagerState {
         }
 
     /**
-     * The side surface that is **fully open and at rest** — the pan exactly on it — or `null` anywhere else, HOME included.
-     * Stricter than [openEdge], which names a surface from half-way: this is for chrome that must not travel with a pane.
-     * A settle's spring lands on its target exactly, so the equality is reached rather than approached.
-     */
-    val settledEdge: HomeEdge?
-        get() = when {
-            animX.value == -1f -> HomeEdge.LEFT
-            animX.value == 1f -> HomeEdge.RIGHT
-            animY.value == -1f -> HomeEdge.TOP
-            animY.value == 1f -> HomeEdge.BOTTOM
-            else -> null
-        }
-
-    /**
      * **The edges whose surface is showing at all** — any part of it, however little.
      *
      * Not the same question as [openEdge], which is "which one are we closer to" and answers `null` for most of a

@@ -1,9 +1,12 @@
 package inkspire.morphic.feature.apps.layout
 
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -16,6 +19,7 @@ import inkspire.morphic.core.designsystem.cell.AppRowCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.fitRowHeight
+import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
 import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.model.AppInfo
@@ -56,7 +60,10 @@ import inkspire.morphic.feature.apps.layout.alphabet.alphabetDim
  * layout's**: the field belongs to the surface, which draws it where `SearchPlacement` says and hands this the
  * matches to render — so a query narrows the rows without the list knowing a query exists.
  *
- * @param insetSides which bars this layout reserves room for. Everything but the edges the surface's chrome took for
+ * **Cropped inside the bars**, as the category pager and card are: rows stop at the bars rather than scrolling under
+ * them, so nothing needs shading there and nothing competes with a top action bar's own gradient.
+ *
+ * @param insetSides which bars this layout crops itself by. Everything but the edges the surface's chrome took for
  *   itself — a pinned search field's, and the end when the A–Z rail has a column there. Each pads itself, and content
  *   that reserved the same bar would leave a phantom band beside it.
  * @param indexed the A–Z run the index strip is pointing at, or null when nothing is being scrubbed. The list is
@@ -76,11 +83,10 @@ fun AppsVerticalList(
     modifier: Modifier = Modifier,
 ) {
     val gestureConfig = rememberAppsGestureConfig()
-    // The bar inset plus the grid's own margin, as **content** padding so the rows still scroll under the bars
-    // instead of stopping short of them. A row's touch target is its icon and label (`AppRowCell` hangs the gestures
-    // on a wrap-content group), so it narrows with the margin for free — the visible extent *is* the target, and
-    // there is nothing to keep in step by hand.
-    val contentPadding = appsContentPadding(horizontalPadding, insetSides)
+    // The margin is **content** padding, so a fling still works at the very edge of the crop. A row's touch target is
+    // its icon and label (`AppRowCell` hangs the gestures on a wrap-content group), so it narrows with the margin for
+    // free — the visible extent *is* the target, and there is nothing to keep in step by hand.
+    val contentPadding = PaddingValues(horizontal = horizontalPadding)
     // **The stored height, clamped to what this row can honor** — the list's counterpart of the vertical grid's column
     // fit, and the read half of the coupling the settings section's slider is bounded by. With icons on that means the
     // guardrails, which can move after a height was chosen: a row shorter than the smallest allowed icon would draw it
@@ -101,7 +107,13 @@ fun AppsVerticalList(
     LaunchedEffect(indexed) { indexed?.let { listState.scrollToItem(it.first) } }
 
     CompositionLocalProvider(LocalIconMetrics provides metrics) {
-        LazyColumn(state = listState, modifier = modifier.fillMaxSize(), contentPadding = contentPadding) {
+        LazyColumn(
+            state = listState,
+            modifier = modifier
+                .fillMaxSize()
+                .windowInsetsPadding(uiInsets.only(insetSides)),
+            contentPadding = contentPadding,
+        ) {
             itemsIndexed(items = apps, key = { _, app -> app.componentKey.flatten() }) { index, app ->
                 AppRowCell(
                     app = app,
