@@ -35,6 +35,14 @@ while developing is mixed in with real ones.
   file and not another splits a metric in two, and nothing warns about it.
 - **Consent:** EU users need a consent choice before collection, through Firebase's consent mode. Decide where it is
   asked. First-run setup is the obvious place, and its flow lives in `docs/ONBOARDING_PLAN.md`.
+- **Play's Families policy applies, because the declared target audience includes 13–15** (set 2026-09-18; the
+  under-13 brackets are deliberately not declared). Several EU states put the age of digital consent at 16, so Play
+  treats part of that bracket as children and requires every API and SDK in the app to comply with COPPA and GDPR-K
+  whenever a child uses it. Today the app clears this by collecting nothing at all; **Analytics is the change that
+  stops that being true**, and it is the one that has to answer for it. The advertising ID being off, above, is
+  already half the answer — the rest is consent mode handling a minor correctly rather than only an EU adult. The
+  alternative Play offers is a neutral age screen, which is **rejected**: it is a first-run wall for every user, to
+  serve a bracket a launcher barely has, when compliance costs nothing while collection stays this thin.
 
 ### Crashlytics
 
