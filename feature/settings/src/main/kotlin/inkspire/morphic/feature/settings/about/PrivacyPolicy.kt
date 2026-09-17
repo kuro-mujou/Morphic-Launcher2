@@ -57,7 +57,7 @@ internal data class PrivacyPolicyDocument(
 
 internal val PrivacyPolicy = PrivacyPolicyDocument(
     title = "Privacy Policy",
-    effective = "17 September 2026",
+    effective = "18 September 2026",
     lede = "Morphic Launcher collects nothing about you. It has no account, no server, no ads, no analytics and no " +
         "crash reporting. The one thing that involves another company is Morphic Premium, the optional " +
         "subscription: Google Play handles it, and Google Play's billing library talks to Google.",
@@ -170,6 +170,6 @@ internal val PrivacyPolicy = PrivacyPolicyDocument(
         ),
 
         PolicyBlock.Heading("Contact"),
-        PolicyBlock.Contact(text = "Questions about this policy:", email = "mguyenmanhtuan@gmail.com"),
+        PolicyBlock.Contact(text = "Questions about this policy:", email = "morphic.launcher@gmail.com"),
     ),
 )
