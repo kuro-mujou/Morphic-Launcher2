@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -57,7 +58,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.ShrinkToFit
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
-import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
@@ -174,7 +174,7 @@ private fun StyleSheet(state: WidgetStudioState, viewModel: WidgetStudioViewMode
                 onSelect = viewModel::select,
                 modifier = Modifier
                     .uiInsetsPadding(WindowInsetsSides.Horizontal)
-                    .padding(start = 20.dp, end = 20.dp, top = 20.dp),
+                    .padding(top = 20.dp),
             )
         }
         // Keyed on the part, so a control left open in one does not open its namesake in the next.
@@ -307,14 +307,16 @@ private fun DrawScope.drawSelection(box: Rect) {
     drawRoundRect(Color.White, outline.topLeft, outline.size, corner, style = Stroke(2.dp.toPx()))
 }
 
-/** The widget and each of its blocks, one segment each — the same choice a tap on the preview makes. */
+/** The widget and each of its blocks, one chip each — the same choice a tap on the preview makes. */
 @Composable
 private fun PartPicker(parts: List<StylePart>, selected: Int?, onSelect: (Int?) -> Unit, modifier: Modifier = Modifier) {
-    MorphicSegmentedButtons(
-        options = listOf("Widget") + parts.map { it.name },
-        selectedIndex = selected?.let { index -> parts.indexOfFirst { it.index == index } + 1 } ?: 0,
+    ChipRow(
+        labels = listOf("Widget") + parts.map { it.name },
+        selected = selected?.let { index -> parts.indexOfFirst { it.index == index } + 1 } ?: 0,
         onSelect = { i -> onSelect(parts.getOrNull(i - 1)?.index) },
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier,
+        // Inside the row rather than around it, so chips scroll to the screen's edge instead of being cut off short.
+        contentPadding = PaddingValues(horizontal = 20.dp),
     )
 }
 
