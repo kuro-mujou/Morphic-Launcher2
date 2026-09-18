@@ -31,6 +31,7 @@ original (`../Morphic-Launcher` or `../launcher` — the folder name differs per
 | Module | Plugin(s) |
 |---|---|
 | `core:model` | `jvm.library` + serialization |
+| `core:widgetscript` | `jvm.library` |
 | `core:common` | `android.library` |
 | `core:database` | `android.library` + `android.room` |
 | `core:designsystem` / `core:icon` / `core:navigation` | `android.library` + `library.compose` (+ serialization for icon/nav) |

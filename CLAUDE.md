@@ -91,7 +91,8 @@ Multi-module Gradle build. Package root `inkspire.morphic.*`; appId `inkspire.mo
 root Gradle project name `Launcher2`.
 
 - **`core:*`** — `model` (plain Kotlin data shapes), `common` (DI + coroutine plumbing), `database`
-  (Room), `icon`, `designsystem` (Compose), `navigation`.
+  (Room), `icon`, `designsystem` (Compose), `navigation`, `widgetscript` (the widget formula language — pure Kotlin,
+  so every read goes through a declared provider).
 - **`data:*`** — `apps`, `billing` (the Play subscription), `icons`, `layout` (the highest-logic module — placement
   engine), `settings`, `appwidgets` (hosting *other apps'* widgets — "widget" unqualified means the launcher's own).
   Each exposes repositories the UI consumes.

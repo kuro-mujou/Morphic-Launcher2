@@ -1,6 +1,6 @@
 # Widget Studio
 
-**Status:** design locked (2026-09-07); **WS0 done** (2026-09-18), nothing of ours built yet. The third studio, after the icon studio (done) and the
+**Status:** design locked (2026-09-07); **WS0–WS1 done** (2026-09-18): the rename, and the language. The third studio, after the icon studio (done) and the
 wallpaper studio (nearly). This is the *what and in what order*; the open questions at the end are real.
 
 **Covers:** a built-in editor for user-authored, data-bound, live-rendered widgets — plus the expression language
@@ -253,7 +253,7 @@ exists. Everything from WS7 on raises the ceiling rather than making it work.
 | # | Slice | Delivers |
 |---|---|---|
 | **WS0** ✅ | **The rename** | `data:widgets` → `data:appwidgets`; `WidgetInfo`→`AppWidgetInfo`, `WidgetCell`→`AppWidgetCell`, `GridItem.Widget`→`GridItem.AppWidget`, the catalog/provider/add-flow types likewise; tables `widget`→`app_widget`, `widget_placement`→`app_widget_placement` (DB v4, a destructive bump). **Container types keep their generic names** — a container will eventually hold both kinds — and so does **`widgetpicker/`**: it already offers both containers and will offer ours at WS5, so it is the add-a-widget sheet, not an app-widget one. **`GridItem.AppWidget` keeps `@SerialName("widget")`** — it is on the wire in stored gesture assignments — so ours takes a different serial name when it becomes a `GridItem`. |
-| **WS1** | **The language** | `core:widgetscript`: lexer, parser, AST, evaluator over pure functions + `if`. `WidgetExpression.providers` present and empty. Heavy unit tests; this is the slice that earns them. |
+| **WS1** ✅ | **The language** | `core:widgetscript`: lexer, parser, AST, evaluator over pure functions + `if`. Heavy unit tests; this is the slice that earns them. **Built with one provider rather than none**: `df` (date format) is the language's most-used function and reads the clock, so `ProviderId.CLOCK` and `ScriptData.now` arrived with it — the declaration rule is tested against a real read, not an empty set. `tc` and `mu` cover the modes a widget uses; `mu(rnd)` is refused outright, since a random value is a read no cadence can be derived from. The data *as a `Flow`* is still WS4's. |
 | **WS2** | **The model** | `core:model/widget`: recipe, layer spec, Text/Shape/Image sources, `WidgetGlobal`, block declaration. Serialization round-trip test, as `WallpaperRecipeTest` does. |
 | **WS3** | **The renderer** | `core:widget`: `WidgetRender(recipe, data)` for Text/Shape/Image in an Overlap container, anchor+offset placement. Test harness, no persistence. |
 | **WS4** | **Providers + cadence** | `data:widgets`: clock, battery, system as `Flow`s; `CadencePolicy` folding `recipe.providers`. **Device-verified: a date-only widget does not wake per second.** |

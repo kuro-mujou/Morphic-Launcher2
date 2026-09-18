@@ -2179,3 +2179,11 @@ the landscape half **letterboxed** rather than pinning the activity's orientatio
 the frame decides the *shape* while the target screen decides the *resolution*. And the service **publishes its
 colors**, which L1's did not — see the design-system note above; it is what lets the rotating pair answer the
 brightness question through the same system API as every other wallpaper.
+
+**The widget studio has started: WS0 and WS1 of [WIDGET_STUDIO_PLAN.md](WIDGET_STUDIO_PLAN.md).** WS0 took the word:
+everything that hosts *another app's* widget is `AppWidget*` and lives in `data:appwidgets`, so "widget" alone means the
+launcher's own. WS1 is `core:widgetscript`, the formula language — pure Kotlin, so a function cannot reach the platform
+and every read goes through `ScriptData` under a declared `ProviderId`. `WidgetExpression.parse(text).providers` is
+known before anything runs, and it is what WS4 will derive a widget's cadence from. The grammar's one unusual rule is
+that an operator between non-numbers is the text as written, which is what lets `df(dd-MM-yyyy)` go unquoted. Nothing
+renders a widget yet; WS2 (the recipe model) is next.
