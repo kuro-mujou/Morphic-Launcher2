@@ -2186,4 +2186,5 @@ launcher's own. WS1 is `core:widgetscript`, the formula language — pure Kotlin
 and every read goes through `ScriptData` under a declared `ProviderId`. `WidgetExpression.parse(text).providers` is
 known before anything runs, and it is what WS4 will derive a widget's cadence from. The grammar's one unusual rule is
 that an operator between non-numbers is the text as written, which is what lets `df(dd-MM-yyyy)` go unquoted. Nothing
-renders a widget yet; WS2 (the recipe model) is next.
+renders a widget yet. WS2 added the stored shape, `WidgetRecipe` in `core:model/widget` — a tree of anchored layers whose
+text is formula source, never a parse tree; WS3 (the renderer) is next.
