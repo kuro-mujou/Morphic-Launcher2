@@ -41,6 +41,13 @@ class WidgetCadenceTest {
     }
 
     @Test
+    fun `a progress's value is read`() {
+        // A battery ring reads the battery through its value alone; missed, it would be drawn once and never again.
+        val recipe = WidgetRecipe(listOf(WidgetLayerSpec(WidgetSource.Progress("\$bi(level)\$"))))
+        assertEquals(WidgetCadence(setOf(ProviderId.BATTERY), clockTick = null), WidgetCadence.of(recipe))
+    }
+
+    @Test
     fun `a hidden layer asks for nothing`() {
         // A hidden seconds clock would otherwise wake the widget every second to draw nothing.
         val recipe = WidgetRecipe(listOf(text("\$df(EEEE)\$"), text("\$df(ss)\$", visible = false)))

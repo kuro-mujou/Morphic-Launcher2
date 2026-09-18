@@ -62,10 +62,10 @@ class WidgetRenderHarness {
 
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
 
-    /** Friday 18 September 2026, 19:14:05 UTC, read in English. */
+    /** Friday 18 September 2026, 19:14:05 UTC, read in English, on a battery at 72% and charging. */
     private val data = object : ScriptData {
         override val now: Instant = Instant.parse("2026-09-18T19:14:05Z")
-        override val battery = BatteryReading.Unknown
+        override val battery = BatteryReading(level = 72, charging = true, source = BatteryReading.PowerSource.AC, temperature = 31f)
         override val system = SystemReading.Unknown
         override val zone: ZoneId = ZoneId.of("UTC")
         override val locale: Locale = Locale.US
@@ -173,6 +173,66 @@ class WidgetRenderHarness {
                 ),
             ),
         ),
+        "progress" to WidgetRecipe(
+            listOf(
+                panel(),
+                WidgetLayerSpec(
+                    WidgetSource.Progress("\$bi(level)\$", WidgetSource.Progress.Kind.ARC, thickness = 8f, color = Teal),
+                    anchor = WidgetAnchor.TOP_LEFT,
+                    offsetX = 12f,
+                    offsetY = 12f,
+                    width = WidgetExtent.Dp(64f),
+                    height = WidgetExtent.Dp(64f),
+                ),
+                WidgetLayerSpec(
+                    WidgetSource.Text("\$bi(level)\$", size = 16f, weight = 600),
+                    anchor = WidgetAnchor.TOP_LEFT,
+                    offsetX = 32f,
+                    offsetY = 33f,
+                ),
+                WidgetLayerSpec(
+                    // A gauge, square-capped, over a range that does not start at zero.
+                    WidgetSource.Progress(
+                        "\$bi(level)\$",
+                        WidgetSource.Progress.Kind.ARC,
+                        min = 50f,
+                        thickness = 6f,
+                        startAngle = -135f,
+                        sweep = 270f,
+                        rounded = false,
+                        color = Amber,
+                    ),
+                    anchor = WidgetAnchor.TOP_RIGHT,
+                    offsetX = -12f,
+                    offsetY = 12f,
+                    width = WidgetExtent.Dp(64f),
+                    height = WidgetExtent.Dp(64f),
+                ),
+                WidgetLayerSpec(
+                    // The day so far: 19:14 is 80% of it.
+                    WidgetSource.Progress("\$df(H) * 60 + df(m)\$", max = 1440f, color = Teal),
+                    anchor = WidgetAnchor.BOTTOM,
+                    offsetY = -28f,
+                    width = WidgetExtent.Fraction(0.85f),
+                    height = WidgetExtent.Dp(10f),
+                ),
+                WidgetLayerSpec(
+                    // A short fill in a pill-ended bar keeps the pill's end rather than drawing its own.
+                    WidgetSource.Progress("3", color = Amber),
+                    anchor = WidgetAnchor.BOTTOM,
+                    offsetY = -12f,
+                    width = WidgetExtent.Fraction(0.85f),
+                    height = WidgetExtent.Dp(10f),
+                ),
+                WidgetLayerSpec(
+                    // A broken value draws the track alone.
+                    WidgetSource.Progress("\$bi(levle)\$", rounded = false),
+                    anchor = WidgetAnchor.CENTER,
+                    width = WidgetExtent.Dp(60f),
+                    height = WidgetExtent.Dp(6f),
+                ),
+            ),
+        ),
         "problems" to WidgetRecipe(
             listOf(
                 panel(),
@@ -212,5 +272,7 @@ class WidgetRenderHarness {
 
     private companion object {
         val Dim = 0xB3FFFFFF.toInt()
+        val Teal = 0xFF2C9E8B.toInt()
+        val Amber = 0xFFE6A15C.toInt()
     }
 }

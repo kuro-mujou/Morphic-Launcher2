@@ -7,6 +7,12 @@ plugins {
 
 android {
     namespace = "inkspire.morphic.feature.home"
+
+    // `TemplateGalleryHarness` draws the template library on a device for a person to judge. It lives here because
+    // this is the one module that sees both the library (data:widgets) and the renderer (core:widget).
+    defaultConfig {
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
 }
 
 dependencies {
@@ -41,4 +47,12 @@ dependencies {
     implementation(libs.timber)
 
     testImplementation(libs.junit)
+
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    // As in core:widget: the Compose test rule's espresso 3.5 fails on Android 16 before the first frame.
+    androidTestImplementation(libs.androidx.test.espresso.core)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

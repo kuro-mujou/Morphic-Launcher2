@@ -22,22 +22,23 @@ data class WidgetCadence(val providers: Set<ProviderId>, val clockTick: ClockTic
 
     companion object {
         /**
-         * The cadence of every text [recipe] draws. Hidden layers draw nothing and so ask for nothing — including one
-         * the Style tab switched off.
+         * The cadence of every formula [recipe] draws — a text's and a progress's value alike. Hidden layers draw
+         * nothing and so ask for nothing — including one the Style tab switched off.
          */
         fun of(recipe: WidgetRecipe): WidgetCadence {
-            val expressions = texts(recipe.layers, recipe.resolvedGlobals).map(WidgetExpression::parse).toList()
+            val expressions = formulas(recipe.layers, recipe.resolvedGlobals).map(WidgetExpression::parse).toList()
             return WidgetCadence(
                 providers = expressions.flatMap { it.providers }.toSet(),
                 clockTick = expressions.mapNotNull { it.clockTick }.minOrNull(),
             )
         }
 
-        private fun texts(layers: List<WidgetLayerSpec>, globals: WidgetGlobals): Sequence<String> =
+        private fun formulas(layers: List<WidgetLayerSpec>, globals: WidgetGlobals): Sequence<String> =
             layers.drawn(globals).asSequence().flatMap {
                 when (val source = it.source) {
                     is WidgetSource.Text -> sequenceOf(source.text)
-                    is WidgetSource.Overlap -> texts(source.layers, globals)
+                    is WidgetSource.Progress -> sequenceOf(source.value)
+                    is WidgetSource.Overlap -> formulas(source.layers, globals)
                     is WidgetSource.Shape, is WidgetSource.Image -> emptySequence()
                 }
             }

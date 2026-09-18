@@ -85,6 +85,43 @@ sealed interface WidgetSource {
     }
 
     /**
+     * How far a formula's number sits between [min] and [max], drawn as a filled share of a track — a battery ring, a
+     * day's progress bar. The value is a formula like a [Text]'s, so what is measured is the design's choice, not a
+     * list of presets.
+     *
+     * A [value] that does not evaluate to a number draws the track alone, as does one at or below [min].
+     *
+     * @property value literal text with `$…$` formulas, read as a number once evaluated — `$bi(level)$`.
+     * @property thickness in dp, the [Kind.ARC]'s stroke. A [Kind.BAR] is its layer's whole box.
+     * @property startAngle degrees clockwise from twelve o'clock, where an arc's fill begins.
+     * @property sweep degrees clockwise the full track covers: 360 is a ring, 270 a gauge.
+     * @property rounded round caps on an arc; pill ends on a bar, with the fill clipped to them.
+     * @property colorGlobal a [WidgetGlobal.Color] that decides [color] instead, when it names one.
+     * @property trackColorGlobal a [WidgetGlobal.Color] that decides [trackColor] instead.
+     */
+    @Serializable
+    @SerialName("progress")
+    data class Progress(
+        val value: String,
+        val kind: Kind = Kind.BAR,
+        val min: Float = 0f,
+        val max: Float = 100f,
+        val color: Int = White,
+        val trackColor: Int = FaintWhite,
+        val thickness: Float = 6f,
+        val startAngle: Float = 0f,
+        val sweep: Float = 360f,
+        val rounded: Boolean = true,
+        val colorGlobal: String? = null,
+        val trackColorGlobal: String? = null,
+    ) : WidgetSource {
+
+        /** A bar fills left to right across its box; an arc fills clockwise around the largest circle that fits. */
+        @Serializable
+        enum class Kind { BAR, ARC }
+    }
+
+    /**
      * A group whose layers are placed freely inside it, each by its own anchor and offset, later layers drawn over
      * earlier ones. A recipe's own layers are this, one level up.
      */
@@ -94,3 +131,4 @@ sealed interface WidgetSource {
 }
 
 private const val White = 0xFFFFFFFF.toInt()
+private const val FaintWhite = 0x33FFFFFF

@@ -55,6 +55,24 @@ class WidgetRecipeTest {
                     width = WidgetExtent.Dp(64f),
                     height = WidgetExtent.Dp(64f),
                 ),
+                WidgetLayerSpec(
+                    source = WidgetSource.Progress(
+                        value = "\$bi(level)\$",
+                        kind = WidgetSource.Progress.Kind.ARC,
+                        min = 10f,
+                        max = 90f,
+                        color = 0xFF2C9E8B.toInt(),
+                        trackColor = 0x22FFFFFF,
+                        thickness = 9f,
+                        startAngle = -135f,
+                        sweep = 270f,
+                        rounded = false,
+                        colorGlobal = "accent",
+                        trackColorGlobal = "track",
+                    ),
+                    width = WidgetExtent.Dp(80f),
+                    height = WidgetExtent.Dp(80f),
+                ),
             ),
         )
 
@@ -84,6 +102,18 @@ class WidgetRecipeTest {
     }
 
     @Test
+    fun `the stored form of a progress is pinned`() {
+        val layer = WidgetLayerSpec(
+            WidgetSource.Progress("\$bi(level)\$", kind = WidgetSource.Progress.Kind.ARC, sweep = 270f),
+        )
+
+        assertEquals(
+            """{"source":{"type":"progress","value":"${'$'}bi(level)${'$'}","kind":"ARC","sweep":270.0}}""",
+            json.encodeToString(layer),
+        )
+    }
+
+    @Test
     fun `a layer stored as only its source reads back at the defaults`() {
         val layer = json.decodeFromString<WidgetRecipe>("""{"layers":[{"source":{"type":"shape"}}]}""").layers.single()
 
@@ -107,7 +137,7 @@ class WidgetRecipeTest {
         // The case ignoreUnknownKeys does not cover: a newer build's source kind is a discriminator this one cannot
         // map. Pinned so that a reader relying on it never silently becoming lenient is visible here.
         assertThrows(SerializationException::class.java) {
-            json.decodeFromString<WidgetRecipe>("""{"layers":[{"source":{"type":"progress"}}]}""")
+            json.decodeFromString<WidgetRecipe>("""{"layers":[{"source":{"type":"hologram"}}]}""")
         }
     }
 }

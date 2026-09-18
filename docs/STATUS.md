@@ -2195,11 +2195,17 @@ surface.** "Widget" alone means the launcher's own; hosting *another app's* is `
   composable on HOME, under the finger and on the picker page), dragged, resized and removed like any HOME item, and
   stored as `widget` + `widget_placement`.
 
-- WS6a (built, awaiting a device check): a design's **globals** — typed settings it declares — edited on a **Style**
+- WS6a: a design's **globals** — typed settings it declares — edited on a **Style**
   screen (`feature:settings/widgetstudio`) opened from the widget's menu, bound to properties through `WidgetGlobals`,
   the one resolver the renderer and the cadence share. Changes save themselves.
 
-WS6b (the template library, a design pass) is next. `feature:shell` gained a detekt baseline with one entry:
+- WS6b: **the template library** — twelve designs in `BuiltInWidgetTemplates`, assembled from `TemplateParts`, laid
+  out for the phone's ~103 × 154 dp visual cell and checked by eye at a denser one through `TemplateGalleryHarness`
+  (`feature:home` androidTest, the one module that sees both library and renderer). The library needed one engine
+  addition first: **`WidgetSource.Progress`**, a bar or arc filled by a formula's number between `min` and `max`, read
+  by the cadence like a text. The picker still lists designs as rows with a generic icon.
+
+`feature:shell` gained a detekt baseline with one entry:
 `LauncherShell` reached 100 lines with the Style route's callback, and wants splitting. **Compose UI tests need espresso ≥ 3.6 on this emulator**
 (API 36): the 3.5 the Compose test rule brings calls an `InputManager` method Android 16 removed, and fails before the
 first frame. `core:widget` pins 3.7.
