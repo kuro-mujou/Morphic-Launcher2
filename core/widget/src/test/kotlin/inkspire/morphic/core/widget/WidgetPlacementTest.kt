@@ -64,4 +64,34 @@ class WidgetPlacementTest {
     fun `a child larger than its centered parent overhangs both sides equally`() {
         assertEquals(-50, WidgetPlacement.position(parent = 100, child = 200, bias = 0.5f, offsetPx = 0f))
     }
+
+    @Test
+    fun `a group hugs its layers, offsets included`() {
+        // Two lines centered in a block, the second 20px lower: the block is both lines' height apart plus the taller,
+        // not the height of either.
+        val (size, starts) = WidgetPlacement.hug(
+            sizes = intArrayOf(30, 30),
+            biases = floatArrayOf(0.5f, 0.5f),
+            offsetsPx = floatArrayOf(-10f, 10f),
+        )
+        assertEquals(50, size)
+        assertEquals(listOf(0, 20), starts.toList())
+    }
+
+    @Test
+    fun `hugging keeps the layers where they sat relative to each other`() {
+        // A narrow line centered over a wide one: the wide one starts the box, and the narrow one keeps its centering.
+        val (size, starts) = WidgetPlacement.hug(
+            sizes = intArrayOf(100, 40),
+            biases = floatArrayOf(0.5f, 0.5f),
+            offsetsPx = floatArrayOf(0f, 0f),
+        )
+        assertEquals(100, size)
+        assertEquals(listOf(0, 30), starts.toList())
+    }
+
+    @Test
+    fun `an empty group hugs nothing`() {
+        assertEquals(0, WidgetPlacement.hug(IntArray(0), FloatArray(0), FloatArray(0)).first)
+    }
 }

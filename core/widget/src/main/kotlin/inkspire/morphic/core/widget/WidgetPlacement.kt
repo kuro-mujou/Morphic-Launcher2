@@ -50,4 +50,20 @@ internal object WidgetPlacement {
      */
     fun position(parent: Int, child: Int, bias: Float, offsetPx: Float): Int =
         (bias * (parent - child) + offsetPx).roundToInt()
+
+    /**
+     * One axis of a group sized by its content: every child placed by [position] inside a box as big as the largest
+     * of them, and then the box shrunk to exactly what they cover — offsets included — with the children moved with
+     * it. So a block whose second line sits 20dp below its first is a box around both lines, not around the wider one.
+     *
+     * @return the group's size and each child's leading edge within it.
+     */
+    fun hug(sizes: IntArray, biases: FloatArray, offsetsPx: FloatArray): Pair<Int, IntArray> {
+        if (sizes.isEmpty()) return 0 to IntArray(0)
+        val box = sizes.max()
+        val starts = IntArray(sizes.size) { position(box, sizes[it], biases[it], offsetsPx[it]) }
+        val min = starts.min()
+        val max = sizes.indices.maxOf { starts[it] + sizes[it] }
+        return (max - min) to IntArray(sizes.size) { starts[it] - min }
+    }
 }

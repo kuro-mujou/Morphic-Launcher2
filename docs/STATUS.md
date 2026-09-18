@@ -2207,6 +2207,10 @@ surface.** "Widget" alone means the launcher's own; hosting *another app's* is `
   (`TemplateShelves`). HOME insets each widget 8dp inside its cell (`WidgetCellInset`, a placeholder for the padding
   settings), and the item's gestures sit inside the inset — so the bounds they report, which the Style studio
   previews at, are the drawn size.
+- WS7a: **blocks** — a named group layer whose parameters are its own globals, in a scope of their own
+  (`WidgetGlobals.inside`), so two copies of a block keep separate settings without renaming anything. Content-sized
+  groups hug what they draw. The templates are a background plus blocks, and the Style screen shows one part at a
+  time, picked by tapping the preview or from a segmented row.
 
 `feature:shell` gained a detekt baseline with one entry:
 `LauncherShell` reached 100 lines with the Style route's callback, and wants splitting. **Compose UI tests need espresso ≥ 3.6 on this emulator**

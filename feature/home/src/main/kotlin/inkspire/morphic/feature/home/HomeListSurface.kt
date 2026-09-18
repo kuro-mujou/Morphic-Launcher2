@@ -99,6 +99,7 @@ import inkspire.morphic.core.model.WidgetAreaGrid
 import inkspire.morphic.core.model.asItemGesture
 import inkspire.morphic.core.model.sideZoneEdge
 import inkspire.morphic.core.model.toGridConfig
+import inkspire.morphic.core.model.widget.isStyleable
 import inkspire.morphic.data.apps.LetterBucket
 import inkspire.morphic.data.appwidgets.AppWidgetHostController
 import inkspire.morphic.data.layout.CellSpan
@@ -354,7 +355,7 @@ internal fun HomeListSurface(
                 title = UnnamedWidget,
                 anchor = anchor,
                 actions = buildList {
-                    if (item.widget.recipe.globals.isNotEmpty()) {
+                    if (item.widget.recipe.isStyleable) {
                         add(
                             MenuAction("Style") {
                                 onStyleWidget(item.widget.id, with(density) { anchor.size.toDpSize() })

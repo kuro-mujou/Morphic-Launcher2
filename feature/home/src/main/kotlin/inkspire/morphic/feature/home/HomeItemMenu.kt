@@ -3,6 +3,7 @@ package inkspire.morphic.feature.home
 import androidx.compose.ui.geometry.Rect
 import inkspire.morphic.core.designsystem.menu.LauncherMenuHost
 import inkspire.morphic.core.designsystem.menu.MenuAction
+import inkspire.morphic.core.model.widget.isStyleable
 import inkspire.morphic.data.appwidgets.AppWidgetHostController
 import inkspire.morphic.data.layout.LayoutChange
 
@@ -77,7 +78,7 @@ internal fun showHomeItemMenu(
             title = UnnamedWidget,
             anchor = anchor,
             actions = buildList {
-                if (item.widget.recipe.globals.isNotEmpty()) {
+                if (item.widget.recipe.isStyleable) {
                     add(MenuAction("Style") { onStyleWidget(item.widget.id, anchor) })
                 }
                 add(resizeAction(item, HomeResizeRules.LauncherItem, onResize))

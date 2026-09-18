@@ -124,10 +124,20 @@ sealed interface WidgetSource {
     /**
      * A group whose layers are placed freely inside it, each by its own anchor and offset, later layers drawn over
      * earlier ones. A recipe's own layers are this, one level up.
+     *
+     * With a content extent, a group is exactly as big as what its layers cover — offsets included — so a block's
+     * box is what it draws, which is what selecting it on the canvas hits.
+     *
+     * @property globals settings this group owns, in a scope of their own: bindings and `gv` inside it read these
+     *   before the recipe's, so two copies of one block keep separate settings under the same names. A block's
+     *   parameters live here.
      */
     @Serializable
     @SerialName("overlap")
-    data class Overlap(val layers: List<WidgetLayerSpec> = emptyList()) : WidgetSource
+    data class Overlap(
+        val layers: List<WidgetLayerSpec> = emptyList(),
+        val globals: List<WidgetGlobal> = emptyList(),
+    ) : WidgetSource
 }
 
 private const val White = 0xFFFFFFFF.toInt()

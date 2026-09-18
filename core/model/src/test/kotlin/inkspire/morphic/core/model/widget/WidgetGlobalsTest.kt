@@ -84,4 +84,48 @@ class WidgetGlobalsTest {
         )
         assertEquals(recipe, json.decodeFromString<WidgetRecipe>(json.encodeToString(recipe)))
     }
+
+    @Test
+    fun `a group's globals shadow the recipe's, and the rest show through`() {
+        val block = WidgetSource.Overlap(globals = listOf(WidgetGlobal.Color("text", "Text color", 0xFFABCDEF.toInt())))
+        val inner = globals.inside(block)
+
+        assertEquals(0xFFABCDEF.toInt(), inner.color("text", fallback = 0))
+        assertEquals(12f, inner.number("round", fallback = 0f))
+        // The outer scope is untouched: a second block reading `text` outside this one still gets the recipe's.
+        assertEquals(0xFF112233.toInt(), globals.color("text", fallback = 0))
+    }
+
+    @Test
+    fun `the nearest global of a name decides, even when it is mistyped`() {
+        // Falling through to an outer global of the right type would make a broken binding read someone else's
+        // setting — silently, and only while that other global happened to exist.
+        val block = WidgetSource.Overlap(globals = listOf(WidgetGlobal.Switch("text", "Text", true)))
+        assertEquals(7, globals.inside(block).color("text", fallback = 7))
+    }
+
+    @Test
+    fun `a formula inside a group reads the nearest value of each name`() {
+        val block = WidgetSource.Overlap(globals = listOf(WidgetGlobal.Text("name", "Name", "Grace")))
+        val values = globals.inside(block).asScriptValues()
+
+        assertEquals("Grace", values["name"])
+        assertEquals("12", values["round"])
+    }
+
+    @Test
+    fun `a group declaring nothing opens no scope`() {
+        assertEquals(globals, globals.inside(WidgetSource.Overlap()))
+    }
+
+    @Test
+    fun `a recipe is styleable through its own globals or any block's`() {
+        val block = WidgetLayerSpec(
+            WidgetSource.Overlap(globals = listOf(WidgetGlobal.Switch("h24", "24-hour", true))),
+            name = "Time",
+        )
+        assertEquals(false, WidgetRecipe(listOf(WidgetLayerSpec(WidgetSource.Overlap()))).isStyleable)
+        assertEquals(true, WidgetRecipe(listOf(block)).isStyleable)
+        assertEquals(true, WidgetRecipe(globals = listOf(WidgetGlobal.Switch("a", "A", true))).isStyleable)
+    }
 }

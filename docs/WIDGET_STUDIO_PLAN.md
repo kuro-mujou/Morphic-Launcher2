@@ -1,7 +1,8 @@
 # Widget Studio
 
 **Status:** design locked (2026-09-07); **WS0–WS6 done** (2026-09-18): the engine, widgets placeable on HOME, the Style tab and a
-twelve-design template library, shown live in the picker. **WS7 — blocks and direct manipulation — is next.** The third studio, after the icon studio (done) and the
+twelve-design template library, shown live in the picker. **WS7a (blocks and selection) is done;**
+WS7b (add/remove/reorder) is next. The third studio, after the icon studio (done) and the
 wallpaper studio (nearly). This is the *what and in what order*; the open questions at the end are real.
 
 **Covers:** a built-in editor for user-authored, data-bound, live-rendered widgets — plus the expression language
@@ -52,14 +53,14 @@ language as an escape hatch.** Same engine underneath; the pyramid is upside dow
 
 | Tier | Who | What they see | Slice |
 |---|---|---|---|
-| **1 — Style** | everyone | the **globals** the template declared: colors, font, a size, an on/off, a list choice. Nothing else. | WS6 |
+| **1 — Style** | everyone | the **globals** of one part at a time — the widget, or a block tapped on the preview: colors, font, a size, an on/off, a list choice. Nothing else. | WS6, WS7a |
 | **2 — Blocks** | some | add / remove / reorder blocks; drag and size them on the canvas | WS7 |
 | **3 — Advanced** | few | primitives, layer stack, the formula editor | WS8–WS9 |
 
 **Tier 1 is not a stripped mode — it is the same mechanism the reference reserves for experts.** A block declares its
-parameter surface; inserting it promotes that surface into the recipe's globals; the Style tab is those globals. So
-the work that makes a preset distributable is the same work that makes it editable by someone who did not author it.
-One mechanism, two payoffs, and it is why globals land at WS6 rather than late.
+parameter surface; inserting it brings that surface along as the block's own globals; the Style tab shows them when
+the block is selected. So the work that makes a preset distributable is the same work that makes it editable by
+someone who did not author it. One mechanism, two payoffs, and it is why globals land at WS6 rather than late.
 
 ---
 
@@ -142,9 +143,13 @@ A **block** is a recipe fragment with a declared parameter surface: a Clock, a B
 **template** is a whole recipe with one. Both are the reference's object type #1 ("a prebuilt reusable component…"),
 which theirs buries as one of ten and treats as optional. Here it is the main road.
 
-**Inserting a block expands it into layers *and* promotes its declared parameters into the recipe's globals.** That
-single behavior is what makes tier 1 work: after inserting a Clock, the Style tab gains "Clock color", "Clock font",
-"24-hour" — and a tier-1 user never learns that a Text layer with a `$df(…)$` binding is underneath.
+**A block is one named group layer, and its parameters are that group's own globals** (settled 2026-09-18, WS7a). A
+group's globals are a **scope**: bindings and `gv` inside it read the nearest global of a name, so two Clock blocks
+each own a `text` color without either being renamed — the rewrite of names and of formulas' `gv(…)` that promoting
+into one recipe-wide list would need is never done. The Style tab shows **one part at a time**, the widget or the
+block selected by tapping it on the preview (or by name), which is what keeps two "Text color" rows from sitting side
+by side with nothing to tell them apart. A tier-1 user still never learns that a Text layer with a `$df(…)$` binding is
+underneath. *This replaces the first design, which promoted a block's parameters into the recipe's globals.*
 
 **Expansion is frozen, not a live reference.** The block's layers become the user's layers, editable and never
 clobbered by a library update. The cost is that improving a shipped block does not improve existing widgets; the
@@ -266,7 +271,9 @@ exists. Everything from WS7 on raises the ceiling rather than making it work.
 | **WS6a** ✅ | **Globals + the Style tab** | `WidgetGlobal` (color / number / switch / choice / font / text) declared on the recipe with its current value — per widget, since each widget owns its recipe. Properties opt in through additive fields (`colorGlobal`, `sizeGlobal`, `fontGlobal`, `cornerRadiusGlobal`, a layer's `visibleGlobal`); formulas read one through `gv(name)`. **One resolver, `WidgetGlobals`, for the renderer and the cadence**, so a layer a switch hides wakes nothing — `drawn(globals)`. The studio (`feature:settings/widgetstudio`) opens from a widget's **Style** menu row (absent when it declares no globals) at the size HOME draws it, over the real wallpaper; every change saves itself, debounced, on the application scope. `ShrinkToFit` (`core:designsystem`) is the true-size preview both the picker and the studio use. The three starter designs declare globals. |
 | **WS6b** ✅ | **The template library** | Twelve designs (`BuiltInWidgetTemplates`, built from `TemplateParts`): four clocks, four dates, two battery, day and year progress. **It needed `WidgetSource.Progress` first** — a text-only engine made twelve variations of a clock — so the plan's WS8 `Progress` arrived here, as specified: a bar or an arc (a ring and a gauge are one kind, by `sweep`), filled by a **formula** between `min` and `max`, read by the cadence like any text. Judged through `TemplateGalleryHarness` (`feature:home` androidTest) at the phone cell and a denser one, over light and dark backdrops; rings are sized as a share of the width so a narrower cell shrinks rather than clips them. **What the library could not express, and so is owed:** a color chosen by a formula (a low battery in red, today highlighted in a week), a per-widget zone (a world clock), a day-of-week number that is not locale-dependent, and every provider past clock/battery/system. |
 | ~~**WS6**~~ | ~~**Templates + the Style tab**~~ ⟵ *the tier-1 product; split into WS6a/WS6b above* | ~12 finished built-in templates, each declaring its globals; a picker that shows them rendered with live data; the Style tab editing those globals; per-instance values. **After this a normal user can have a widget they styled themselves, and nothing else has to exist.** |
-| **WS7** | **Blocks + direct manipulation** | The block library; add / remove / reorder; select-drag-size on the canvas. Tier 2. |
+| **WS7a** ✅ | **Blocks + selection** | A block is a **named group layer** (`WidgetLayerSpec.name`) whose parameters are **its own globals** (`WidgetSource.Overlap.globals`), resolved as a nested scope by `WidgetGlobals.inside` — the one resolver the renderer and the cadence share. A content-sized group now **hugs** what it draws, offsets included (`WidgetPlacement.hug`), so a block's box is its visible extent. The twelve templates are rebuilt as a background plus blocks. The Style tab shows one part at a time, chosen by tapping it on the preview (the renderer reports each layer's drawn box through `onLayout`) or from a segmented row, and the selected block is outlined. |
+| **WS7b** | **Add / remove / reorder** | The block library; a block inserted into a placed widget, removed, or moved in the draw order. Removal replaces the templates' visibility switches ("Show date"). |
+| **WS7c** | **Direct manipulation** | Drag a block to move it (resolved back to the nearest anchor plus an offset, the inverse of `WidgetPlacement`) and pinch to size it — a uniform **scale** on the layer, applied in layout so anchoring stays right. Scale was chosen over rewriting each block's own sizes: pinching must work for every kind of block, and a per-kind resize rule drifts proportions. |
 | **WS8** | **Primitives + item editor** | The layer stack, per-item tabs, Stack container and Series (`Progress` arrived with WS6b). Tier 3, behind "Advanced". |
 | **WS9** | **Formula editor** | The field, the live-evaluated example browser, faves. The escape hatch, and deliberately the last authoring surface built. |
 | **WS10** | **Touch** | A list of `gesture × action` per item. Gestures we have and they cannot: double tap, long press, swipe. No `Disabled (block touch)` — a workaround for a hit-testing model we do not have. |

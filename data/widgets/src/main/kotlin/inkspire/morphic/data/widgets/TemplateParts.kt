@@ -15,6 +15,36 @@ import inkspire.morphic.core.model.widget.WidgetSource
  */
 internal object TemplateParts {
 
+    /**
+     * A block: [layers] grouped under [name] with the settings they read, placed as one. Its [globals] are its own
+     * scope, so the same part used twice in a design keeps two sets of settings.
+     */
+    @Suppress("LongParameterList") // A layer's placement, which every block states in full.
+    fun block(
+        name: String,
+        globals: List<WidgetGlobal>,
+        layers: List<WidgetLayerSpec>,
+        anchor: WidgetAnchor = WidgetAnchor.CENTER,
+        offsetX: Float = 0f,
+        offsetY: Float = 0f,
+        width: WidgetExtent = WidgetExtent.Content,
+        height: WidgetExtent = WidgetExtent.Content,
+        visibleGlobal: String? = null,
+    ) = WidgetLayerSpec(
+        WidgetSource.Overlap(layers, globals),
+        anchor = anchor,
+        offsetX = offsetX,
+        offsetY = offsetY,
+        width = width,
+        height = height,
+        visibleGlobal = visibleGlobal,
+        name = name,
+    )
+
+    /** A block the size of the whole widget — a design that is one thing, whose parts are pinned to its edges. */
+    fun wholeBlock(name: String, globals: List<WidgetGlobal>, layers: List<WidgetLayerSpec>) =
+        block(name, globals, layers, width = WidgetExtent.Fill, height = WidgetExtent.Fill)
+
     /** A battery ring with its percentage inside, as a group so the two stay together wherever it is placed. */
     fun batteryDial(ring: Float, textSize: Float) = WidgetSource.Overlap(
         listOf(

@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.unit.IntRect
 import inkspire.morphic.core.model.widget.WidgetRecipe
 import inkspire.morphic.core.model.widget.resolvedGlobals
 import inkspire.morphic.core.widgetscript.ScriptData
@@ -19,13 +20,22 @@ import inkspire.morphic.core.widgetscript.ScriptData
  * guarded against, so a second path must not be added. If one is ever needed, it shares a derivation with this one.
  *
  * Fills what it is given and clips to it: a widget is exactly the size of its cell.
+ *
+ * @param onLayout for an editor: where each of the recipe's own layers landed, by its index in `recipe.layers`, in
+ *   this composable's pixels — reported from the layout that drew them, so what is hit-tested is what is on screen. A
+ *   layer that does not draw is absent. Called on every layout pass; nothing is reported when it is null.
  */
 @Composable
-fun WidgetRender(recipe: WidgetRecipe, data: ScriptData, modifier: Modifier = Modifier) {
+fun WidgetRender(
+    recipe: WidgetRecipe,
+    data: ScriptData,
+    modifier: Modifier = Modifier,
+    onLayout: ((Map<Int, IntRect>) -> Unit)? = null,
+) {
     val globals = remember(recipe.globals) { recipe.resolvedGlobals }
     val scoped = remember(data, globals) { GlobalScopedData(data, globals.asScriptValues()) }
-    WidgetOverlap(recipe.layers, scoped, globals, modifier.fillMaxSize().clipToBounds())
+    WidgetOverlap(recipe.layers, scoped, globals, modifier.fillMaxSize().clipToBounds(), onLayout)
 }
 
-/** [data] with this widget's own settings added, for `gv`. */
-private class GlobalScopedData(data: ScriptData, override val globals: Map<String, String>) : ScriptData by data
+/** [data] with the settings in scope added, for `gv` — the widget's at the top, a block's inside it. */
+internal class GlobalScopedData(data: ScriptData, override val globals: Map<String, String>) : ScriptData by data

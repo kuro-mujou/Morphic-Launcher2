@@ -16,6 +16,9 @@ import kotlinx.serialization.Serializable
  * @property visible false hides the layer and keeps it — the editor's eye toggle, not a deletion.
  * @property visibleGlobal a [WidgetGlobal.Switch] that decides whether a [visible] layer draws — how a design offers
  *   "Show date" without the person placing it ever seeing a layer.
+ * @property name what the studio calls this layer. **A named layer at the top of a recipe is a block**: something
+ *   the person placing the widget can select and restyle on its own. An unnamed one — a background panel — is part
+ *   of the widget itself.
  */
 @Serializable
 data class WidgetLayerSpec(
@@ -29,6 +32,7 @@ data class WidgetLayerSpec(
     val opacity: Float = 1f,
     val visible: Boolean = true,
     val visibleGlobal: String? = null,
+    val name: String? = null,
 )
 
 /**

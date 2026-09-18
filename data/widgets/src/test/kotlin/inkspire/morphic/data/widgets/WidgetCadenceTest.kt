@@ -69,6 +69,20 @@ class WidgetCadenceTest {
     }
 
     @Test
+    fun `a block's own switch is read in its own scope`() {
+        // The recipe turns seconds on and the block turns them off; the block's is the nearer, so nothing ticks.
+        val block = WidgetLayerSpec(
+            WidgetSource.Overlap(
+                layers = listOf(WidgetLayerSpec(WidgetSource.Text("\$df(ss)\$"), visibleGlobal = "secs")),
+                globals = listOf(WidgetGlobal.Switch("secs", "Seconds", false)),
+            ),
+            name = "Time",
+        )
+        val recipe = WidgetRecipe(listOf(block), globals = listOf(WidgetGlobal.Switch("secs", "Seconds", true)))
+        assertEquals(WidgetCadence(emptySet(), clockTick = null), WidgetCadence.of(recipe))
+    }
+
+    @Test
     fun `no starter design wakes every second`() {
         // The guard on the design library: a template that ticks per second costs every user who places it battery
         // for something a person never asked to see, and nothing on screen would say so.

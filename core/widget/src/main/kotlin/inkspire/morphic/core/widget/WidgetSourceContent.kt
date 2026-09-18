@@ -38,8 +38,18 @@ internal fun WidgetSourceContent(source: WidgetSource, data: ScriptData, globals
         is WidgetSource.Shape -> WidgetShape(source, globals)
         is WidgetSource.Image -> WidgetImage(source)
         is WidgetSource.Progress -> WidgetProgress(source, data, globals)
-        is WidgetSource.Overlap -> WidgetOverlap(source.layers, data, globals)
+        is WidgetSource.Overlap -> WidgetGroup(source, data, globals)
     }
+}
+
+/**
+ * A group, drawn in its own scope when it declares globals: its bindings and its formulas' `gv` read those first.
+ */
+@Composable
+private fun WidgetGroup(source: WidgetSource.Overlap, data: ScriptData, globals: WidgetGlobals) {
+    val inner = remember(source.globals, globals) { globals.inside(source) }
+    val scoped = remember(data, inner) { if (inner === globals) data else GlobalScopedData(data, inner.asScriptValues()) }
+    WidgetOverlap(source.layers, scoped, inner)
 }
 
 /**
