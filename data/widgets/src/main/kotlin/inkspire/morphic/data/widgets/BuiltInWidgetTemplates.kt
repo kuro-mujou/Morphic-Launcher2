@@ -40,10 +40,16 @@ import inkspire.morphic.data.widgets.TemplateParts.text
  */
 object BuiltInWidgetTemplates {
 
+    /**
+     * In the order the picker shows them, which packs its shelves (eight visual cells wide on a phone) without gaps:
+     * the 4 × 1s in pairs, then the 2 × 2s together.
+     */
     val all: List<WidgetTemplate> = listOf(
-        clock(), stackedClock(), hourRing(), clockAndBattery(),
-        date(), calendarPage(), weekday(), greeting(),
-        batteryRing(), battery(), dayProgress(), yearProgress(),
+        clock(), clockAndBattery(),
+        weekday(), greeting(),
+        dayProgress(), battery(), date(),
+        stackedClock(), hourRing(), calendarPage(), batteryRing(),
+        yearProgress(),
     )
 
     private fun clock() = WidgetTemplate(

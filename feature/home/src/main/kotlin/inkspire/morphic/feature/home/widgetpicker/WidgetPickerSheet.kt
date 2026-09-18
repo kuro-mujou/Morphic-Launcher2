@@ -183,6 +183,9 @@ internal fun WidgetPickerSheet(
                     onOpenComponent = { opened = PickerEntry.Component(it) },
                     templates = if (onAddTemplate != null) state.templates else emptyList(),
                     onOpenTemplate = { opened = PickerEntry.Template(it) },
+                    grid = grid,
+                    cellWidthPx = cellWidthPx,
+                    cellHeightPx = cellHeightPx,
                 )
 
                 is PickerEntry.Widgets -> DetailPane(
@@ -219,7 +222,8 @@ internal fun WidgetPickerSheet(
 }
 
 /**
- * The first pane: a search field, the launcher's own **Components**, then one row per app that publishes widgets.
+ * The first pane: a search field, the launcher's own **Widgets** drawn live, its **Components**, then one row per app
+ * that publishes widgets.
  */
 @Composable
 private fun ListPane(
@@ -230,6 +234,9 @@ private fun ListPane(
     onOpenComponent: (ComponentKind) -> Unit = {},
     templates: List<WidgetTemplate> = emptyList(),
     onOpenTemplate: (WidgetTemplate) -> Unit = {},
+    grid: GridConfig? = null,
+    cellWidthPx: Float = 0f,
+    cellHeightPx: Float = 0f,
 ) {
     val colors = LocalMorphicColors.current
     val search = rememberTextFieldState()
@@ -289,8 +296,8 @@ private fun ListPane(
             val matching = if (query.isBlank()) templates else templates.filter { it.name.contains(query.trim(), true) }
             if (matching.isNotEmpty()) {
                 item(key = "widgets-heading") { SectionHeading("Widgets") }
-                items(matching, key = { "template-${it.id}" }) { template ->
-                    TemplateRow(template) { onOpenTemplate(template) }
+                item(key = "widgets") {
+                    TemplateShelves(matching, grid, cellWidthPx, cellHeightPx, onOpen = onOpenTemplate)
                 }
             }
             val showComponents = query.isBlank() && components.isNotEmpty()

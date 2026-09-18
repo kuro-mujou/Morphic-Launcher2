@@ -2203,7 +2203,10 @@ surface.** "Widget" alone means the launcher's own; hosting *another app's* is `
   out for the phone's ~103 × 154 dp visual cell and checked by eye at a denser one through `TemplateGalleryHarness`
   (`feature:home` androidTest, the one module that sees both library and renderer). The library needed one engine
   addition first: **`WidgetSource.Progress`**, a bar or arc filled by a formula's number between `min` and `max`, read
-  by the cadence like a text. The picker still lists designs as rows with a generic icon.
+  by the cadence like a text. The picker draws every design live, in shelves two grid rows wide at one shared scale
+  (`TemplateShelves`). HOME insets each widget 8dp inside its cell (`WidgetCellInset`, a placeholder for the padding
+  settings), and the item's gestures sit inside the inset — so the bounds they report, which the Style studio
+  previews at, are the drawn size.
 
 `feature:shell` gained a detekt baseline with one entry:
 `LauncherShell` reached 100 lines with the Style route's callback, and wants splitting. **Compose UI tests need espresso ≥ 3.6 on this emulator**

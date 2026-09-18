@@ -1,7 +1,7 @@
 # Widget Studio
 
 **Status:** design locked (2026-09-07); **WS0–WS6 done** (2026-09-18): the engine, widgets placeable on HOME, the Style tab and a
-twelve-design template library. **The template picker is the open tier-1 question** before WS7. The third studio, after the icon studio (done) and the
+twelve-design template library, shown live in the picker. **WS7 — blocks and direct manipulation — is next.** The third studio, after the icon studio (done) and the
 wallpaper studio (nearly). This is the *what and in what order*; the open questions at the end are real.
 
 **Covers:** a built-in editor for user-authored, data-bound, live-rendered widgets — plus the expression language
@@ -305,8 +305,9 @@ it as its own work.
 
 - ~~How does a widget declare its size, and what does resizing do?~~ **Settled:** `WidgetRecipe.span`, in visual
   cells, and resizing **re-lays** — anchors re-resolve and dp sizes hold (WS2–WS5).
-- **What is the template *picker* — a grid of thumbnails, or the wallpaper studio's swipe-through-designs?** The
-  latter is already built next door and shows each design with live data, which a thumbnail cannot.
+- ~~What is the template *picker*?~~ **Settled:** every design drawn live in the picker's list, packed into shelves
+  two grid rows wide at one shared scale (so sizes compare truly), each opening its own true-size page. Swipe-through
+  was rejected: it shows one design at a time, and the section's job is seeing all of them.
 - **Is a 1×1 widget worth designing for?** Nothing stops it once we render — a live tile in the icon grid (a date, a
   battery ring, a next-event chip) is a real idea the AppWidget-shaped framing hides, and it may be the *most*
   tier-1 thing here. Cheap to allow, expensive to retrofit if the editor assumes a large canvas.
