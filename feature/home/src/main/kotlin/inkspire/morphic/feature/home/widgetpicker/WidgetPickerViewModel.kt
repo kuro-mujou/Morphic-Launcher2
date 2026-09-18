@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.data.appwidgets.AppWidgetCatalog
 import inkspire.morphic.data.appwidgets.AppWidgetProviderGroup
+import inkspire.morphic.data.widgets.BuiltInWidgetTemplates
+import inkspire.morphic.data.widgets.WidgetTemplate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,8 +17,12 @@ import kotlinx.coroutines.launch
  * @property groups the installed widgets by app, or **null while the catalog is still being read** — which is a
  *   different thing from an empty list and is drawn differently: null is a spinner, empty is a device with no
  *   widgets on it. Collapsing the two would show "no widgets" for the second or so the read takes.
+ * @property templates the launcher's own widget designs, which need no read.
  */
-data class WidgetPickerState(val groups: List<AppWidgetProviderGroup>? = null)
+data class WidgetPickerState(
+    val groups: List<AppWidgetProviderGroup>? = null,
+    val templates: List<WidgetTemplate> = BuiltInWidgetTemplates.all,
+)
 
 /**
  * State holder for the widget picker.
@@ -40,7 +46,7 @@ class WidgetPickerViewModel(
 
     init {
         viewModelScope.launch {
-            _state.value = WidgetPickerState(groups = widgetCatalog.installed())
+            _state.value = _state.value.copy(groups = widgetCatalog.installed())
         }
     }
 }

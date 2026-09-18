@@ -64,10 +64,22 @@ internal fun showHomeItemMenu(
                 // because there is nothing to bound the drag with.
                 val rules = widgetHost.boundAppWidget(item.info.appWidgetId)?.resize
                 if (rules != null) {
-                    add(resizeAction(item, HomeResizeRules.Widget(rules), onResize))
+                    add(resizeAction(item, HomeResizeRules.AppWidget(rules), onResize))
                 }
                 add(MenuAction("Remove widget") { viewModel.removeAppWidget(item.info.appWidgetId) })
             },
+        )
+        // Ours: resizable from one visual cell up, since the recipe re-lays at any size, and removed by a plain
+        // `RemoveFromGrid` — there is no host to release, which is what makes an app widget's removal special.
+        is HomeItem.Widget -> menuHost?.show(
+            title = UnnamedWidget,
+            anchor = anchor,
+            actions = listOf(
+                resizeAction(item, HomeResizeRules.LauncherItem, onResize),
+                MenuAction("Remove widget") {
+                    viewModel.applyChanges(listOf(LayoutChange.RemoveFromGrid(item.gridItem)))
+                },
+            ),
         )
         // No shortcuts stage and no App info — a folder is the launcher's own object, not an installed app.
         // "Remove folder" takes the folder off the grid and its membership with it (`RemoveFromGrid` cascades),
@@ -98,8 +110,8 @@ internal fun showHomeItemMenu(
                 // **Resizable like a widget, and it was only the menu that said otherwise.** Every layer below —
                 // the planner, the overlay, `Move` on the container's own placement table — already treated a
                 // container as one more placed rectangle; the row was simply never added. What differs is the
-                // floor, which no provider states here: see [HomeResizeRules.Container].
-                resizeAction(item, HomeResizeRules.Container, onResize),
+                // floor, which no provider states here: see [HomeResizeRules.LauncherItem].
+                resizeAction(item, HomeResizeRules.LauncherItem, onResize),
                 MenuAction("Container settings") { onOpenIconContainerSettings(item.container.id) },
                 MenuAction("Remove container") {
                     viewModel.applyChanges(listOf(LayoutChange.RemoveFromGrid(item.gridItem)))
@@ -117,7 +129,7 @@ internal fun showHomeItemMenu(
             actions = listOf(
                 // The icon container's reasoning exactly — and it matters more here, since what a widget container
                 // holds is itself sized by the container rather than by the grid.
-                resizeAction(item, HomeResizeRules.Container, onResize),
+                resizeAction(item, HomeResizeRules.LauncherItem, onResize),
                 MenuAction("Container settings") { onOpenWidgetContainerSettings(item.container.id) },
                 MenuAction("Remove container") { viewModel.removeWidgetContainer(item.container.id) },
             ),
@@ -137,6 +149,7 @@ internal val HomeItem.menuLabel: String
         is HomeItem.App -> info.label
         is HomeItem.Folder -> folder.label.ifBlank { UnnamedFolder }
         is HomeItem.AppWidget -> info.label.ifBlank { UnnamedAppWidget }
+        is HomeItem.Widget -> UnnamedWidget
         is HomeItem.IconContainer -> IconContainerTitle
         is HomeItem.WidgetContainer -> WidgetContainerTitle
     }

@@ -26,6 +26,8 @@ import inkspire.morphic.core.database.dao.IconOverrideDao
 import inkspire.morphic.core.database.dao.WidgetContainerDao
 import inkspire.morphic.core.database.dao.WidgetContainerItemDao
 import inkspire.morphic.core.database.dao.WidgetContainerPlacementDao
+import inkspire.morphic.core.database.dao.WidgetDao
+import inkspire.morphic.core.database.dao.WidgetPlacementDao
 import inkspire.morphic.core.database.entity.AppInfoEntity
 import inkspire.morphic.core.database.entity.AppPlacementEntity
 import inkspire.morphic.core.database.entity.AppWidgetEntity
@@ -44,10 +46,12 @@ import inkspire.morphic.core.database.entity.IconOverrideEntity
 import inkspire.morphic.core.database.entity.WidgetContainerEntity
 import inkspire.morphic.core.database.entity.WidgetContainerItemEntity
 import inkspire.morphic.core.database.entity.WidgetContainerPlacementEntity
+import inkspire.morphic.core.database.entity.WidgetEntity
+import inkspire.morphic.core.database.entity.WidgetPlacementEntity
 
 /**
- * The launcher's Room database: cached app metadata, home placements (per `ArrangementKey`), folders, widgets,
- * containers, per-app icon overrides, and the ordered stores (APPS pager, categories, home list).
+ * The launcher's Room database: cached app metadata, home placements (per `ArrangementKey`), folders, app widgets and
+ * the launcher's own widgets, containers, per-app icon overrides, and the ordered stores (APPS pager, categories, home list).
  * Layout/grid/icon *config* for a surface lives in `data:settings`, not here.
  *
  * **No migrations are written.** `DatabaseModule` builds this with `fallbackToDestructiveMigration(dropAllTables
@@ -74,8 +78,10 @@ import inkspire.morphic.core.database.entity.WidgetContainerPlacementEntity
         CategoryEntity::class,
         CategoryItemEntity::class,
         HomeListItemEntity::class,
+        WidgetEntity::class,
+        WidgetPlacementEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 @TypeConverters(
@@ -85,6 +91,8 @@ import inkspire.morphic.core.database.entity.WidgetContainerPlacementEntity
     IconArrangementConverter::class,
     WidgetContainerAxisConverter::class
 )
+// One abstract accessor per DAO is how Room exposes a table, not a class doing twenty things.
+@Suppress("TooManyFunctions")
 abstract class LauncherDatabase : RoomDatabase() {
     abstract fun appInfoDao(): AppInfoDao
     abstract fun appPlacementDao(): AppPlacementDao
@@ -104,6 +112,8 @@ abstract class LauncherDatabase : RoomDatabase() {
     abstract fun categoryDao(): CategoryDao
     abstract fun categoryItemDao(): CategoryItemDao
     abstract fun homeListItemDao(): HomeListItemDao
+    abstract fun widgetDao(): WidgetDao
+    abstract fun widgetPlacementDao(): WidgetPlacementDao
 
     companion object {
         const val DATABASE_NAME = "morphic-launcher.db"

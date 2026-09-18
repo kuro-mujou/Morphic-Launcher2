@@ -2191,6 +2191,10 @@ surface.** "Widget" alone means the launcher's own; hosting *another app's* is `
   recipe reads and wakes the clock at the coarsest tick its patterns allow; verified on the emulator, where a date
   widget emits once in four seconds.
 
-Nothing is placeable yet — WS5 (placement on HOME) is next. **Compose UI tests need espresso ≥ 3.6 on this emulator**
+- `feature:home` — WS5: a design is added from the picker's **Widgets** section, drawn by `WidgetCell` (the same
+  composable on HOME, under the finger and on the picker page), dragged, resized and removed like any HOME item, and
+  stored as `widget` + `widget_placement`.
+
+WS6 (templates and the Style tab) is next. **Compose UI tests need espresso ≥ 3.6 on this emulator**
 (API 36): the 3.5 the Compose test rule brings calls an `InputManager` method Android 16 removed, and fails before the
 first frame. `core:widget` pins 3.7.

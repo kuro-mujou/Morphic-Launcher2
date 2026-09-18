@@ -8,6 +8,7 @@ import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.WidgetContainerAxis
+import inkspire.morphic.core.model.widget.WidgetRecipe
 
 /**
  * The write-command vocabulary for the HOME layout — one value per intended change to *where items sit and
@@ -108,6 +109,17 @@ sealed interface LayoutChange {
      */
     data class PlaceAppWidget(
         val widget: AppWidgetInfo,
+        val at: GridPlacement,
+        val zone: HomeZone = HomeZone.MAIN,
+    ) : LayoutChange
+
+    /**
+     * Places a new widget of the launcher's own drawn from [recipe] — the definition row and its placement, for
+     * [PlaceAppWidget]'s reason: a placement with no recipe behind it draws nothing. The widget gets a copy of the
+     * recipe, so placing one template twice makes two widgets.
+     */
+    data class PlaceWidget(
+        val recipe: WidgetRecipe,
         val at: GridPlacement,
         val zone: HomeZone = HomeZone.MAIN,
     ) : LayoutChange

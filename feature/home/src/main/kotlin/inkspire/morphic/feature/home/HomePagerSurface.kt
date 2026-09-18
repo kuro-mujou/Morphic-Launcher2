@@ -71,7 +71,7 @@ import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.asItemGesture
 import inkspire.morphic.data.appwidgets.AppWidgetHostController
 import inkspire.morphic.data.appwidgets.AppWidgetResizeRules
-import inkspire.morphic.data.layout.AppWidgetSpan
+import inkspire.morphic.data.layout.CellSpan
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.feature.home.widgetpicker.WidgetPickerSheet
@@ -99,6 +99,9 @@ internal const val UnnamedFolder = "Folder"
 
 /** The same fallback for a widget whose provider publishes no label. Internal, since a container's pages draw one. */
 internal const val UnnamedAppWidget = "Widget"
+
+/** What the launcher's own widget is called in a menu until a recipe carries a name of its own. */
+internal const val UnnamedWidget = "Widget"
 
 /**
  * Menu titles for the two containers.
@@ -514,6 +517,9 @@ internal fun HomePagerSurface(
             // A widget handles its own taps — its content is another app's views, and every button in it is
             // theirs. The launcher's job here is to *not* intercept.
             is HomeItem.AppWidget -> Unit
+            // Ours has no touch actions yet (WS10), and a tap on it opening something the user did not draw would
+            // be the launcher guessing.
+            is HomeItem.Widget -> Unit
             // **A filled container has no expanded view; an empty one opens its add flow.** A container's contents
             // are already on screen, so a tap on a filled one means whatever it landed on — an icon container's slots
             // launch and open for themselves (`IconContainerCell`), a widget container's pages are the widget's own,
@@ -676,7 +682,7 @@ internal fun HomePagerSurface(
         )
         val geo = geometry
         val span = geo?.let {
-            AppWidgetSpan.forWidget(
+            CellSpan.forAppWidget(
                 bound.targetCols, bound.targetRows,
                 bound.minWidthPx, bound.minHeightPx,
                 it.cellW, it.cellH, config,
@@ -886,6 +892,9 @@ internal fun HomePagerSurface(
             // An **icon container** is re-drawn like any other cell — its contents are icons the launcher owns, so
             // there is nothing here it cannot paint a second time.
             val draggedIconContainer = draggedItem as? HomeItem.IconContainer
+            // **Ours re-draws too**, where another app's widget has to be photographed: the launcher renders it, so
+            // the proxy is the same live widget following the finger.
+            val draggedOwnWidget = draggedItem as? HomeItem.Widget
             // A widget cannot be re-drawn the way a cell can — its content is another app's views — so the proxy
             // is a snapshot of the one on screen, taken once when the drag starts. See
             // `AppWidgetHostController.snapshot`.
@@ -900,7 +909,7 @@ internal fun HomePagerSurface(
                 draggedWidgetContainer?.container?.widgetIds?.firstNotNullOfOrNull { widgetHost.snapshot(it) }
             }
             val hasProxy = draggedApp != null || draggedFolder != null || widgetShot != null ||
-                draggedIconContainer != null || draggedWidgetContainer != null
+                draggedIconContainer != null || draggedWidgetContainer != null || draggedOwnWidget != null
             if (hasProxy && folderHost.openCollectionId == null) {
                 val finger = session.fingerInRoot
                 // **A cell-filling item is placed under the grab; an icon under the finger's centre.** A widget or
@@ -909,7 +918,8 @@ internal fun HomePagerSurface(
                 // grabbed by a small centred icon, so `grabInItem` is near centre for it anyway; forcing the centre
                 // keeps it exactly where it was and cannot drift if that small target is ever off-centre.
                 val grab = when (session.item) {
-                    is GridItem.AppWidget, is GridItem.WidgetContainer, is GridItem.IconContainer -> session.grabInItem
+                    is GridItem.AppWidget, is GridItem.Widget, is GridItem.WidgetContainer, is GridItem.IconContainer ->
+                        session.grabInItem
                     is GridItem.App, is GridItem.Folder -> GrabCenter
                 }
                 FloatingDragIcon(
@@ -951,6 +961,8 @@ internal fun HomePagerSurface(
                             )
                         } else if (draggedWidgetContainer != null) {
                             WidgetContainerProxy(snapshot = containerShot, modifier = Modifier.fillMaxSize())
+                        } else if (draggedOwnWidget != null) {
+                            WidgetCell(recipe = draggedOwnWidget.widget.recipe)
                         } else if (widgetShot != null) {
                             Image(
                                 bitmap = widgetShot.asImageBitmap(),
@@ -1085,6 +1097,10 @@ internal fun HomePagerSurface(
                     widgetPickerOpen = false
                     pageToReveal = viewModel.createWidgetContainer(HomeZone.MAIN, config)?.page
                 },
+                onAddTemplate = { template ->
+                    widgetPickerOpen = false
+                    pageToReveal = viewModel.placeWidget(template.recipe, HomeZone.MAIN, config)?.page
+                },
                 // Nothing is ever too big for this grid to take: the search grows a page rather than refusing, and
                 // the only refusal left is an item wider or taller than the grid itself. Asked all the same, so the
                 // picker's Add row is absent for exactly the widgets that could not be placed — see the sheet.
@@ -1145,6 +1161,12 @@ private fun HomeItemCell(
         is HomeItem.AppWidget -> AppWidgetCell(
             appWidgetId = item.info.appWidgetId,
             label = item.info.label.ifBlank { UnnamedAppWidget },
+            modifier = cellModifier,
+            itemGestures = itemGestures,
+        )
+
+        is HomeItem.Widget -> WidgetCell(
+            recipe = item.widget.recipe,
             modifier = cellModifier,
             itemGestures = itemGestures,
         )
@@ -1219,11 +1241,14 @@ private fun geometryFor(zone: HomeZone, main: GridGeometry?, dock: GridGeometry?
  */
 internal sealed interface HomeResizeRules {
 
-    /** A widget, bounded by what its provider says it can be drawn at. */
-    data class Widget(val rules: AppWidgetResizeRules) : HomeResizeRules
+    /** An app widget, bounded by what its provider says it can be drawn at. */
+    data class AppWidget(val rules: AppWidgetResizeRules) : HomeResizeRules
 
-    /** An icon or widget container, bounded by the grid rather than by any provider. */
-    data object Container : HomeResizeRules
+    /**
+     * Something the launcher draws itself — either container, or a widget of its own — bounded by the grid rather
+     * than by any provider: nothing states a minimum for it but the grid's one visual cell.
+     */
+    data object LauncherItem : HomeResizeRules
 }
 
 /**
@@ -1233,21 +1258,21 @@ internal sealed interface HomeResizeRules {
  * would offer a size the provider has already said it cannot draw at. Floored at one cell, since a footprint of
  * nothing is not a thing the grid can express.
  *
- * **A container's floor is one *visual* cell** — `cellMultiplier` logical ones — which is the smallest footprint
+ * **A launcher item's floor is one *visual* cell** — `cellMultiplier` logical ones — which is the smallest footprint
  * anything on this grid occupies: a single app icon's. Below that a container would be smaller than one of the icons
  * it exists to hold, which is not a size worth being able to reach. It is not `ContainerSpan`: that is where a
  * container *lands*, and a default placement is not a minimum.
  */
 private fun HomeResizeRules.asResizeBounds(geometry: GridGeometry, config: GridConfig): ResizeBounds = when (this) {
     // Both axes always: the provider's `resizeMode` is not honored here — see `AppWidgetResizeRules`.
-    is HomeResizeRules.Widget -> ResizeBounds(
+    is HomeResizeRules.AppWidget -> ResizeBounds(
         horizontal = true,
         vertical = true,
         minColSpan = if (geometry.cellW > 0f) ceil(rules.minWidthPx / geometry.cellW).toInt().coerceAtLeast(1) else 1,
         minRowSpan = if (geometry.cellH > 0f) ceil(rules.minHeightPx / geometry.cellH).toInt().coerceAtLeast(1) else 1,
     )
 
-    HomeResizeRules.Container -> ResizeBounds(
+    HomeResizeRules.LauncherItem -> ResizeBounds(
         horizontal = true,
         vertical = true,
         minColSpan = config.cellMultiplier.coerceAtLeast(1),

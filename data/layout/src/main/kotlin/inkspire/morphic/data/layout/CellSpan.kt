@@ -1,22 +1,20 @@
 package inkspire.morphic.data.layout
 
 import inkspire.morphic.core.model.GridConfig
+import inkspire.morphic.core.model.widget.WidgetSpan
 import kotlin.math.ceil
 
 /**
- * How many grid cells a widget needs — the bridge between the size a provider states in pixels and the lattice
- * everything on HOME is placed in.
+ * How many grid cells an item larger than an icon needs — an app widget, a widget of the launcher's own, a
+ * container — as the lattice everything on HOME is placed in counts them.
  *
  * **In logical cells, like every other span in the placement engine.** A home grid is sub-divided
  * (`GridConfig.cellMultiplier`), so an app occupies a 2×2 logical footprint rather than one cell; a widget is
  * measured against the same lattice, which is what lets [FreeGridPlanner] treat it as an ordinary occupant with no
  * special case. Turning it back into the "3 × 2" a *user* would recognize is a division by the multiplier, and
  * [visualLabel] is the one place that happens.
- *
- * Ported from L1's `AppWidgetSpan`, with the arguments folded into the [GridConfig] the caller already has rather
- * than passed as three loose ints beside it.
  */
-data class AppWidgetSpan(val colSpan: Int, val rowSpan: Int) {
+data class CellSpan(val colSpan: Int, val rowSpan: Int) {
 
     /**
      * The span as the user reads it — whole visual cells, "3 × 2".
@@ -52,7 +50,7 @@ data class AppWidgetSpan(val colSpan: Int, val rowSpan: Int) {
          * The same function feeds the picker and every home surface, so the number the label prints and the number
          * the placement searches for cannot drift — the drift this fixes.
          */
-        fun forWidget(
+        fun forAppWidget(
             targetCols: Int,
             targetRows: Int,
             minWidthPx: Int,
@@ -60,15 +58,24 @@ data class AppWidgetSpan(val colSpan: Int, val rowSpan: Int) {
             cellWidthPx: Float,
             cellHeightPx: Float,
             config: GridConfig,
-        ): AppWidgetSpan? {
-            if (targetCols > 0 && targetRows > 0) {
-                val multiplier = config.cellMultiplier.coerceAtLeast(1)
-                return AppWidgetSpan(
-                    colSpan = (targetCols * multiplier).coerceIn(multiplier, config.cols),
-                    rowSpan = (targetRows * multiplier).coerceIn(multiplier, config.rows),
-                )
-            }
+        ): CellSpan? {
+            if (targetCols > 0 && targetRows > 0) return forVisualCells(targetCols, targetRows, config)
             return forMinSize(minWidthPx, minHeightPx, cellWidthPx, cellHeightPx, config)
+        }
+
+        /**
+         * The footprint of a widget of the launcher's own: its recipe's size, in the visual cells a user counts. The
+         * same conversion an app widget's declared target gets, so a 2 × 2 of either kind is the same footprint.
+         */
+        fun forWidget(span: WidgetSpan, config: GridConfig): CellSpan = forVisualCells(span.cols, span.rows, config)
+
+        /** [cols] × [rows] visual cells in logical ones, at least one visual cell and at most the whole grid. */
+        private fun forVisualCells(cols: Int, rows: Int, config: GridConfig): CellSpan {
+            val multiplier = config.cellMultiplier.coerceAtLeast(1)
+            return CellSpan(
+                colSpan = (cols * multiplier).coerceIn(multiplier, config.cols),
+                rowSpan = (rows * multiplier).coerceIn(multiplier, config.rows),
+            )
         }
 
         /**
@@ -89,10 +96,10 @@ data class AppWidgetSpan(val colSpan: Int, val rowSpan: Int) {
             cellWidthPx: Float,
             cellHeightPx: Float,
             config: GridConfig,
-        ): AppWidgetSpan? {
+        ): CellSpan? {
             if (cellWidthPx <= 0f || cellHeightPx <= 0f) return null
             val multiplier = config.cellMultiplier.coerceAtLeast(1)
-            return AppWidgetSpan(
+            return CellSpan(
                 colSpan = ceil(minWidthPx / cellWidthPx).toInt().coerceIn(multiplier, config.cols),
                 rowSpan = ceil(minHeightPx / cellHeightPx).toInt().coerceIn(multiplier, config.rows),
             )

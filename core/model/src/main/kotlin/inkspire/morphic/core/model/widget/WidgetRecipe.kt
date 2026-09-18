@@ -12,6 +12,11 @@ import kotlinx.serialization.Serializable
  *
  * Its [layers] are the widget's own free-placement group: each is anchored to the widget's box, and later ones draw
  * over earlier ones. A background is simply the first layer.
+ *
+ * @property span the size it is placed at, which the user can then resize — the layers re-lay rather than scale.
  */
 @Serializable
-data class WidgetRecipe(val layers: List<WidgetLayerSpec> = emptyList())
+data class WidgetRecipe(
+    val layers: List<WidgetLayerSpec> = emptyList(),
+    val span: WidgetSpan = WidgetSpan(),
+)

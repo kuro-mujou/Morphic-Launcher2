@@ -67,7 +67,8 @@ import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.data.appwidgets.AppWidgetProvider
 import inkspire.morphic.data.appwidgets.AppWidgetProviderGroup
-import inkspire.morphic.data.layout.AppWidgetSpan
+import inkspire.morphic.data.layout.CellSpan
+import inkspire.morphic.data.widgets.WidgetTemplate
 import inkspire.morphic.feature.home.ArrangementShapeRow
 import inkspire.morphic.feature.home.ContainerAddGlyph
 import inkspire.morphic.feature.home.HomeViewModel
@@ -104,7 +105,7 @@ import org.koin.androidx.compose.koinViewModel
  *   be a promise nothing keeps.
  * @param cellWidthPx the measured cell size of that grid; a widget's span is its declared cell size, or its stated
  *   minimum divided by this when it declares none. Zero before the surface has been measured, which
- *   [AppWidgetSpan.forWidget] answers with no label at all rather than a wrong one.
+ *   [CellSpan.forAppWidget] answers with no label at all rather than a wrong one.
  * @param onAddWidget **null while nothing can place a widget yet**, which hides the Add button rather than
  *   disabling it — the same nullable-lambda shape `AppsScreen`'s settings
  *   verb use for a destination that does not exist yet. The placement slice passes a real lambda and the button
@@ -119,6 +120,8 @@ import org.koin.androidx.compose.koinViewModel
  *   kind nests, so the section would be two rows that could not work. Null also **removes the row**, since a
  *   component with nowhere to go has nothing to preview.
  * @param onAddWidgetContainer the same, for a widget container.
+ * @param onAddTemplate places one of the launcher's own widget designs. Null removes the **Widgets** section, on
+ *   [onAddIconContainer]'s terms.
  */
 @Composable
 internal fun WidgetPickerSheet(
@@ -130,7 +133,8 @@ internal fun WidgetPickerSheet(
     onAddWidget: ((AppWidgetProvider) -> Unit)? = null,
     onAddIconContainer: ((IconArrangement) -> Unit)? = null,
     onAddWidgetContainer: (() -> Unit)? = null,
-    hasRoomFor: (AppWidgetSpan) -> Boolean = { true },
+    onAddTemplate: ((WidgetTemplate) -> Unit)? = null,
+    hasRoomFor: (CellSpan) -> Boolean = { true },
 ) {
     val viewModel = koinViewModel<WidgetPickerViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -177,6 +181,8 @@ internal fun WidgetPickerSheet(
                     // A component is listed only when something can place it — see [WidgetPickerSheet].
                     components = ComponentKind.entries.filter(canAdd),
                     onOpenComponent = { opened = PickerEntry.Component(it) },
+                    templates = if (onAddTemplate != null) state.templates else emptyList(),
+                    onOpenTemplate = { opened = PickerEntry.Template(it) },
                 )
 
                 is PickerEntry.Widgets -> DetailPane(
@@ -186,6 +192,16 @@ internal fun WidgetPickerSheet(
                     cellHeightPx = cellHeightPx,
                     onBack = { opened = null },
                     onAddWidget = onAddWidget,
+                    hasRoomFor = hasRoomFor,
+                )
+
+                is PickerEntry.Template -> TemplateDetailPane(
+                    template = target.template,
+                    grid = grid,
+                    cellWidthPx = cellWidthPx,
+                    cellHeightPx = cellHeightPx,
+                    onBack = { opened = null },
+                    onAdd = onAddTemplate,
                     hasRoomFor = hasRoomFor,
                 )
 
@@ -212,6 +228,8 @@ private fun ListPane(
     onDismiss: () -> Unit,
     components: List<ComponentKind> = emptyList(),
     onOpenComponent: (ComponentKind) -> Unit = {},
+    templates: List<WidgetTemplate> = emptyList(),
+    onOpenTemplate: (WidgetTemplate) -> Unit = {},
 ) {
     val colors = LocalMorphicColors.current
     val search = rememberTextFieldState()
@@ -266,13 +284,23 @@ private fun ListPane(
             // **Components come first, and only when nothing is being searched.** They are the launcher's own
             // offerings rather than any app's, so the search field — which filters apps by name — has nothing to
             // say about them, and leaving them pinned above a filtered list would read as two failed matches.
-            if (query.isBlank() && components.isNotEmpty()) {
+            // **The launcher's own widgets lead**, and unlike the components they are searched: a user typing
+            // "clock" is looking for exactly this.
+            val matching = if (query.isBlank()) templates else templates.filter { it.name.contains(query.trim(), true) }
+            if (matching.isNotEmpty()) {
+                item(key = "widgets-heading") { SectionHeading("Widgets") }
+                items(matching, key = { "template-${it.id}" }) { template ->
+                    TemplateRow(template) { onOpenTemplate(template) }
+                }
+            }
+            val showComponents = query.isBlank() && components.isNotEmpty()
+            if (showComponents) {
                 item(key = "components-heading") { SectionHeading("Components") }
                 items(components, key = { it.name }) { kind ->
                     ComponentRow(kind) { onOpenComponent(kind) }
                 }
-                item(key = "apps-heading") { SectionHeading("Apps") }
             }
+            if (showComponents || matching.isNotEmpty()) item(key = "apps-heading") { SectionHeading("Apps") }
             items(filtered, key = { it.packageName }) { group ->
                 AppRow(group = group, onClick = { onOpen(group) })
             }
@@ -318,6 +346,7 @@ private enum class ComponentKind(
 private sealed interface PickerEntry {
     data class Widgets(val group: AppWidgetProviderGroup) : PickerEntry
     data class Component(val kind: ComponentKind) : PickerEntry
+    data class Template(val template: WidgetTemplate) : PickerEntry
 }
 
 /** A group label above a run of rows. Only drawn when there is more than one group to tell apart. */
@@ -436,7 +465,7 @@ private fun DetailPane(
     cellHeightPx: Float,
     onBack: () -> Unit,
     onAddWidget: ((AppWidgetProvider) -> Unit)?,
-    hasRoomFor: (AppWidgetSpan) -> Boolean,
+    hasRoomFor: (CellSpan) -> Boolean,
 ) {
     val pagerState = rememberPagerState { group.providers.size }
     val current = group.providers.getOrNull(pagerState.currentPage)
@@ -508,7 +537,7 @@ private fun ComponentDetailPane(
     onBack: () -> Unit,
     onAddIconContainer: ((IconArrangement) -> Unit)?,
     onAddWidgetContainer: (() -> Unit)?,
-    hasRoomFor: (AppWidgetSpan) -> Boolean,
+    hasRoomFor: (CellSpan) -> Boolean,
 ) {
     val span = grid?.let { containerSpan(it) }
     val fits = span == null || hasRoomFor(span)
@@ -546,7 +575,7 @@ private fun ComponentDetailPane(
  *   for a verb with no op behind it.
  */
 @Composable
-private fun DetailFrame(
+internal fun DetailFrame(
     title: String,
     onBack: () -> Unit,
     onAdd: (() -> Unit)?,
@@ -732,7 +761,7 @@ private fun AppWidgetPage(provider: AppWidgetProvider, sizeLabel: String, roomle
  * read before wondering where the button went, and muted text beside a muted size label would not be read at all.
  */
 @Composable
-private fun RoomlessNotice() {
+internal fun RoomlessNotice() {
     Text(
         text = "Not enough room",
         style = MaterialTheme.typography.bodyMedium,
@@ -773,9 +802,9 @@ private fun spanOf(
     grid: GridConfig?,
     cellWidthPx: Float,
     cellHeightPx: Float,
-): AppWidgetSpan? {
+): CellSpan? {
     if (grid == null) return null
-    return AppWidgetSpan.forWidget(
+    return CellSpan.forAppWidget(
         targetCols = provider.targetCols,
         targetRows = provider.targetRows,
         minWidthPx = provider.minWidthPx,
@@ -792,7 +821,7 @@ private fun spanOf(
  * `HomeViewModel.ContainerSpan` rather than a literal, for [spanOf]'s reason applied to the other kind of entry: the
  * number the page prints and the number the placement searches for have to be one number.
  */
-private fun containerSpan(grid: GridConfig): AppWidgetSpan {
+private fun containerSpan(grid: GridConfig): CellSpan {
     val span = HomeViewModel.ContainerSpan * grid.cellMultiplier
-    return AppWidgetSpan(rowSpan = span, colSpan = span)
+    return CellSpan(rowSpan = span, colSpan = span)
 }

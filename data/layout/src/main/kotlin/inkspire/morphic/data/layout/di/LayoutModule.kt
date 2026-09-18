@@ -25,8 +25,8 @@ import org.koin.dsl.module
 val layoutModule = module {
     single {
         LayoutDaos(
-            get(), get(), get(), get(), get(), get(),
-            get(), get(), get(), get(), get(), get(),
+            get(), get(), get(), get(), get(), get(), get(),
+            get(), get(), get(), get(), get(), get(), get(),
         )
     }
     single<LayoutRepository> { LayoutRepositoryImpl(get(), get()) }

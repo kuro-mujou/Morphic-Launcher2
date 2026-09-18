@@ -34,4 +34,6 @@ val databaseModule = module {
     single { get<LauncherDatabase>().categoryDao() }
     single { get<LauncherDatabase>().categoryItemDao() }
     single { get<LauncherDatabase>().homeListItemDao() }
+    single { get<LauncherDatabase>().widgetDao() }
+    single { get<LauncherDatabase>().widgetPlacementDao() }
 }

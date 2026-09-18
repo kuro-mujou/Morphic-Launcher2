@@ -17,6 +17,7 @@ import inkspire.morphic.data.settings.HomeItemGestures
 import inkspire.morphic.core.model.Folder as FolderModel
 import inkspire.morphic.core.model.IconContainer as IconContainerModel
 import inkspire.morphic.core.model.WidgetContainer as WidgetContainerModel
+import inkspire.morphic.core.model.widget.Widget as WidgetModel
 
 /**
  * A single item placed on the home surface. Carries where it sits — which [zone]'s grid, and the [placement]
@@ -58,6 +59,18 @@ sealed interface HomeItem {
         override val zone: HomeZone,
     ) : HomeItem {
         override val gridItem: GridItem get() = GridItem.AppWidget(info.appWidgetId)
+    }
+
+    /**
+     * A placed widget of the launcher's own: its [widget] — the recipe it draws — at [placement] in [zone]. Its
+     * [placement] carries a real span, as an [AppWidget]'s does.
+     */
+    data class Widget(
+        val widget: WidgetModel,
+        override val placement: GridPlacement,
+        override val zone: HomeZone,
+    ) : HomeItem {
+        override val gridItem: GridItem get() = GridItem.Widget(widget.id)
     }
 
     /**
@@ -158,7 +171,7 @@ internal fun IconItem.asGridItem(): GridItem = when (this) {
 internal fun GridItem.asIconItem(): IconItem? = when (this) {
     is GridItem.App -> IconItem.App(component)
     is GridItem.Folder -> IconItem.Folder(folderId)
-    is GridItem.AppWidget, is GridItem.IconContainer, is GridItem.WidgetContainer -> null
+    is GridItem.AppWidget, is GridItem.Widget, is GridItem.IconContainer, is GridItem.WidgetContainer -> null
 }
 
 
@@ -344,6 +357,6 @@ fun HomeState.appInfo(component: ComponentKey): AppInfo? =
                 }
             }
             // Neither kind of widget is an app or holds one, so they can never answer this.
-            is HomeItem.AppWidget, is HomeItem.WidgetContainer -> null
+            is HomeItem.AppWidget, is HomeItem.Widget, is HomeItem.WidgetContainer -> null
         }
     } ?: catalog[component]

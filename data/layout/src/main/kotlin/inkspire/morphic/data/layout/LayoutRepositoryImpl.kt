@@ -15,6 +15,7 @@ import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.IconContainer
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.WidgetContainer
+import inkspire.morphic.core.model.widget.Widget
 import inkspire.morphic.data.layout.mapper.foldersOf
 import inkspire.morphic.data.layout.mapper.iconContainersOf
 import inkspire.morphic.data.layout.mapper.toAppWidgetInfo
@@ -22,6 +23,7 @@ import inkspire.morphic.data.layout.mapper.toEntity
 import inkspire.morphic.data.layout.mapper.toEntry
 import inkspire.morphic.data.layout.mapper.toIconItem
 import inkspire.morphic.data.layout.mapper.toRow
+import inkspire.morphic.data.layout.mapper.toWidget
 import inkspire.morphic.data.layout.mapper.widgetContainersOf
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -30,7 +32,8 @@ import kotlinx.coroutines.withContext
 
 /**
  * Room-backed [LayoutRepository] — the complete HOME layout store: placement of every [GridItem] kind across
- * the five `*_placement` tables, and the folder / icon-container / widget-container / widget definitions. Every
+ * the six `*_placement` tables, and the folder / icon-container / widget-container / app-widget / widget
+ * definitions. Every
  * [LayoutChange] is handled, so [apply]'s `when` is exhaustive over the vocabulary.
  *
  * Writes hop to [AppDispatchers.io]; the DAOs' `Flow`s stay on Room's own executor.
@@ -40,21 +43,21 @@ internal class LayoutRepositoryImpl(
     private val dispatchers: AppDispatchers,
 ) : LayoutRepository {
 
-    /** One map from the five per-type placement tables: each observed list maps to entries, concatenated. */
+    /**
+     * One map from the six per-type placement tables. Each table is mapped to entries on its own flow, since the
+     * `combine` overload that takes a list erases the six element types.
+     */
     override fun placements(arrangement: ArrangementKey): Flow<Map<GridItem, PlacedItem>> =
         combine(
-            daos.appPlacement.observe(arrangement),
-            daos.folderPlacement.observe(arrangement),
-            daos.widgetPlacement.observe(arrangement),
-            daos.iconContainerPlacement.observe(arrangement),
-            daos.widgetContainerPlacement.observe(arrangement),
-        ) { apps, folders, widgets, iconContainers, widgetContainers ->
-            (apps.map { it.toEntry() } +
-                folders.map { it.toEntry() } +
-                widgets.map { it.toEntry() } +
-                iconContainers.map { it.toEntry() } +
-                widgetContainers.map { it.toEntry() }).toMap()
-        }
+            listOf(
+                daos.appPlacement.observe(arrangement).map { rows -> rows.map { it.toEntry() } },
+                daos.folderPlacement.observe(arrangement).map { rows -> rows.map { it.toEntry() } },
+                daos.appWidgetPlacement.observe(arrangement).map { rows -> rows.map { it.toEntry() } },
+                daos.iconContainerPlacement.observe(arrangement).map { rows -> rows.map { it.toEntry() } },
+                daos.widgetContainerPlacement.observe(arrangement).map { rows -> rows.map { it.toEntry() } },
+                daos.widgetPlacement.observe(arrangement).map { rows -> rows.map { it.toEntry() } },
+            ),
+        ) { tables -> tables.flatMap { it }.toMap() }
 
     override suspend fun replacePlacements(arrangement: ArrangementKey, placements: Map<GridItem, PlacedItem>) {
         withContext(dispatchers.io) {
@@ -64,9 +67,10 @@ internal class LayoutRepositoryImpl(
             // the target happened to be holding.
             daos.appPlacement.clearArrangement(arrangement)
             daos.folderPlacement.clearArrangement(arrangement)
-            daos.widgetPlacement.clearArrangement(arrangement)
+            daos.appWidgetPlacement.clearArrangement(arrangement)
             daos.iconContainerPlacement.clearArrangement(arrangement)
             daos.widgetContainerPlacement.clearArrangement(arrangement)
+            daos.widgetPlacement.clearArrangement(arrangement)
             placements.forEach { (item, placed) ->
                 applyChange(arrangement, LayoutChange.Move(item, placed.placement, placed.zone))
             }
@@ -89,8 +93,11 @@ internal class LayoutRepositoryImpl(
             widgetContainersOf(containers, items)
         }
 
+    override fun widgets(): Flow<List<Widget>> =
+        daos.widget.observeAll().map { rows -> rows.mapNotNull { it.toWidget() } }
+
     override fun appWidgets(): Flow<List<AppWidgetInfo>> =
-        daos.widget.observeAll().map { widgets -> widgets.map { it.toAppWidgetInfo() } }
+        daos.appWidget.observeAll().map { widgets -> widgets.map { it.toAppWidgetInfo() } }
 
     override suspend fun apply(arrangement: ArrangementKey, changes: List<LayoutChange>) {
         withContext(dispatchers.io) {
@@ -100,7 +107,7 @@ internal class LayoutRepositoryImpl(
     }
 
     /**
-     * Destroys every folder and icon container that no arrangement places any more.
+     * Destroys every folder, icon container and launcher widget that no arrangement places any more.
      *
      * **The other half of a per-arrangement removal.** `RemoveFromGrid` drops one posture's placement row, so the
      * definition has to outlive it — and something then has to notice when the *last* posture lets go, or a folder
@@ -117,6 +124,7 @@ internal class LayoutRepositoryImpl(
     private suspend fun dropUnplacedDefinitions() {
         daos.folder.deleteUnplaced()
         daos.iconContainer.deleteUnplaced()
+        daos.widget.deleteUnplaced()
     }
 
     /**
@@ -138,7 +146,10 @@ internal class LayoutRepositoryImpl(
         is GridItem.Folder -> daos.folderPlacement.delete(item.folderId, arrangement)
         is GridItem.IconContainer -> daos.iconContainerPlacement.delete(item.containerId, arrangement)
         is GridItem.WidgetContainer -> daos.widgetContainer.delete(item.containerId)
-        is GridItem.AppWidget -> daos.widget.delete(item.appWidgetId)
+        is GridItem.AppWidget -> daos.appWidget.delete(item.appWidgetId)
+        // Ours are scoped like a folder, not global like an app widget: there is no host to release, so nothing
+        // needs to know whether another posture still holds it — the sweep collects it when none does.
+        is GridItem.Widget -> daos.widgetPlacement.delete(item.widgetId, arrangement)
     }
 
     /**
@@ -192,13 +203,16 @@ internal class LayoutRepositoryImpl(
                     daos.folderPlacement.upsert(listOf(item.toEntity(arrangement, change.zone, change.to)))
 
                 is GridItem.AppWidget ->
-                    daos.widgetPlacement.upsert(listOf(item.toEntity(arrangement, change.zone, change.to)))
+                    daos.appWidgetPlacement.upsert(listOf(item.toEntity(arrangement, change.zone, change.to)))
 
                 is GridItem.IconContainer ->
                     daos.iconContainerPlacement.upsert(listOf(item.toEntity(arrangement, change.zone, change.to)))
 
                 is GridItem.WidgetContainer ->
                     daos.widgetContainerPlacement.upsert(listOf(item.toEntity(arrangement, change.zone, change.to)))
+
+                is GridItem.Widget ->
+                    daos.widgetPlacement.upsert(listOf(item.toEntity(arrangement, change.zone, change.to)))
             }
 
             is LayoutChange.RemoveFromGrid -> removeFromGrid(arrangement, change.item)
@@ -207,13 +221,19 @@ internal class LayoutRepositoryImpl(
             // In that order, because the placement is the row a surface joins *through* the definition — writing
             // it first would emit a placement the UI resolves to nothing for as long as the two writes are apart.
             is LayoutChange.PlaceAppWidget -> {
-                daos.widget.upsert(change.widget.toEntity())
-                daos.widgetPlacement.upsert(
+                daos.appWidget.upsert(change.widget.toEntity())
+                daos.appWidgetPlacement.upsert(
                     listOf(
                         GridItem.AppWidget(change.widget.appWidgetId)
                             .toEntity(arrangement, change.zone, change.at),
                     ),
                 )
+            }
+
+            // Definition first, for `PlaceAppWidget`'s reason just above.
+            is LayoutChange.PlaceWidget -> {
+                val id = daos.widget.insert(change.recipe.toEntity())
+                daos.widgetPlacement.upsert(listOf(GridItem.Widget(id).toEntity(arrangement, change.zone, change.at)))
             }
 
             // ── Folders ──
@@ -266,7 +286,7 @@ internal class LayoutRepositoryImpl(
                 // Definition first, then membership — `PlaceAppWidget`'s order and its reason: the membership row is
                 // what a surface joins *through* the definition, so writing it first would emit a container holding
                 // a widget that resolves to nothing for as long as the two writes are apart.
-                daos.widget.upsert(change.widget.toEntity())
+                daos.appWidget.upsert(change.widget.toEntity())
                 detachAppWidget(arrangement, change.widget.appWidgetId)
                 val next = (daos.widgetContainerItem.maxSortOrder(change.containerId) ?: -1) + 1
                 daos.widgetContainerItem.upsert(
@@ -393,7 +413,7 @@ internal class LayoutRepositoryImpl(
      */
     private suspend fun detachAppWidget(arrangement: ArrangementKey, appWidgetId: Int) {
         daos.widgetContainerItem.removeByWidget(appWidgetId)
-        daos.widgetPlacement.delete(appWidgetId, arrangement)
+        daos.appWidgetPlacement.delete(appWidgetId, arrangement)
     }
 }
 

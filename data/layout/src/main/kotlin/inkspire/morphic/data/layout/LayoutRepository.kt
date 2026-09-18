@@ -6,6 +6,7 @@ import inkspire.morphic.core.model.Folder
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.IconContainer
 import inkspire.morphic.core.model.WidgetContainer
+import inkspire.morphic.core.model.widget.Widget
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -46,6 +47,9 @@ interface LayoutRepository {
 
     /** Metadata for the bound widgets referenced by placements / widget containers. */
     fun appWidgets(): Flow<List<AppWidgetInfo>>
+
+    /** The launcher's own widgets, each with its recipe. One whose recipe cannot be read is left out. */
+    fun widgets(): Flow<List<Widget>>
 
     /**
      * Applies [changes] to [arrangement]'s layout as one unit — the single write path. [arrangement] scopes

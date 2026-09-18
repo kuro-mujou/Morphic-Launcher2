@@ -1,6 +1,6 @@
 # Widget Studio
 
-**Status:** design locked (2026-09-07); **WS0–WS4 done** (2026-09-18): the rename, the language, the recipe model, the renderer, the providers. The third studio, after the icon studio (done) and the
+**Status:** design locked (2026-09-07); **WS0–WS5 done** (2026-09-18): the engine, and widgets placeable on HOME. The third studio, after the icon studio (done) and the
 wallpaper studio (nearly). This is the *what and in what order*; the open questions at the end are real.
 
 **Covers:** a built-in editor for user-authored, data-bound, live-rendered widgets — plus the expression language
@@ -100,7 +100,7 @@ the minute tick and nothing else, and the user is never asked.
 | `core:model` → `widget/` | `WidgetRecipe`, `WidgetLayerSpec`, `WidgetSource`, `WidgetGlobal`, `TouchBinding` | new package beside `icon/` and `wallpaper/` |
 | **`core:widgetscript`** | lexer → parser → **AST** → evaluator; the provider-declaration walk | **new, pure Kotlin, no Android** |
 | **`core:widget`** | the live Compose renderer — parallel to `core:icon` | new |
-| **`data:widgets`** | recipe persistence, the block/template library, the data providers as `Flow`s, `CadencePolicy` | new, name freed by WS0 |
+| **`data:widgets`** | the block/template library, the data providers as `Flow`s, `WidgetCadence` | new, name freed by WS0; a placed widget's recipe is stored by `data:layout` beside every other HOME item |
 | `feature:settings/widgetstudio` | the editor | new package |
 
 **Why `core:widgetscript` is separate, and pure Kotlin.** Not tidiness: an Android-free module *cannot* reach a
@@ -203,18 +203,22 @@ changes every minute. A baked widget is a screenshot.
 
 ## Persistence
 
-| What | Where | Per-orientation |
+**As built (WS5):**
+
+| What | Where | Per-arrangement |
 |---|---|---|
-| The recipe | `widget_design` — one row, one serialized blob, like a detached icon | no |
-| Its position on HOME | `widget_design_placement` — keyed `designId + orientation`, carrying `zone` + `@Embedded GridPlacement` | **yes** |
-| Global *values* for a placed instance | on the placement row or its own table (WS6 decides) | no |
+| A placed widget, with **its own copy** of the recipe | `widget` — one row, one serialized blob, like a detached icon | no |
+| Its position on HOME | `widget_placement` — keyed `widgetId + arrangement`, carrying `zone` + `@Embedded GridPlacement` | **yes** |
 
-This mirrors `app_widget`/`app_widget_placement` exactly, which is the point — a Morphic widget is a HOME item of the same
-kind as a hosted one, so it stores the same way. Coordinate placement, per the arrangement table in CLAUDE.md.
+This mirrors `app_widget`/`app_widget_placement`, which is the point — a Morphic widget is a HOME item of the same kind
+as a hosted one, so it stores the same way. Removal is per arrangement, like a folder's, and the definition is swept
+once no arrangement places it; an app widget's is global only because releasing its host id needs to know.
 
-**The recipe and its instance values are different rows on purpose.** A design is authored once; the same design
-placed twice with different global values is two instances of one recipe. That is what makes the same template
-usable twice without a copy — and tier 1 depends on it.
+**Each placed widget owns its recipe, where this plan first had a shared design row plus instance rows.** The design
+as sketched keyed placement on `designId`, which cannot hold the same design placed twice — the very case it was for.
+A copy per widget (the reference's own model: a preset is copied into each widget) is what a template placed twice
+needs, and it makes WS6's Style tab edit one widget without reaching into another. What is given up is editing a
+design once and seeing every widget change, which nothing offers. Global values live in the widget's own recipe.
 
 ---
 
@@ -257,7 +261,7 @@ exists. Everything from WS7 on raises the ceiling rather than making it work.
 | **WS2** ✅ | **The model** | `core:model/widget`: `WidgetRecipe`, `WidgetLayerSpec`, Text/Shape/Image sources and the `Overlap` group, `WidgetAnchor`, `WidgetExtent` (`Content` / `Dp` / `Fraction` per axis). Round-trip, defaults, unknown-key and **pinned stored-form** tests. **Built to what WS3 draws and no further**: `WidgetGlobal` and the block declaration wait for WS6/WS7, their consumers — additive under `ignoreUnknownKeys` + defaulted fields, so nothing is lost by waiting. Likewise the default span (WS5) and the per-widget zone (per *instance*, so WS6's global values). **Sizes are dp and anchors absolute left/right**: a widget re-lays rather than scales on resize, and a drawn picture does not mirror for RTL. Text size is dp, not sp, for the same reason. |
 | **WS3** ✅ | **The renderer** | `core:widget`: `WidgetRender(recipe, data)` for Text/Shape/Image and nested Overlap groups, anchor+offset placement. The placement arithmetic is `WidgetPlacement`, pure and unit-tested, since WS7's drag inverts it. `WidgetRenderHarness` (androidTest) draws a gallery at two sizes to PNGs in the test app's own files — run through `am instrument`, pulled with `run-as`, so no MediaStore and no stale renders. Imported pictures decode at full size: the import (not yet built) must store a widget-sized copy. |
 | **WS4** ✅ | **Providers + cadence** | `data:widgets`: clock, battery, system as `Flow`s behind `WidgetDataRepository.data(cadence)`; `WidgetCadence.of(recipe)` is the plan's `CadencePolicy`. **The clock is not one rate**: `WidgetExpression.clockTick` reads each `df` pattern's finest letter (quoted text skipped, an unquoted `dd-MM-yyyy` still recognized as fixed), so `HH:mm` wakes on the minute and a date at the zone's midnight; a pattern built at run time counts as every second. Hidden layers ask for nothing, through `drawn()` — the one walk the renderer also uses. The clock restarts on a time, zone or locale change. **Device-verified** (`WidgetDataDeviceTest`, API 36): a date-only widget emits once in 4 s, a static one once, a seconds one on each second. `widgetsModule` is registered in the app by WS5, its first consumer. |
-| **WS5** | **Placement** | `widget_design` + `widget_design_placement`; added from the picker, placed, dragged, resized on HOME. First slice visible on the launcher. |
+| **WS5** ✅ | **Placement** | `widget` + `widget_placement` (DB v5), `GridItem.Widget` (`@SerialName("launcher_widget")`), `LayoutChange.PlaceWidget`; a **Widgets** section in the picker with a live, true-size page per design; placed, dragged, resized (re-lays), removed, and drawn in the list pairing's widget area. `WidgetRecipe.span` carries the default size in visual cells, turned into a footprint by `CellSpan.forWidget` — `AppWidgetSpan` renamed, since it had long been every footprint's type. Three starter designs (`BuiltInWidgetTemplates`) stand in for WS6's library. Device-verified on the emulator, including a restart and the sweep. |
 | **WS6** | **Templates + the Style tab** ⟵ *the tier-1 product* | ~12 finished built-in templates, each declaring its globals; a picker that shows them rendered with live data; the Style tab editing those globals; per-instance values. **After this a normal user can have a widget they styled themselves, and nothing else has to exist.** |
 | **WS7** | **Blocks + direct manipulation** | The block library; add / remove / reorder; select-drag-size on the canvas. Tier 2. |
 | **WS8** | **Primitives + item editor** | The layer stack, per-item tabs, Stack container, Progress and Series. `Progress` takes a `Custom` formula source from the start — theirs proves the presets are conveniences over one mechanism. Tier 3, behind "Advanced". |
@@ -296,10 +300,8 @@ it as its own work.
 
 ## Open questions
 
-- **How does a widget declare its size, and what does resizing do?** A hosted AppWidget states
-  `targetCols`/`targetRows`; ours is authored, so the recipe carries a default span — but does resizing on the grid
-  re-lay the recipe (anchors re-resolve, which is what anchor+offset is for) or scale it? Their `Scale` knob suggests
-  they scale. Ours should re-lay. Needs deciding before WS5.
+- ~~How does a widget declare its size, and what does resizing do?~~ **Settled:** `WidgetRecipe.span`, in visual
+  cells, and resizing **re-lays** — anchors re-resolve and dp sizes hold (WS2–WS5).
 - **What is the template *picker* — a grid of thumbnails, or the wallpaper studio's swipe-through-designs?** The
   latter is already built next door and shows each design with live data, which a thumbnail cannot.
 - **Is a 1×1 widget worth designing for?** Nothing stops it once we render — a live tile in the icon grid (a date, a

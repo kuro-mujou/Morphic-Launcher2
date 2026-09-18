@@ -32,7 +32,7 @@ class HomeResizeTest {
     ) = HomeResize(
         item = widget,
         zone = HomeZone.MAIN,
-        rules = HomeResizeRules.Widget(AppWidgetResizeRules(minWidthPx = 0, minHeightPx = 0)),
+        rules = HomeResizeRules.AppWidget(AppWidgetResizeRules(minWidthPx = 0, minHeightPx = 0)),
         placement = placement,
         moves = moves,
         refused = refused,

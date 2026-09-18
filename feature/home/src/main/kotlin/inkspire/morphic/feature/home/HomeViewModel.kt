@@ -31,11 +31,13 @@ import inkspire.morphic.core.model.on
 import inkspire.morphic.core.model.pagerSlot
 import inkspire.morphic.core.model.portraitOfPair
 import inkspire.morphic.core.model.sideSlot
+import inkspire.morphic.core.model.widget.Widget
+import inkspire.morphic.core.model.widget.WidgetRecipe
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.apps.GestureActionRunner
 import inkspire.morphic.data.appwidgets.AppWidgetHostController
-import inkspire.morphic.data.layout.AppWidgetSpan
+import inkspire.morphic.data.layout.CellSpan
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.GridOccupancy
 import inkspire.morphic.data.layout.GridReflow
@@ -369,6 +371,7 @@ class HomeViewModel(
             layoutRepository.appWidgets(),
             layoutRepository.iconContainers(),
             layoutRepository.widgetContainers(),
+            layoutRepository.widgets(),
             ::HomeDefinitions,
         )
 
@@ -382,7 +385,8 @@ class HomeViewModel(
         ) { placed, apps, defined, listOrder, configured ->
             val infoByComponent = apps.associateBy { it.componentKey }
             val folderById = defined.folders.associateBy { it.id }
-            val widgetById = defined.widgets.associateBy { it.appWidgetId }
+            val appWidgetById = defined.appWidgets.associateBy { it.appWidgetId }
+            val widgetById = defined.widgets.associateBy { it.id }
             val iconContainerById = defined.iconContainers.associateBy { it.id }
             val widgetContainerById = defined.widgetContainers.associateBy { it.id }
             HomeState(
@@ -401,7 +405,10 @@ class HomeViewModel(
                         }
 
                         is GridItem.AppWidget ->
-                            widgetById[item.appWidgetId]?.let { HomeItem.AppWidget(it, at.placement, at.zone) }
+                            appWidgetById[item.appWidgetId]?.let { HomeItem.AppWidget(it, at.placement, at.zone) }
+
+                        is GridItem.Widget ->
+                            widgetById[item.widgetId]?.let { HomeItem.Widget(it, at.placement, at.zone) }
                         // Both containers resolve their *contents* here too, for the folder's reason: the cell draws
                         // them, so re-resolving per frame in the UI would put this join in the wrong layer twice.
                         is GridItem.IconContainer -> iconContainerById[item.containerId]?.let { container ->
@@ -423,7 +430,7 @@ class HomeViewModel(
                         is GridItem.WidgetContainer -> widgetContainerById[item.containerId]?.let { container ->
                             HomeItem.WidgetContainer(
                                 container = container,
-                                widgets = container.widgetIds.mapNotNull(widgetById::get),
+                                widgets = container.widgetIds.mapNotNull(appWidgetById::get),
                                 placement = at.placement,
                                 zone = at.zone,
                             )
@@ -646,9 +653,20 @@ class HomeViewModel(
      *   them what they just added. Null when nothing of that size fits, in which case **nothing is written** and the
      *   caller still owns the id — a widget half-added is worse than one not added.
      */
-    fun placeAppWidget(widget: AppWidgetInfo, span: AppWidgetSpan, zone: HomeZone, config: GridConfig): GridPlacement? {
+    fun placeAppWidget(widget: AppWidgetInfo, span: CellSpan, zone: HomeZone, config: GridConfig): GridPlacement? {
         val at = freeRect(zone, config, rowSpan = span.rowSpan, colSpan = span.colSpan) ?: return null
         applyChanges(listOf(LayoutChange.PlaceAppWidget(widget, at, zone)))
+        return at
+    }
+
+    /**
+     * Places a widget of the launcher's own, drawn from [recipe], at the first free rect of its span on [zone]'s
+     * grid — [placeAppWidget]'s search and its return, without the id to hand back, since ours has none.
+     */
+    fun placeWidget(recipe: WidgetRecipe, zone: HomeZone, config: GridConfig): GridPlacement? {
+        val span = CellSpan.forWidget(recipe.span, config)
+        val at = freeRect(zone, config, rowSpan = span.rowSpan, colSpan = span.colSpan) ?: return null
+        applyChanges(listOf(LayoutChange.PlaceWidget(recipe, at, zone)))
         return at
     }
 
@@ -1228,7 +1246,7 @@ class HomeViewModel(
             // widgets, so nothing an icon drag carries can go there. Returning null is what makes the drop fall
             // through to an ordinary push, which is the honest outcome — the finger is over something that cannot
             // receive what it is holding. It mirrors `canMerge`, which is what stops the ring being offered at all.
-            is HomeItem.AppWidget, is HomeItem.WidgetContainer -> null
+            is HomeItem.AppWidget, is HomeItem.Widget, is HomeItem.WidgetContainer -> null
             is HomeItem.App -> draggedApp?.let {
                 listOf(
                     LayoutChange.CreateFolder(
@@ -1362,9 +1380,10 @@ private data class HomeSizing(
  */
 private data class HomeDefinitions(
     val folders: List<Folder>,
-    val widgets: List<AppWidgetInfo>,
+    val appWidgets: List<AppWidgetInfo>,
     val iconContainers: List<IconContainer>,
     val widgetContainers: List<WidgetContainer>,
+    val widgets: List<Widget>,
 )
 
 /**

@@ -4,9 +4,10 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * Anything that can occupy a position on a home grid (main area or dock). These five are the "same level"
- * peers: apps and app widgets are referenced directly; folders and containers by their id (defined in [Folder] /
- * [IconContainer] / [WidgetContainer]). Pair a [GridItem] with a [GridPlacement] to record where it sits.
+ * Anything that can occupy a position on a home grid (main area or dock). These six are the "same level"
+ * peers: apps and app widgets are referenced directly; folders, containers and the launcher's own widgets by their
+ * id (defined in [Folder] / [IconContainer] / [WidgetContainer] / `widget.Widget`). Pair a [GridItem] with a
+ * [GridPlacement] to record where it sits.
  *
  * **Short [SerialName]s, because this now reaches a user's stored blob** — a per-item gesture assignment is keyed by
  * one of these. Without them the discriminator is the fully-qualified class name, so moving or renaming a subtype
@@ -17,9 +18,15 @@ sealed interface GridItem {
     @Serializable
     @SerialName("app")
     data class App(val component: ComponentKey) : GridItem
+    /** Another app's widget, hosted. Its serial name predates the launcher having widgets of its own. */
     @Serializable
     @SerialName("widget")
     data class AppWidget(val appWidgetId: Int) : GridItem
+
+    /** One of the launcher's own widgets — a placed `widget.Widget`. */
+    @Serializable
+    @SerialName("launcher_widget")
+    data class Widget(val widgetId: Long) : GridItem
     @Serializable
     @SerialName("folder")
     data class Folder(val folderId: Long) : GridItem

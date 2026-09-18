@@ -5,6 +5,7 @@ import inkspire.morphic.core.database.entity.AppWidgetPlacementEntity
 import inkspire.morphic.core.database.entity.FolderPlacementEntity
 import inkspire.morphic.core.database.entity.IconContainerPlacementEntity
 import inkspire.morphic.core.database.entity.WidgetContainerPlacementEntity
+import inkspire.morphic.core.database.entity.WidgetPlacementEntity
 import inkspire.morphic.core.model.ArrangementKey
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
@@ -12,10 +13,10 @@ import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.data.layout.PlacedItem
 
 /**
- * Entity ⇄ domain mapping for the five `*_placement` tables. Each stores the same shape — an id + `arrangement`
+ * Entity ⇄ domain mapping for the six `*_placement` tables. Each stores the same shape — an id + `arrangement`
  * + `zone` + an `@Embedded` [GridPlacement] — differing only in which id column identifies the [GridItem]. So
  * the read side factors through [entry] (the identical `(placement, zone)` → [PlacedItem] step), and the write
- * side is five thin constructors, one per placement table. This is the "find the shared pattern, don't copy it
+ * side is six thin constructors, one per placement table. This is the "find the shared pattern, don't copy it
  * four times" cleanup L1's parallel `toAppPosition()` mappers never did.
  */
 
@@ -28,6 +29,7 @@ internal fun FolderPlacementEntity.toEntry() = entry(GridItem.Folder(folderId), 
 internal fun AppWidgetPlacementEntity.toEntry() = entry(GridItem.AppWidget(appWidgetId), placement, zone)
 internal fun IconContainerPlacementEntity.toEntry() = entry(GridItem.IconContainer(containerId), placement, zone)
 internal fun WidgetContainerPlacementEntity.toEntry() = entry(GridItem.WidgetContainer(containerId), placement, zone)
+internal fun WidgetPlacementEntity.toEntry() = entry(GridItem.Widget(widgetId), placement, zone)
 
 internal fun GridItem.App.toEntity(arrangement: ArrangementKey, zone: HomeZone, placement: GridPlacement) =
     AppPlacementEntity(component, arrangement, zone, placement)
@@ -43,3 +45,6 @@ internal fun GridItem.IconContainer.toEntity(arrangement: ArrangementKey, zone: 
 
 internal fun GridItem.WidgetContainer.toEntity(arrangement: ArrangementKey, zone: HomeZone, placement: GridPlacement) =
     WidgetContainerPlacementEntity(containerId, arrangement, zone, placement)
+
+internal fun GridItem.Widget.toEntity(arrangement: ArrangementKey, zone: HomeZone, placement: GridPlacement) =
+    WidgetPlacementEntity(widgetId, arrangement, zone, placement)

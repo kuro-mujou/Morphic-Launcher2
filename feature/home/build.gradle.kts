@@ -18,6 +18,9 @@ dependencies {
     implementation(projects.data.settings)
     // The widget picker's catalog, and the AppWidgetHost that binds and draws what it offers.
     implementation(projects.data.appwidgets)
+    // The launcher's own widgets: the renderer, and the live data each one reads.
+    implementation(projects.core.widget)
+    implementation(projects.data.widgets)
     // `LauncherIcon`, for an icon container's slots. Drawn directly rather than through a designsystem cell because
     // a container's *arrangement* decides how big each icon is — see `IconContainerCell`.
     implementation(projects.core.icon)

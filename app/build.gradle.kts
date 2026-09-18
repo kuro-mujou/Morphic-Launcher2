@@ -98,6 +98,7 @@ dependencies {
     implementation(projects.data.setup) // setupModule, likewise
     implementation(projects.data.wallpaper) // wallpaperModule, likewise
     implementation(projects.data.appwidgets)   // appWidgetsModule, likewise
+    implementation(projects.data.widgets) // widgetsModule, likewise
     implementation(projects.feature.shell)
     implementation(projects.feature.onboarding)
     implementation(projects.feature.paywall)

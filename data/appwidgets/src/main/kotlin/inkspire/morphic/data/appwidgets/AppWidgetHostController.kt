@@ -20,10 +20,10 @@ import timber.log.Timber
  * @property configure the provider's configuration activity, or null when it has none — which is the branch the
  *   add flow turns on, since a widget with a configuration screen must show it before it can be placed.
  * @property targetCols the provider's declared width **in cells** (`targetCellWidth`, Android 12+), or 0. The
- *   placement prefers it, for the reason `AppWidgetSpan.forWidget` gives — it is the same number the picker showed.
+ *   placement prefers it, for the reason `CellSpan.forAppWidget` gives — it is the same number the picker showed.
  * @property targetRows the declared height in cells, the same way.
  * @property minWidthPx the size the provider asks for, in pixels — the placement's fallback when no target is
- *   declared, for `AppWidgetSpan` to turn into a footprint.
+ *   declared, for `CellSpan` to turn into a footprint.
  * @property resize the smallest the provider says it can still *draw* at — the resize floor, a different claim from
  *   the add size; see [AppWidgetResizeRules].
  */

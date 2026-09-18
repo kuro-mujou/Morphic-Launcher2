@@ -101,7 +101,7 @@ import inkspire.morphic.core.model.sideZoneEdge
 import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.apps.LetterBucket
 import inkspire.morphic.data.appwidgets.AppWidgetHostController
-import inkspire.morphic.data.layout.AppWidgetSpan
+import inkspire.morphic.data.layout.CellSpan
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.feature.home.widgetpicker.WidgetPickerSheet
 import inkspire.morphic.feature.home.widgetpicker.rememberAppWidgetAddFlow
@@ -299,7 +299,7 @@ internal fun HomeListSurface(
     val addWidget = rememberAppWidgetAddFlow(widgetHost) { bound ->
         val geo = areaGeometry
         val span = geo?.let {
-            AppWidgetSpan.forWidget(
+            CellSpan.forAppWidget(
                 bound.targetCols, bound.targetRows,
                 bound.minWidthPx, bound.minHeightPx,
                 it.cellW, it.cellH, areaConfig,
@@ -340,14 +340,26 @@ internal fun HomeListSurface(
     // removing it also releases its `appWidgetId`, which is why it goes through the ViewModel rather than being a
     // plain `RemoveFromGrid`.
     val showAreaMenu: (HomeItem, Rect) -> Unit = { item, anchor ->
-        (item as? HomeItem.AppWidget)?.let { widget ->
-            menuHost?.show(
-                title = widget.info.label.ifBlank { "Widget" },
+        when (item) {
+            is HomeItem.AppWidget -> menuHost?.show(
+                title = item.info.label.ifBlank { "Widget" },
                 anchor = anchor,
                 actions = listOf(
-                    MenuAction("Remove widget") { viewModel.removeAppWidget(widget.info.appWidgetId) },
+                    MenuAction("Remove widget") { viewModel.removeAppWidget(item.info.appWidgetId) },
                 ),
             )
+
+            is HomeItem.Widget -> menuHost?.show(
+                title = UnnamedWidget,
+                anchor = anchor,
+                actions = listOf(
+                    MenuAction("Remove widget") {
+                        viewModel.applyChanges(listOf(LayoutChange.RemoveFromGrid(item.gridItem)))
+                    },
+                ),
+            )
+
+            else -> Unit
         }
     }
     val presented = LocalSurfacePresented.current
@@ -477,7 +489,9 @@ internal fun HomeListSurface(
                     gestureConfig = gestureConfig,
                     dragItem = { it.gridItem },
                     placement = { it.placement },
-                    acceptsItem = { it is GridItem.AppWidget || it is GridItem.WidgetContainer },
+                    acceptsItem = {
+                        it is GridItem.AppWidget || it is GridItem.Widget || it is GridItem.WidgetContainer
+                    },
                     // The same shared planner the pager pairing's two zones use — a zone is described by its
                     // geometry, its dimensions and its occupants, not by an algorithm of its own.
                     planner = { item, finger, grabInItem ->
@@ -518,13 +532,21 @@ internal fun HomeListSurface(
                 ) { item, cellModifier, itemGestures ->
                     // Only a widget can be here — `acceptsItem` refuses everything else, and nothing seeds it — so
                     // anything the state reports for this zone that is not one is a row we cannot draw.
-                    (item as? HomeItem.AppWidget)?.let {
-                        AppWidgetCell(
-                            appWidgetId = it.info.appWidgetId,
-                            label = it.info.label.ifBlank { "Widget" },
+                    when (item) {
+                        is HomeItem.AppWidget -> AppWidgetCell(
+                            appWidgetId = item.info.appWidgetId,
+                            label = item.info.label.ifBlank { "Widget" },
                             modifier = cellModifier,
                             itemGestures = itemGestures,
                         )
+
+                        is HomeItem.Widget -> WidgetCell(
+                            recipe = item.widget.recipe,
+                            modifier = cellModifier,
+                            itemGestures = itemGestures,
+                        )
+
+                        else -> Unit
                     }
                 }
             },
@@ -688,6 +710,10 @@ internal fun HomeListSurface(
                 onAddWidget = { provider ->
                     widgetPickerOpen = false
                     addWidget.start(provider.component)
+                },
+                onAddTemplate = { template ->
+                    widgetPickerOpen = false
+                    viewModel.placeWidget(template.recipe, HomeZone.WIDGET_AREA, areaConfig)
                 },
                 // The one surface where this really refuses. Asked of the ViewModel rather than answered here, so
                 // the test and the placement are the same search — a picker that offered Add on a widget the area

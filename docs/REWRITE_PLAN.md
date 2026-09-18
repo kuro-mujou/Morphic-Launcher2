@@ -167,7 +167,7 @@ this entry, which is only the summary.
       the layout reacts to the resulting `AppEvent` removal and prunes placements. Uninstall is available
       wherever an app shows — including the APPS drawer, where it is the *only* removal (you can't "remove"
       an app from the full installed-app list).
-- Geometry ⚠️: `GridOccupancy`, `PlacementResolver`, `GridReflow`, `GridEdit`, `DockGridEdit`, `AppWidgetSpan`.
+- Geometry ⚠️: `GridOccupancy`, `PlacementResolver`, `GridReflow`, `GridEdit`, `DockGridEdit`, `CellSpan`.
 - 🔧 FLOW engine (`FlowReflow`, `SpreadPush`, `PushPath`): Launcher 1's `FLOW_TO_DRAWER_PLAN` **drops FLOW from
   home**. Decide up front whether L2 even ports these, or moves the packed-grid behavior straight to the drawer.
 - 🔧 `GridEdit` vs `DockGridEdit` are near-duplicate edge-edit passes — unify into one edge-edit operation
