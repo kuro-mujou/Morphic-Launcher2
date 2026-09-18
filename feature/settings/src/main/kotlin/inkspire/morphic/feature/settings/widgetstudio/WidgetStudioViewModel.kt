@@ -1,14 +1,17 @@
 package inkspire.morphic.feature.settings.widgetstudio
 
+import android.net.Uri
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.common.scope.ApplicationScope
+import inkspire.morphic.core.model.widget.WidgetExtent
 import inkspire.morphic.core.model.widget.WidgetGlobal
 import inkspire.morphic.core.model.widget.WidgetLayerSpec
 import inkspire.morphic.core.model.widget.WidgetRecipe
 import inkspire.morphic.core.model.widget.WidgetSource
+import inkspire.morphic.core.model.widget.imagePaths
 import inkspire.morphic.core.widget.movedTo
 import inkspire.morphic.core.widget.scaledBy
 import inkspire.morphic.core.widgetscript.ScriptData
@@ -17,6 +20,7 @@ import inkspire.morphic.data.widgets.BuiltInBlocks
 import inkspire.morphic.data.widgets.WidgetBlock
 import inkspire.morphic.data.widgets.WidgetCadence
 import inkspire.morphic.data.widgets.WidgetDataRepository
+import inkspire.morphic.data.widgets.WidgetImageStore
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -107,6 +111,7 @@ class WidgetStudioViewModel(
     private val layoutRepository: LayoutRepository,
     widgetData: WidgetDataRepository,
     private val applicationScope: ApplicationScope,
+    private val images: WidgetImageStore,
 ) : ViewModel() {
 
     private val recipe = MutableStateFlow<WidgetRecipe?>(null)
@@ -209,6 +214,18 @@ class WidgetStudioViewModel(
         val children = current.childrenAt(container)
         edit { it.withChildrenAt(container, children + layer) }
         open(container + children.size)
+    }
+
+    /**
+     * Imports the picture at [uri] and adds it as a layer, as [addLayer] does — square, a size to adjust from, fitted
+     * rather than cropped so the whole picture shows until the person decides otherwise.
+     */
+    fun addImage(uri: Uri) {
+        viewModelScope.launch {
+            val path = images.import(uri) ?: return@launch
+            val size = WidgetExtent.Dp(value = NewImageDp)
+            addLayer(WidgetLayerSpec(WidgetSource.Image(path, WidgetSource.Image.Fit.FIT), width = size, height = size))
+        }
     }
 
     /** Removes the layer open in Advanced, undoably like a block; the group it was in is opened. */
@@ -315,6 +332,17 @@ class WidgetStudioViewModel(
         }
     }
 
+    /**
+     * Sweeps pictures no widget uses any more — ones removed here, or undone, or left by a widget removed from HOME —
+     * once the last edit has been saved, so a picture added a moment ago is not swept before its recipe is stored.
+     */
+    override fun onCleared() {
+        val save = pendingSave
+        applicationScope.launch {
+            save?.join()
+            images.retainOnly(layoutRepository.widgets().first().flatMapTo(mutableSetOf()) { it.recipe.imagePaths })
+        }
+    }
 
     /** What a removal took out, and everything needed to put it back as it was. */
     private data class Removal(
@@ -327,5 +355,6 @@ class WidgetStudioViewModel(
     private companion object {
         const val SaveDebounceMs = 250L
         const val StopTimeoutMs = 5_000L
+        const val NewImageDp = 96f
     }
 }

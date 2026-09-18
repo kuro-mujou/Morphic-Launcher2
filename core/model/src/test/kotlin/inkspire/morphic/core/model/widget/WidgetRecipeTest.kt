@@ -169,4 +169,18 @@ class WidgetRecipeTest {
         assertEquals(null, WidgetSource.Text("x").children)
         assertEquals(WidgetSource.Text("x"), WidgetSource.Text("x").withChildren(listOf(a)))
     }
+
+    @Test
+    fun `every picture is found, however deep and whether or not it shows`() {
+        val recipe = WidgetRecipe(
+            listOf(
+                WidgetLayerSpec(WidgetSource.Image("a.png")),
+                WidgetLayerSpec(
+                    WidgetSource.Stack(listOf(WidgetLayerSpec(WidgetSource.Image("b.png"), visible = false))),
+                ),
+                WidgetLayerSpec(WidgetSource.Overlap(listOf(WidgetLayerSpec(WidgetSource.Image("a.png"))))),
+            ),
+        )
+        assertEquals(setOf("a.png", "b.png"), recipe.imagePaths)
+    }
 }

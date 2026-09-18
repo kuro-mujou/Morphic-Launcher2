@@ -62,5 +62,5 @@ val settingsSurfaceModule = module {
     viewModel { (route: IconStudioRoute) ->
         IconStudioViewModel(route, get(), get(), get(), get(), get(), get(), get())
     }
-    viewModel { (route: WidgetStudioRoute) -> WidgetStudioViewModel(route, get(), get(), get()) }
+    viewModel { (route: WidgetStudioRoute) -> WidgetStudioViewModel(route, get(), get(), get(), get()) }
 }

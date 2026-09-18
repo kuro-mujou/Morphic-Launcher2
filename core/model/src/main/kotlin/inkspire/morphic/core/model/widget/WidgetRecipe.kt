@@ -23,3 +23,11 @@ data class WidgetRecipe(
     val globals: List<WidgetGlobal> = emptyList(),
 )
 
+/**
+ * Every imported picture this recipe draws or holds — hidden layers included, since hiding is not removing. What a
+ * sweep of stored pictures keeps.
+ */
+val WidgetRecipe.imagePaths: Set<String> get() = layers.flatMapTo(mutableSetOf()) { it.imagePaths() }
+
+private fun WidgetLayerSpec.imagePaths(): List<String> =
+    listOfNotNull((source as? WidgetSource.Image)?.path) + source.children.orEmpty().flatMap { it.imagePaths() }

@@ -1,6 +1,7 @@
 package inkspire.morphic.data.widgets.di
 
 import inkspire.morphic.data.widgets.WidgetDataRepository
+import inkspire.morphic.data.widgets.WidgetImageStore
 import inkspire.morphic.data.widgets.internal.DefaultWidgetDataRepository
 import org.koin.dsl.module
 
@@ -10,4 +11,5 @@ import org.koin.dsl.module
  */
 val widgetsModule = module {
     single<WidgetDataRepository> { DefaultWidgetDataRepository(get()) }
+    single { WidgetImageStore(get(), get()) }
 }

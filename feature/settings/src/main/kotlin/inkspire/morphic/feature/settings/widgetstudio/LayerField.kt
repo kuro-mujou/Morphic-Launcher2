@@ -60,7 +60,12 @@ internal fun layerFields(layer: WidgetLayerSpec, scope: WidgetGlobals, inStack: 
         is WidgetSource.Shape -> shapeFields(source, scope)
         is WidgetSource.Progress -> progressFields(source, scope)
         is WidgetSource.Stack -> stackFields(source)
-        is WidgetSource.Overlap, is WidgetSource.Image -> emptyList()
+        is WidgetSource.Image -> listOf(
+            choice("fit", "Fit", listOf("Crop", "Fit"), source.fit.ordinal) { l, i ->
+                l.edit<WidgetSource.Image> { it.copy(fit = WidgetSource.Image.Fit.entries[i]) }
+            },
+        )
+        is WidgetSource.Overlap -> emptyList()
     } + placementFields(layer).filterNot { inStack && it.key in PlacedByStack } +
         text("name", "Name", layer.name.orEmpty()) { l, value -> l.copy(name = value.ifBlank { null }) }
 

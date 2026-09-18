@@ -19,6 +19,9 @@ dependencies {
     // `ContextCompat.registerReceiver`, for the battery and clock broadcasts.
     implementation(libs.androidx.core.ktx)
 
+    // A widget picture that could not be imported or swept is logged, since nothing on screen would say so.
+    implementation(libs.timber)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
 

@@ -2220,6 +2220,8 @@ surface.** "Widget" alone means the launcher's own; hosting *another app's* is `
 - WS8a: **Advanced** on the same screen walks the layer tree a level at a time (`LayerPath`); each layer's properties
   are described as `WidgetGlobal`s (`LayerField`) so the Style controls draw them, formulas are typed raw with their
   live result, and a property bound to a setting shows as bound with Unbind.
+- WS8b: `WidgetSource.Stack`, a group that lays its layers end to end; and pictures, imported through the photo picker
+  into `WidgetImageStore` (widget-sized, aspect kept) and swept when the studio closes if no widget uses them.
 
 `feature:shell` gained a detekt baseline with one entry:
 `LauncherShell` reached 100 lines with the Style route's callback, and wants splitting. **Compose UI tests need espresso ≥ 3.6 on this emulator**

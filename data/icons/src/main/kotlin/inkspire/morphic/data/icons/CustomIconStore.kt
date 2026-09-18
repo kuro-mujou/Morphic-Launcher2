@@ -7,6 +7,7 @@ import android.graphics.Canvas
 import android.net.Uri
 import androidx.core.graphics.createBitmap
 import inkspire.morphic.core.common.dispatcher.AppDispatchers
+import inkspire.morphic.core.common.image.decodeSampled
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
@@ -55,7 +56,7 @@ class CustomIconStore(
      */
     suspend fun decode(uri: Uri): Bitmap? = withContext(dispatchers.io) {
         runCatching {
-            val source = decodeSampled(uri) ?: return@runCatching null
+            val source = decodeSampled(context, uri, atLeast = ImageSize) ?: return@runCatching null
             squared(source).also { if (it !== source) source.recycle() }
         }.onFailure { Timber.w(it, "Could not read the picked image") }.getOrNull()
     }
@@ -90,26 +91,6 @@ class CustomIconStore(
             .forEach { file ->
                 if (!file.delete()) Timber.w("Could not delete orphaned icon layer %s", file.name)
             }
-    }
-
-    private fun decodeSampled(uri: Uri): Bitmap? {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-
-        val options = BitmapFactory.Options().apply {
-            inSampleSize = sampleSizeFor(max(bounds.outWidth, bounds.outHeight))
-        }
-        return context.contentResolver.openInputStream(uri)?.use {
-            BitmapFactory.decodeStream(it, null, options)
-        }
-    }
-
-    /** The largest power-of-two reduction that still leaves at least [ImageSize] on the longest edge. */
-    private fun sampleSizeFor(longestEdge: Int): Int {
-        var sample = 1
-        while (longestEdge / (sample * 2) >= ImageSize) sample *= 2
-        return sample
     }
 
     /** [source] centered in a transparent [ImageSize] square, scaled to fit; returned as-is if it already fits. */

@@ -1,5 +1,8 @@
 package inkspire.morphic.feature.settings.widgetstudio
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -80,6 +83,11 @@ internal fun AdvancedPanel(state: WidgetStudioState, viewModel: WidgetStudioView
 @Composable
 private fun LayerEditor(state: WidgetStudioState, viewModel: WidgetStudioViewModel, modifier: Modifier = Modifier) {
     var expanded by rememberSaveable { mutableStateOf<String?>(null) }
+    // The system photo picker: no storage permission, and only the picture chosen is ever readable.
+    val imageRequest = remember { PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly) }
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) viewModel.addImage(uri)
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -109,7 +117,9 @@ private fun LayerEditor(state: WidgetStudioState, viewModel: WidgetStudioViewMod
                 NewLayers.forEach { (label, layer) ->
                     MorphicButton(onClick = { viewModel.addLayer(layer) }, style = MorphicButtonStyle.Tonal) { Text(label) }
                 }
-
+                MorphicButton(onClick = { imagePicker.launch(imageRequest) }, style = MorphicButtonStyle.Tonal) {
+                    Text("Image")
+                }
             }
         }
         if (state.layer != null) {
