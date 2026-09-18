@@ -1,0 +1,7 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>LongMethod:LauncherShell.kt$@Composable fun LauncherShell( homePresses: Flow&lt;Unit&gt;, onOpenSettings: () -&gt; Unit, onOpenAppsSettings: (AppsLayout) -&gt; Unit, onEditIcon: (ComponentKey) -&gt; Unit, modifier: Modifier = Modifier, onOpenIconContainerSettings: (Long) -&gt; Unit = {}, /** * Opens the action picker for one gesture on one home item. Passed through rather than handled here for the * reason every other destination is: `app` owns the back stack, so `app` says where a full-screen place goes. */ onAssignGesture: (GridItem, ItemGesture) -&gt; Unit = { _, _ -&gt; }, onOpenWidgetContainerSettings: (Long) -&gt; Unit = {}, onStyleWidget: (Long, DpSize) -&gt; Unit = { _, _ -&gt; }, interactive: Boolean = true, pagerState: SurfacePagerState = rememberSurfacePagerState(), )</ID>
+  </CurrentIssues>
+</SmellBaseline>

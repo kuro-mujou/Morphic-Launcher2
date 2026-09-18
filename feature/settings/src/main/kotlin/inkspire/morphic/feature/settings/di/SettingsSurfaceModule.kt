@@ -19,6 +19,8 @@ import inkspire.morphic.feature.settings.register.SurfaceRegisterViewModel
 import inkspire.morphic.feature.settings.setup.SetupHubViewModel
 import inkspire.morphic.feature.settings.wallpaper.WallpaperViewModel
 import inkspire.morphic.feature.settings.wallpaperstudio.WallpaperStudioViewModel
+import inkspire.morphic.feature.settings.widgetstudio.WidgetStudioRoute
+import inkspire.morphic.feature.settings.widgetstudio.WidgetStudioViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
@@ -60,4 +62,5 @@ val settingsSurfaceModule = module {
     viewModel { (route: IconStudioRoute) ->
         IconStudioViewModel(route, get(), get(), get(), get(), get(), get(), get())
     }
+    viewModel { (route: WidgetStudioRoute) -> WidgetStudioViewModel(route, get(), get(), get()) }
 }

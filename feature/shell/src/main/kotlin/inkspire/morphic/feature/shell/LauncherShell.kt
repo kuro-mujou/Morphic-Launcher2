@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleStartEffect
@@ -125,6 +126,7 @@ fun LauncherShell(
      */
     onAssignGesture: (GridItem, ItemGesture) -> Unit = { _, _ -> },
     onOpenWidgetContainerSettings: (Long) -> Unit = {},
+    onStyleWidget: (Long, DpSize) -> Unit = { _, _ -> },
     interactive: Boolean = true,
     pagerState: SurfacePagerState = rememberSurfacePagerState(),
 ) {
@@ -301,13 +303,13 @@ fun LauncherShell(
                         )
                     },
                 ) {
-                    // Two more destinations the shell passes on without naming, exactly as `onEditIcon` is —
-                    // a container's settings key belongs to `feature:home`, and `app` is the only layer that
-                    // maps a key to a screen. Ids rather than the key itself, so this module never imports it.
+                    // Destinations passed on unnamed, as `onEditIcon` is: `app` alone maps a key to a screen, so
+                    // ids travel rather than keys and this module never imports one.
                     HomeScreen(
                         onOpenIconContainerSettings = onOpenIconContainerSettings,
                         onAssignGesture = onAssignGesture,
                         onOpenWidgetContainerSettings = onOpenWidgetContainerSettings,
+                        onStyleWidget = onStyleWidget,
                     )
                 }
 

@@ -25,6 +25,9 @@ sealed interface WidgetSource {
      *   one line of it would push that line out of the design.
      * @property weight 100–900, the CSS scale Compose's `FontWeight` takes.
      * @property maxLines past this, the text is cut with an ellipsis.
+     * @property colorGlobal a [WidgetGlobal.Color] that decides [color] instead, when it names one.
+     * @property sizeGlobal a [WidgetGlobal.Number] that decides [size] instead.
+     * @property fontGlobal a [WidgetGlobal.Font] that decides [font] instead.
      */
     @Serializable
     @SerialName("text")
@@ -36,6 +39,9 @@ sealed interface WidgetSource {
         val weight: Int = 400,
         val align: Align = Align.LEFT,
         val maxLines: Int = 1,
+        val colorGlobal: String? = null,
+        val sizeGlobal: String? = null,
+        val fontGlobal: String? = null,
     ) : WidgetSource {
 
         /** The family, as a choice among the platform's own — there is no font import yet. */
@@ -51,6 +57,8 @@ sealed interface WidgetSource {
      * A filled shape, stretched to the layer's box.
      *
      * @property cornerRadius in dp, for [Kind.RECTANGLE]; an [Kind.OVAL] has no corners.
+     * @property colorGlobal a [WidgetGlobal.Color] that decides [color] instead, when it names one.
+     * @property cornerRadiusGlobal a [WidgetGlobal.Number] that decides [cornerRadius] instead.
      */
     @Serializable
     @SerialName("shape")
@@ -58,6 +66,8 @@ sealed interface WidgetSource {
         val kind: Kind = Kind.RECTANGLE,
         val color: Int = White,
         val cornerRadius: Float = 0f,
+        val colorGlobal: String? = null,
+        val cornerRadiusGlobal: String? = null,
     ) : WidgetSource {
 
         @Serializable

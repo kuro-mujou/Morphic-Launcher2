@@ -7,6 +7,7 @@ import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.IconContainer
 import inkspire.morphic.core.model.WidgetContainer
 import inkspire.morphic.core.model.widget.Widget
+import inkspire.morphic.core.model.widget.WidgetRecipe
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -50,6 +51,12 @@ interface LayoutRepository {
 
     /** The launcher's own widgets, each with its recipe. One whose recipe cannot be read is left out. */
     fun widgets(): Flow<List<Widget>>
+
+    /**
+     * Replaces widget [id]'s recipe — a restyle. Not a [LayoutChange]: it says nothing about where anything sits, so
+     * it belongs to no arrangement, and every posture holding the widget shows the change.
+     */
+    suspend fun setWidgetRecipe(id: Long, recipe: WidgetRecipe)
 
     /**
      * Applies [changes] to [arrangement]'s layout as one unit — the single write path. [arrangement] scopes

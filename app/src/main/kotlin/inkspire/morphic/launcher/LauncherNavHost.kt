@@ -33,6 +33,8 @@ import inkspire.morphic.feature.settings.wallpaper.WallpaperCropRoute
 import inkspire.morphic.feature.settings.wallpaper.WallpaperCropScreen
 import inkspire.morphic.feature.settings.wallpaperstudio.WallpaperStudioRoute
 import inkspire.morphic.feature.settings.wallpaperstudio.WallpaperStudioScreen
+import inkspire.morphic.feature.settings.widgetstudio.WidgetStudioRoute
+import inkspire.morphic.feature.settings.widgetstudio.WidgetStudioScreen
 import inkspire.morphic.feature.shell.LauncherShell
 import kotlinx.coroutines.flow.Flow
 
@@ -169,6 +171,12 @@ private fun EntryProviderScope<NavKey>.settingsEntries(navigator: Navigator) {
             onBack = { navigator.goBack() },
         )
     }
+    entry<WidgetStudioRoute> { route ->
+        WidgetStudioScreen(
+            route = route,
+            onBack = { navigator.goBack() },
+        )
+    }
     entry<WallpaperStudioRoute> {
         WallpaperStudioScreen(
             onBack = { navigator.goBack() },
@@ -195,6 +203,7 @@ private fun HomeEntry(navigator: Navigator, homePresses: Flow<Unit>) {
         onEditIcon = { component -> navigator.goTo(IconStudioRoute.App(component.flatten())) },
         onOpenIconContainerSettings = { id -> navigator.goTo(ContainerSettingsRoute.Icon(id)) },
         onOpenWidgetContainerSettings = { id -> navigator.goTo(ContainerSettingsRoute.Widget(id)) },
+        onStyleWidget = { id, size -> navigator.goTo(WidgetStudioRoute(id, size.width.value, size.height.value)) },
         onAssignGesture = { item, gesture ->
             when (item) {
                 is GridItem.App -> navigator.goTo(GestureActionRoute.App(item.component.flatten(), gesture))

@@ -14,6 +14,8 @@ import kotlinx.serialization.Serializable
  * @property offsetY in dp from the [anchor] point, positive downward.
  * @property rotation degrees clockwise, about the layer's center.
  * @property visible false hides the layer and keeps it — the editor's eye toggle, not a deletion.
+ * @property visibleGlobal a [WidgetGlobal.Switch] that decides whether a [visible] layer draws — how a design offers
+ *   "Show date" without the person placing it ever seeing a layer.
  */
 @Serializable
 data class WidgetLayerSpec(
@@ -26,10 +28,12 @@ data class WidgetLayerSpec(
     val rotation: Float = 0f,
     val opacity: Float = 1f,
     val visible: Boolean = true,
+    val visibleGlobal: String? = null,
 )
 
 /**
- * The layers that draw. The renderer lays out exactly these and the update cadence reads exactly these — a hidden
- * seconds clock counted by one and not the other would wake a widget every second to show nothing.
+ * The layers that draw, under [globals]. The renderer lays out exactly these and the update cadence reads exactly
+ * these — a hidden seconds clock counted by one and not the other would wake a widget every second to show nothing.
  */
-fun List<WidgetLayerSpec>.drawn(): List<WidgetLayerSpec> = filter { it.visible }
+fun List<WidgetLayerSpec>.drawn(globals: WidgetGlobals): List<WidgetLayerSpec> =
+    filter { it.visible && globals.switch(it.visibleGlobal, fallback = true) }

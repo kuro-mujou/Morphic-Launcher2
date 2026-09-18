@@ -14,9 +14,11 @@ import kotlinx.serialization.Serializable
  * over earlier ones. A background is simply the first layer.
  *
  * @property span the size it is placed at, which the user can then resize — the layers re-lay rather than scale.
+ * @property globals what the design lets someone restyle, with this widget's current values.
  */
 @Serializable
 data class WidgetRecipe(
     val layers: List<WidgetLayerSpec> = emptyList(),
     val span: WidgetSpan = WidgetSpan(),
+    val globals: List<WidgetGlobal> = emptyList(),
 )

@@ -4,14 +4,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -25,10 +23,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.adaptive.ShrinkToFit
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.data.layout.CellSpan
@@ -105,7 +103,7 @@ internal fun TemplateDetailPane(
                     DpSize(160.dp, 160.dp)
                 }
             }
-            TrueSizePreview(
+            ShrinkToFit(
                 size = size,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -116,27 +114,6 @@ internal fun TemplateDetailPane(
                 Text(text = span.visualLabel(grid), style = MaterialTheme.typography.bodyMedium, color = colors.contentMuted)
             }
             if (!fits) RoomlessNotice()
-        }
-    }
-}
-
-/**
- * [content] laid out at exactly [size] and shrunk, never grown, to fit what the page has — so a widget that re-lays
- * rather than scales is seen as it will land, only smaller when the sheet is narrower than the grid.
- */
-@Composable
-private fun TrueSizePreview(size: DpSize, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    BoxWithConstraints(modifier = modifier, contentAlignment = Alignment.Center) {
-        val scale = minOf(1f, maxWidth / size.width, maxHeight / size.height)
-        Box(Modifier.size(size.width * scale, size.height * scale), contentAlignment = Alignment.Center) {
-            Box(
-                Modifier
-                    .requiredSize(size)
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                    },
-            ) { content() }
         }
     }
 }

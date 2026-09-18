@@ -1,5 +1,6 @@
 package inkspire.morphic.data.widgets
 
+import inkspire.morphic.core.model.widget.WidgetGlobal
 import inkspire.morphic.core.model.widget.WidgetLayerSpec
 import inkspire.morphic.core.model.widget.WidgetRecipe
 import inkspire.morphic.core.model.widget.WidgetSource
@@ -47,5 +48,26 @@ class WidgetCadenceTest {
 
         val hiddenGroup = WidgetLayerSpec(WidgetSource.Overlap(listOf(text("\$bi(level)\$"))), visible = false)
         assertEquals(emptySet<ProviderId>(), WidgetCadence.of(WidgetRecipe(listOf(hiddenGroup))).providers)
+    }
+
+    @Test
+    fun `a layer a switch turned off asks for nothing`() {
+        val recipe = WidgetRecipe(
+            layers = listOf(text("\$df(EEEE)\$"), WidgetLayerSpec(WidgetSource.Text("\$df(ss)\$"), visibleGlobal = "secs")),
+            globals = listOf(WidgetGlobal.Switch("secs", "Seconds", false)),
+        )
+        assertEquals(ClockTick.DAY, WidgetCadence.of(recipe).clockTick)
+        val on = recipe.copy(globals = listOf(WidgetGlobal.Switch("secs", "Seconds", true)))
+        assertEquals(ClockTick.SECOND, WidgetCadence.of(on).clockTick)
+    }
+
+    @Test
+    fun `no starter design wakes every second`() {
+        // The guard on the design library: a template that ticks per second costs every user who places it battery
+        // for something a person never asked to see, and nothing on screen would say so.
+        BuiltInWidgetTemplates.all.forEach { template ->
+            val tick = WidgetCadence.of(template.recipe).clockTick
+            assert(tick == null || tick > ClockTick.SECOND) { "${template.id} ticks $tick" }
+        }
     }
 }

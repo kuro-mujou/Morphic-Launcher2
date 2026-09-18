@@ -2,9 +2,11 @@ package inkspire.morphic.core.widget
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import inkspire.morphic.core.model.widget.WidgetRecipe
+import inkspire.morphic.core.model.widget.resolvedGlobals
 import inkspire.morphic.core.widgetscript.ScriptData
 
 /**
@@ -20,5 +22,10 @@ import inkspire.morphic.core.widgetscript.ScriptData
  */
 @Composable
 fun WidgetRender(recipe: WidgetRecipe, data: ScriptData, modifier: Modifier = Modifier) {
-    WidgetOverlap(recipe.layers, data, modifier.fillMaxSize().clipToBounds())
+    val globals = remember(recipe.globals) { recipe.resolvedGlobals }
+    val scoped = remember(data, globals) { GlobalScopedData(data, globals.asScriptValues()) }
+    WidgetOverlap(recipe.layers, scoped, globals, modifier.fillMaxSize().clipToBounds())
 }
+
+/** [data] with this widget's own settings added, for `gv`. */
+private class GlobalScopedData(data: ScriptData, override val globals: Map<String, String>) : ScriptData by data

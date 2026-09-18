@@ -33,6 +33,7 @@ internal fun showHomeItemMenu(
     onOpenIconContainerSettings: (Long) -> Unit,
     onOpenWidgetContainerSettings: (Long) -> Unit,
     onOpenGestures: (HomeItem) -> Unit,
+    onStyleWidget: (Long, Rect) -> Unit = { _, _ -> },
 ) {
     when (item) {
         is HomeItem.App -> menuHost?.showApp(
@@ -71,15 +72,21 @@ internal fun showHomeItemMenu(
         )
         // Ours: resizable from one visual cell up, since the recipe re-lays at any size, and removed by a plain
         // `RemoveFromGrid` — there is no host to release, which is what makes an app widget's removal special.
+        // **Style** only when the design declared something to style — absent, not a row opening an empty screen.
         is HomeItem.Widget -> menuHost?.show(
             title = UnnamedWidget,
             anchor = anchor,
-            actions = listOf(
-                resizeAction(item, HomeResizeRules.LauncherItem, onResize),
-                MenuAction("Remove widget") {
-                    viewModel.applyChanges(listOf(LayoutChange.RemoveFromGrid(item.gridItem)))
-                },
-            ),
+            actions = buildList {
+                if (item.widget.recipe.globals.isNotEmpty()) {
+                    add(MenuAction("Style") { onStyleWidget(item.widget.id, anchor) })
+                }
+                add(resizeAction(item, HomeResizeRules.LauncherItem, onResize))
+                add(
+                    MenuAction("Remove widget") {
+                        viewModel.applyChanges(listOf(LayoutChange.RemoveFromGrid(item.gridItem)))
+                    },
+                )
+            },
         )
         // No shortcuts stage and no App info — a folder is the launcher's own object, not an installed app.
         // "Remove folder" takes the folder off the grid and its membership with it (`RemoveFromGrid` cascades),

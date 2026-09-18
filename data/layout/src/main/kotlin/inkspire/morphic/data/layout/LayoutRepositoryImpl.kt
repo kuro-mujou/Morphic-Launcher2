@@ -16,6 +16,8 @@ import inkspire.morphic.core.model.IconContainer
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.WidgetContainer
 import inkspire.morphic.core.model.widget.Widget
+import inkspire.morphic.core.model.widget.WidgetRecipe
+import inkspire.morphic.data.layout.mapper.encoded
 import inkspire.morphic.data.layout.mapper.foldersOf
 import inkspire.morphic.data.layout.mapper.iconContainersOf
 import inkspire.morphic.data.layout.mapper.toAppWidgetInfo
@@ -95,6 +97,10 @@ internal class LayoutRepositoryImpl(
 
     override fun widgets(): Flow<List<Widget>> =
         daos.widget.observeAll().map { rows -> rows.mapNotNull { it.toWidget() } }
+
+    override suspend fun setWidgetRecipe(id: Long, recipe: WidgetRecipe) {
+        withContext(dispatchers.io) { daos.widget.setRecipe(id, recipe.encoded()) }
+    }
 
     override fun appWidgets(): Flow<List<AppWidgetInfo>> =
         daos.appWidget.observeAll().map { widgets -> widgets.map { it.toAppWidgetInfo() } }

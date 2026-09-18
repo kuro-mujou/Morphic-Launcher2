@@ -17,6 +17,9 @@ interface WidgetDao {
     @Insert
     suspend fun insert(widget: WidgetEntity): Long
 
+    @Query("UPDATE widget SET recipe = :recipe WHERE id = :id")
+    suspend fun setRecipe(id: Long, recipe: String)
+
     /**
      * Deletes every widget no arrangement places — the other half of removing one from a single posture, as
      * `FolderDao.deleteUnplaced` is for a folder.

@@ -24,6 +24,9 @@ dependencies {
     // removed right one. So the grid editor holds `LayoutRepository` alongside `SettingsRepository`, as L1's dock
     // detail did. If a second caller ever needs the pair, they extract into a command of their own.
     implementation(projects.data.layout)
+    // The widget studio: the one renderer, and the live data its preview reads.
+    implementation(projects.core.widget)
+    implementation(projects.data.widgets)
 
     // One installed app, for the live icon preview to draw. The preview's whole point is a real icon at a real cell
     // size — a placeholder shape would answer a question nobody asked — so this surface needs the app cache, exactly as

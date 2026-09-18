@@ -243,6 +243,7 @@ internal fun HomePagerSurface(
      * the navigation and this surface only says which gesture was chosen.
      */
     onAssignGesture: (GridItem, ItemGesture) -> Unit = { _, _ -> },
+    onStyleWidget: (Long, DpSize) -> Unit = { _, _ -> },
 ) {
     val density = LocalDensity.current
 
@@ -667,6 +668,7 @@ internal fun HomePagerSurface(
             onOpenIconContainerSettings = onOpenIconContainerSettings,
             onOpenWidgetContainerSettings = onOpenWidgetContainerSettings,
             onOpenGestures = { gesturesFor = it },
+            onStyleWidget = { id, anchor -> onStyleWidget(id, with(density) { anchor.size.toDpSize() }) },
         )
     }
 

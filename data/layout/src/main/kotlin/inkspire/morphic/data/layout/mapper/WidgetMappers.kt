@@ -28,5 +28,8 @@ internal fun WidgetEntity.toWidget(): Widget? = try {
     null
 }
 
+/** [this] recipe as the `widget.recipe` column stores it. */
+internal fun WidgetRecipe.encoded(): String = RecipeJson.encodeToString(this)
+
 /** A new row for [this] recipe; Room assigns the id. */
-internal fun WidgetRecipe.toEntity(): WidgetEntity = WidgetEntity(recipe = RecipeJson.encodeToString(this))
+internal fun WidgetRecipe.toEntity(): WidgetEntity = WidgetEntity(recipe = encoded())

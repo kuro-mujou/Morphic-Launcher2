@@ -8,6 +8,7 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.constrainWidth
+import inkspire.morphic.core.model.widget.WidgetGlobals
 import inkspire.morphic.core.model.widget.WidgetLayerSpec
 import inkspire.morphic.core.model.widget.drawn
 import inkspire.morphic.core.widgetscript.ScriptData
@@ -20,10 +21,15 @@ import inkspire.morphic.core.widgetscript.ScriptData
  * Layers are not clipped to it — only the widget as a whole is.
  */
 @Composable
-internal fun WidgetOverlap(layers: List<WidgetLayerSpec>, data: ScriptData, modifier: Modifier = Modifier) {
-    val visible = layers.drawn()
+internal fun WidgetOverlap(
+    layers: List<WidgetLayerSpec>,
+    data: ScriptData,
+    globals: WidgetGlobals,
+    modifier: Modifier = Modifier,
+) {
+    val visible = layers.drawn(globals)
     Layout(
-        content = { visible.forEach { WidgetLayer(it, data) } },
+        content = { visible.forEach { WidgetLayer(it, data, globals) } },
         modifier = modifier,
     ) { measurables, constraints ->
         val placeables = measurables.mapIndexed { i, measurable ->
@@ -66,7 +72,7 @@ private fun layerConstraints(spec: WidgetLayerSpec, group: Constraints, density:
  * group's measurables stay in step with its layer list.
  */
 @Composable
-private fun WidgetLayer(spec: WidgetLayerSpec, data: ScriptData) {
+private fun WidgetLayer(spec: WidgetLayerSpec, data: ScriptData, globals: WidgetGlobals) {
     Box(
         modifier = Modifier.graphicsLayer {
             rotationZ = spec.rotation
@@ -74,6 +80,6 @@ private fun WidgetLayer(spec: WidgetLayerSpec, data: ScriptData) {
         },
         propagateMinConstraints = true,
     ) {
-        WidgetSourceContent(spec.source, data)
+        WidgetSourceContent(spec.source, data, globals)
     }
 }

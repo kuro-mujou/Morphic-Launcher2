@@ -1,9 +1,11 @@
 package inkspire.morphic.data.widgets
 
+import inkspire.morphic.core.model.widget.WidgetGlobals
 import inkspire.morphic.core.model.widget.WidgetLayerSpec
 import inkspire.morphic.core.model.widget.WidgetRecipe
 import inkspire.morphic.core.model.widget.WidgetSource
 import inkspire.morphic.core.model.widget.drawn
+import inkspire.morphic.core.model.widget.resolvedGlobals
 import inkspire.morphic.core.widgetscript.ClockTick
 import inkspire.morphic.core.widgetscript.ProviderId
 import inkspire.morphic.core.widgetscript.WidgetExpression
@@ -19,21 +21,25 @@ import inkspire.morphic.core.widgetscript.WidgetExpression
 data class WidgetCadence(val providers: Set<ProviderId>, val clockTick: ClockTick?) {
 
     companion object {
-        /** The cadence of every text [recipe] draws. Hidden layers draw nothing and so ask for nothing. */
+        /**
+         * The cadence of every text [recipe] draws. Hidden layers draw nothing and so ask for nothing — including one
+         * the Style tab switched off.
+         */
         fun of(recipe: WidgetRecipe): WidgetCadence {
-            val expressions = texts(recipe.layers).map(WidgetExpression::parse).toList()
+            val expressions = texts(recipe.layers, recipe.resolvedGlobals).map(WidgetExpression::parse).toList()
             return WidgetCadence(
                 providers = expressions.flatMap { it.providers }.toSet(),
                 clockTick = expressions.mapNotNull { it.clockTick }.minOrNull(),
             )
         }
 
-        private fun texts(layers: List<WidgetLayerSpec>): Sequence<String> = layers.drawn().asSequence().flatMap {
-            when (val source = it.source) {
-                is WidgetSource.Text -> sequenceOf(source.text)
-                is WidgetSource.Overlap -> texts(source.layers)
-                is WidgetSource.Shape, is WidgetSource.Image -> emptySequence()
+        private fun texts(layers: List<WidgetLayerSpec>, globals: WidgetGlobals): Sequence<String> =
+            layers.drawn(globals).asSequence().flatMap {
+                when (val source = it.source) {
+                    is WidgetSource.Text -> sequenceOf(source.text)
+                    is WidgetSource.Overlap -> texts(source.layers, globals)
+                    is WidgetSource.Shape, is WidgetSource.Image -> emptySequence()
+                }
             }
-        }
     }
 }

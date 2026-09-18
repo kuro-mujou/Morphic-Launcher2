@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.DpSize
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.cell.IconMetrics
@@ -48,6 +49,8 @@ fun HomeScreen(
      * the navigation and this surface only says which gesture was chosen.
      */
     onAssignGesture: (GridItem, ItemGesture) -> Unit = { _, _ -> },
+    /** Opens the widget studio on one of the launcher's own widgets, at the size it is drawn. */
+    onStyleWidget: (Long, DpSize) -> Unit = { _, _ -> },
 ) {
     val viewModel = koinViewModel<HomeViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -67,6 +70,7 @@ fun HomeScreen(
             onOpenIconContainerSettings = onOpenIconContainerSettings,
             onOpenWidgetContainerSettings = onOpenWidgetContainerSettings,
             onAssignGesture = onAssignGesture,
+            onStyleWidget = onStyleWidget,
         )
 
         HomeLayout.LIST_WITH_WIDGET_AREA -> HomeListSurface(
@@ -75,6 +79,7 @@ fun HomeScreen(
             device = device,
             modifier = modifier,
             onAssignGesture = onAssignGesture,
+            onStyleWidget = onStyleWidget,
         )
     }
 }

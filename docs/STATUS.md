@@ -2195,6 +2195,11 @@ surface.** "Widget" alone means the launcher's own; hosting *another app's* is `
   composable on HOME, under the finger and on the picker page), dragged, resized and removed like any HOME item, and
   stored as `widget` + `widget_placement`.
 
-WS6 (templates and the Style tab) is next. **Compose UI tests need espresso ≥ 3.6 on this emulator**
+- WS6a (built, awaiting a device check): a design's **globals** — typed settings it declares — edited on a **Style**
+  screen (`feature:settings/widgetstudio`) opened from the widget's menu, bound to properties through `WidgetGlobals`,
+  the one resolver the renderer and the cadence share. Changes save themselves.
+
+WS6b (the template library, a design pass) is next. `feature:shell` gained a detekt baseline with one entry:
+`LauncherShell` reached 100 lines with the Style route's callback, and wants splitting. **Compose UI tests need espresso ≥ 3.6 on this emulator**
 (API 36): the 3.5 the Compose test rule brings calls an `InputManager` method Android 16 removed, and fails before the
 first frame. `core:widget` pins 3.7.

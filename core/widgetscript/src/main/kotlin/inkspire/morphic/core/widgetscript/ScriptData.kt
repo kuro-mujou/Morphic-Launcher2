@@ -28,4 +28,10 @@ interface ScriptData {
 
     /** Formats dates and changes case; a script evaluated under two locales is expected to read differently. */
     val locale: Locale
+
+    /**
+     * The widget's own settings as `gv` reads them, by name. Not a provider: they change only when the user changes
+     * them, which redraws the widget anyway, so nothing has to be woken for them.
+     */
+    val globals: Map<String, String> get() = emptyMap()
 }

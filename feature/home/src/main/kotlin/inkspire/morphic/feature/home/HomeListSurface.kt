@@ -179,6 +179,7 @@ internal fun HomeListSurface(
      * the navigation and this surface only says which gesture was chosen.
      */
     onAssignGesture: (GridItem, ItemGesture) -> Unit = { _, _ -> },
+    onStyleWidget: (Long, DpSize) -> Unit = { _, _ -> },
 ) {
     val density = LocalDensity.current
 
@@ -352,11 +353,20 @@ internal fun HomeListSurface(
             is HomeItem.Widget -> menuHost?.show(
                 title = UnnamedWidget,
                 anchor = anchor,
-                actions = listOf(
-                    MenuAction("Remove widget") {
-                        viewModel.applyChanges(listOf(LayoutChange.RemoveFromGrid(item.gridItem)))
-                    },
-                ),
+                actions = buildList {
+                    if (item.widget.recipe.globals.isNotEmpty()) {
+                        add(
+                            MenuAction("Style") {
+                                onStyleWidget(item.widget.id, with(density) { anchor.size.toDpSize() })
+                            },
+                        )
+                    }
+                    add(
+                        MenuAction("Remove widget") {
+                            viewModel.applyChanges(listOf(LayoutChange.RemoveFromGrid(item.gridItem)))
+                        },
+                    )
+                },
             )
 
             else -> Unit

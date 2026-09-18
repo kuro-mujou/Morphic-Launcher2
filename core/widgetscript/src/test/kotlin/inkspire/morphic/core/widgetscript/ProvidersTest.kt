@@ -76,4 +76,20 @@ class ProvidersTest {
         val result = WidgetExpression.parse("\$bi(volts)\$").evaluate(FixtureData)
         assertEquals("bi has no \"volts\"", result.problems.single().message)
     }
+
+    @Test
+    fun `gv reads the widget's own settings and declares nothing`() {
+        val styled = object : ScriptData by FixtureData {
+            override val globals = mapOf("h24" to "0", "name" to "Ada")
+        }
+        assertEquals("Hi Ada, 7:14", eval("Hi \$gv(name)\$, \$if(gv(h24), df(HH:mm), df(h:mm))\$", styled))
+        assertEquals(setOf(ProviderId.CLOCK), WidgetExpression.parse("\$gv(x)\$ \$df(HH)\$").providers)
+        assertEquals(ClockTick.MINUTE, tick("\$if(gv(h24), df(HH:mm), df(h:mm))\$"))
+    }
+
+    @Test
+    fun `a missing setting is reported`() {
+        val result = WidgetExpression.parse("\$gv(nope)\$").evaluate(FixtureData)
+        assertEquals("No setting called \"nope\"", result.problems.single().message)
+    }
 }
