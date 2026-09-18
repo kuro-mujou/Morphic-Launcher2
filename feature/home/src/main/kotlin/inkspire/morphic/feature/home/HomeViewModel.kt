@@ -401,7 +401,7 @@ class HomeViewModel(
                         }
 
                         is GridItem.AppWidget ->
-                            widgetById[item.appWidgetId]?.let { HomeItem.Widget(it, at.placement, at.zone) }
+                            widgetById[item.appWidgetId]?.let { HomeItem.AppWidget(it, at.placement, at.zone) }
                         // Both containers resolve their *contents* here too, for the folder's reason: the cell draws
                         // them, so re-resolving per frame in the UI would put this join in the wrong layer twice.
                         is GridItem.IconContainer -> iconContainerById[item.containerId]?.let { container ->
@@ -1228,7 +1228,7 @@ class HomeViewModel(
             // widgets, so nothing an icon drag carries can go there. Returning null is what makes the drop fall
             // through to an ordinary push, which is the honest outcome — the finger is over something that cannot
             // receive what it is holding. It mirrors `canMerge`, which is what stops the ring being offered at all.
-            is HomeItem.Widget, is HomeItem.WidgetContainer -> null
+            is HomeItem.AppWidget, is HomeItem.WidgetContainer -> null
             is HomeItem.App -> draggedApp?.let {
                 listOf(
                     LayoutChange.CreateFolder(

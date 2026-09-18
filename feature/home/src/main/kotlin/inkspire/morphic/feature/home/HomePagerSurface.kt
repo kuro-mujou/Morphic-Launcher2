@@ -513,7 +513,7 @@ internal fun HomePagerSurface(
             is HomeItem.Folder -> folderHost.open(item.folder.id)
             // A widget handles its own taps — its content is another app's views, and every button in it is
             // theirs. The launcher's job here is to *not* intercept.
-            is HomeItem.Widget -> Unit
+            is HomeItem.AppWidget -> Unit
             // **A filled container has no expanded view; an empty one opens its add flow.** A container's contents
             // are already on screen, so a tap on a filled one means whatever it landed on — an icon container's slots
             // launch and open for themselves (`IconContainerCell`), a widget container's pages are the widget's own,
@@ -1142,7 +1142,7 @@ private fun HomeItemCell(
         is HomeItem.App ->
             AppCell(app = item.info, modifier = cellModifier, metrics = metrics, itemGestures = itemGestures)
 
-        is HomeItem.Widget -> AppWidgetCell(
+        is HomeItem.AppWidget -> AppWidgetCell(
             appWidgetId = item.info.appWidgetId,
             label = item.info.label.ifBlank { UnnamedAppWidget },
             modifier = cellModifier,

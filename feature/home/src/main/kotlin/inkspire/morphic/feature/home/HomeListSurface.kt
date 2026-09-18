@@ -340,7 +340,7 @@ internal fun HomeListSurface(
     // removing it also releases its `appWidgetId`, which is why it goes through the ViewModel rather than being a
     // plain `RemoveFromGrid`.
     val showAreaMenu: (HomeItem, Rect) -> Unit = { item, anchor ->
-        (item as? HomeItem.Widget)?.let { widget ->
+        (item as? HomeItem.AppWidget)?.let { widget ->
             menuHost?.show(
                 title = widget.info.label.ifBlank { "Widget" },
                 anchor = anchor,
@@ -518,7 +518,7 @@ internal fun HomeListSurface(
                 ) { item, cellModifier, itemGestures ->
                     // Only a widget can be here — `acceptsItem` refuses everything else, and nothing seeds it — so
                     // anything the state reports for this zone that is not one is a row we cannot draw.
-                    (item as? HomeItem.Widget)?.let {
+                    (item as? HomeItem.AppWidget)?.let {
                         AppWidgetCell(
                             appWidgetId = it.info.appWidgetId,
                             label = it.info.label.ifBlank { "Widget" },

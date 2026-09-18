@@ -53,7 +53,7 @@ internal fun showHomeItemMenu(
         // A widget offers one verb and no shortcuts stage: it is not an app, so App info and Uninstall would
         // name its *provider* rather than the thing being long-pressed. Removing it also releases the
         // `appWidgetId` — see [HomeViewModel.removeAppWidget], which is why this is not a plain `RemoveFromGrid`.
-        is HomeItem.Widget -> menuHost?.show(
+        is HomeItem.AppWidget -> menuHost?.show(
             title = item.info.label.ifBlank { UnnamedAppWidget },
             anchor = anchor,
             actions = buildList {
@@ -136,7 +136,7 @@ internal val HomeItem.menuLabel: String
     get() = when (this) {
         is HomeItem.App -> info.label
         is HomeItem.Folder -> folder.label.ifBlank { UnnamedFolder }
-        is HomeItem.Widget -> info.label.ifBlank { UnnamedAppWidget }
+        is HomeItem.AppWidget -> info.label.ifBlank { UnnamedAppWidget }
         is HomeItem.IconContainer -> IconContainerTitle
         is HomeItem.WidgetContainer -> WidgetContainerTitle
     }

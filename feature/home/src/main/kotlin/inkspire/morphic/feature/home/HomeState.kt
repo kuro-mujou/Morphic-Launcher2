@@ -44,7 +44,7 @@ sealed interface HomeItem {
     }
 
     /**
-     * A placed widget: the [info] the layout store keeps about it (its `appWidgetId`, provider and label) at
+     * A placed app widget: the [info] the layout store keeps about it (its `appWidgetId`, provider and label) at
      * [placement] in [zone].
      *
      * **Its [placement] carries a real span**, unlike an app's or a folder's — those are always one visual cell,
@@ -52,7 +52,7 @@ sealed interface HomeItem {
      * handles that (the planner, the occupancy map and the cell layout all read spans), which is why adding
      * widgets needed no change to any of them.
      */
-    data class Widget(
+    data class AppWidget(
         val info: AppWidgetInfo,
         override val placement: GridPlacement,
         override val zone: HomeZone,
@@ -93,7 +93,7 @@ sealed interface HomeItem {
      * A placed widget container: the [container] definition plus the resolved [widgets] it pages between, in
      * container order.
      *
-     * [widgets] is the same [AppWidgetInfo] a loose [Widget] carries, because a contained widget is hosted exactly as
+     * [widgets] is the same [AppWidgetInfo] a loose [AppWidget] carries, because a contained widget is hosted exactly as
      * a placed one is — what the container changes is *where* it draws and *when* it is visible, not what it is.
      */
     data class WidgetContainer(
@@ -344,6 +344,6 @@ fun HomeState.appInfo(component: ComponentKey): AppInfo? =
                 }
             }
             // Neither kind of widget is an app or holds one, so they can never answer this.
-            is HomeItem.Widget, is HomeItem.WidgetContainer -> null
+            is HomeItem.AppWidget, is HomeItem.WidgetContainer -> null
         }
     } ?: catalog[component]
