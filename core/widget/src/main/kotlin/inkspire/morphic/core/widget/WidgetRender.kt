@@ -9,6 +9,7 @@ import androidx.compose.ui.unit.IntRect
 import inkspire.morphic.core.model.widget.WidgetRecipe
 import inkspire.morphic.core.model.widget.resolvedGlobals
 import inkspire.morphic.core.widgetscript.ScriptData
+import inkspire.morphic.core.widgetscript.withGlobals
 
 /**
  * A widget, drawn live: [recipe]'s layers laid out in the space [modifier] gives it, with every formula evaluated
@@ -33,9 +34,7 @@ fun WidgetRender(
     onLayout: ((Map<Int, IntRect>) -> Unit)? = null,
 ) {
     val globals = remember(recipe.globals) { recipe.resolvedGlobals }
-    val scoped = remember(data, globals) { GlobalScopedData(data, globals.asScriptValues()) }
+    val scoped = remember(data, globals) { data.withGlobals(globals.asScriptValues()) }
     WidgetOverlap(recipe.layers, scoped, globals, modifier.fillMaxSize().clipToBounds(), onLayout)
 }
 
-/** [data] with the settings in scope added, for `gv` — the widget's at the top, a block's inside it. */
-internal class GlobalScopedData(data: ScriptData, override val globals: Map<String, String>) : ScriptData by data

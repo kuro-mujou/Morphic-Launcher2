@@ -35,3 +35,12 @@ interface ScriptData {
      */
     val globals: Map<String, String> get() = emptyMap()
 }
+
+/**
+ * This data with [globals] as the settings `gv` reads — the widget's own, or a block's over them. Everything that
+ * evaluates a formula where a widget would, the renderer and the studio's editor alike, goes through this, so a `gv`
+ * that works on the widget cannot fail in the editor.
+ */
+fun ScriptData.withGlobals(globals: Map<String, String>): ScriptData = GlobalScopedData(this, globals)
+
+private class GlobalScopedData(data: ScriptData, override val globals: Map<String, String>) : ScriptData by data

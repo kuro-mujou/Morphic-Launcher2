@@ -15,6 +15,8 @@ import inkspire.morphic.core.model.widget.imagePaths
 import inkspire.morphic.core.widget.movedTo
 import inkspire.morphic.core.widget.scaledBy
 import inkspire.morphic.core.widgetscript.ScriptData
+import inkspire.morphic.core.widgetscript.ScriptExamples
+import inkspire.morphic.core.widgetscript.withGlobals
 import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.widgets.BuiltInBlocks
 import inkspire.morphic.data.widgets.WidgetBlock
@@ -61,6 +63,7 @@ data class StudioFocus(val selected: Int? = null, val path: LayerPath = emptyLis
  *   returns to.
  * @property removed the name of what was just removed, while that removal can still be undone.
  * @property library the blocks on offer while the Add sheet is open, and null while it is closed.
+ * @property browsing the formula examples are open, so [data] reads everything they read.
  */
 data class WidgetStudioState(
     val recipe: WidgetRecipe? = null,
@@ -70,6 +73,7 @@ data class WidgetStudioState(
     val initial: Map<Int?, Map<String, WidgetGlobal>> = emptyMap(),
     val removed: String? = null,
     val library: List<WidgetBlock>? = null,
+    val browsing: Boolean = false,
 ) {
     /** The block being styled, by its layer index, or null for the widget itself. */
     val selected: Int? get() = focus.selected
@@ -88,6 +92,13 @@ data class WidgetStudioState(
 
     /** The layer open in Advanced, or null for the widget itself. */
     val layer: WidgetLayerSpec? get() = recipe?.layerAt(focus.path)
+
+    /**
+     * [data] with the settings in scope at the open layer, which is what a formula there reads — so the editor's
+     * "Shows:" and the widget agree on a `gv`.
+     */
+    val formulaData: ScriptData?
+        get() = recipe?.let { recipe -> data?.withGlobals(recipe.globalsAt(focus.path).asScriptValues()) }
 
     /** The open layer's properties, in the scope its bindings read. */
     internal val fields: List<LayerField>
@@ -120,6 +131,7 @@ class WidgetStudioViewModel(
     private val initial = MutableStateFlow<Map<Int?, Map<String, WidgetGlobal>>>(emptyMap())
     private val undo = MutableStateFlow<Removal?>(null)
     private val picking = MutableStateFlow(false)
+    private val browsing = MutableStateFlow(false)
     private var pendingSave: Job? = null
 
     init {
@@ -140,11 +152,14 @@ class WidgetStudioViewModel(
     /**
      * Live readings for whatever the recipe reads *now* — a switch that shows a battery line subscribes to the battery
      * the moment it is turned on, through the same cadence HOME uses. While the Add sheet is open it reads what every
-     * block on offer reads too, so a battery block previewed on a clock shows the battery rather than nothing.
+     * block on offer reads too, so a battery block previewed on a clock shows the battery rather than nothing — and
+     * likewise every formula example while those are open.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val data = combine(recipe.filterNotNull(), picking) { recipe, picking ->
-        WidgetCadence.of(if (picking) recipe.copy(layers = recipe.layers + BuiltInBlocks.all.map { it.layer }) else recipe)
+    private val data = combine(recipe.filterNotNull(), picking, browsing) { recipe, picking, browsing ->
+        val previewed = (if (picking) BuiltInBlocks.all.map { it.layer } else emptyList()) +
+            (if (browsing) ExampleLayers else emptyList())
+        WidgetCadence.of(recipe.copy(layers = recipe.layers + previewed))
     }
         .distinctUntilChanged()
         .flatMapLatest(widgetData::data)
@@ -157,9 +172,18 @@ class WidgetStudioViewModel(
             focus,
             initial,
             undo,
-            picking,
-        ) { (recipe, data, missing), focus, initial, undo, picking ->
-            WidgetStudioState(recipe, data, missing, focus, initial, undo?.name, BuiltInBlocks.all.takeIf { picking })
+            combine(picking, browsing, ::Pair),
+        ) { (recipe, data, missing), focus, initial, undo, (picking, browsing) ->
+            WidgetStudioState(
+                recipe,
+                data,
+                missing,
+                focus,
+                initial,
+                undo?.name,
+                BuiltInBlocks.all.takeIf { picking },
+                browsing,
+            )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(StopTimeoutMs), WidgetStudioState())
 
     /**
@@ -263,6 +287,11 @@ class WidgetStudioViewModel(
         remove(name, listOf(part))
     }
 
+    /** Opens or closes the formula examples. */
+    fun showExamples(open: Boolean) {
+        browsing.value = open
+    }
+
     /** Opens or closes the sheet of blocks to add. */
     fun showLibrary(open: Boolean) {
         picking.value = open
@@ -353,6 +382,9 @@ class WidgetStudioViewModel(
     )
 
     private companion object {
+        /** Every example as a layer, for the cadence to read while they are open — nothing draws these. */
+        val ExampleLayers = ScriptExamples.all.map { WidgetLayerSpec(WidgetSource.Text(it.formula)) }
+
         const val SaveDebounceMs = 250L
         const val StopTimeoutMs = 5_000L
         const val NewImageDp = 96f

@@ -105,7 +105,13 @@ private fun LayerEditor(state: WidgetStudioState, viewModel: WidgetStudioViewMod
                     onChange = { viewModel.set(field, it) },
                 )
 
-                is LayerField.Formula -> FormulaControl(field.label, field.source, state.data) { viewModel.set(field, it) }
+                is LayerField.Formula -> FormulaControl(
+                    label = field.label,
+                    source = field.source,
+                    data = state.formulaData,
+                    browsing = state.browsing,
+                    onBrowse = viewModel::showExamples,
+                ) { viewModel.set(field, it) }
                 is LayerField.Bound -> BoundRow(field.label, field.setting) { viewModel.unbind(field) }
             }
         }
@@ -136,13 +142,27 @@ private fun LayerEditor(state: WidgetStudioState, viewModel: WidgetStudioViewMod
 
 /**
  * A formula typed as text, with what it shows right now under it — or what is wrong with it. The live result is how a
- * formula gets written without a manual: type, and watch what it says.
+ * formula gets written without a manual: type, and watch what it says. **Examples** opens the worked examples, and
+ * picking one puts it where the cursor is.
+ *
+ * @param data the readings a formula here would read, the open layer's settings included.
+ * @param browsing whether the examples are open — the ViewModel's, since they widen what the preview reads.
  */
+@Suppress("LongParameterList") // A field, what it is evaluated against, and the examples beside it.
 @Composable
-private fun FormulaControl(label: String, source: String, data: ScriptData?, onChange: (String) -> Unit) {
+private fun FormulaControl(
+    label: String,
+    source: String,
+    data: ScriptData?,
+    browsing: Boolean,
+    onBrowse: (Boolean) -> Unit,
+    onChange: (String) -> Unit,
+) {
     val colors = LocalMorphicColors.current
     val field = rememberTextFieldState(source)
     var typed by remember { mutableStateOf(source) }
+    // Whether *this* field opened the examples, so a pick lands in the field it was asked from.
+    var asked by remember { mutableStateOf(false) }
     LaunchedEffect(field) {
         snapshotFlow { field.text.toString() }.drop(1).collect {
             typed = it
@@ -150,7 +170,19 @@ private fun FormulaControl(label: String, source: String, data: ScriptData?, onC
         }
     }
     val result = remember(typed, data) { data?.let { WidgetExpression.parse(typed).evaluate(it) } }
-    Labeled(label) {
+    Column(modifier = Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = colors.content,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = {
+                asked = true
+                onBrowse(true)
+            }) { Text("Examples") }
+        }
         MorphicTextField(state = field, modifier = Modifier.fillMaxWidth())
         result?.let {
             val problem = it.problems.firstOrNull()
@@ -160,6 +192,21 @@ private fun FormulaControl(label: String, source: String, data: ScriptData?, onC
                 color = if (problem != null) colors.error else colors.contentMuted,
             )
         }
+    }
+    if (browsing && asked) {
+        ExampleSheet(
+            data = data,
+            onPick = { example ->
+                // Replaces the selection, or goes in at the cursor when nothing is selected.
+                field.edit { replace(selection.min, selection.max, example.formula) }
+                asked = false
+                onBrowse(false)
+            },
+            onDismiss = {
+                asked = false
+                onBrowse(false)
+            },
+        )
     }
 }
 

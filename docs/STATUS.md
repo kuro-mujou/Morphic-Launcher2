@@ -2222,6 +2222,8 @@ surface.** "Widget" alone means the launcher's own; hosting *another app's* is `
   live result, and a property bound to a setting shows as bound with Unbind.
 - WS8b: `WidgetSource.Stack`, a group that lays its layers end to end; and pictures, imported through the photo picker
   into `WidgetImageStore` (widget-sized, aspect kept) and swept when the studio closes if no widget uses them.
+- WS9: **Examples** beside every formula field — `ScriptExamples`, each shown with its live result and inserted at the
+  cursor; the editor evaluates formulas with the layer's settings in scope, through the renderer's own `withGlobals`.
 
 `feature:shell` gained a detekt baseline with one entry:
 `LauncherShell` reached 100 lines with the Style route's callback, and wants splitting. **Compose UI tests need espresso ≥ 3.6 on this emulator**

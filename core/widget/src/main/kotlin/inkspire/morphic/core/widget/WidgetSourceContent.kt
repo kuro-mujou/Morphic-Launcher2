@@ -27,6 +27,7 @@ import inkspire.morphic.core.model.widget.WidgetGlobals
 import inkspire.morphic.core.model.widget.WidgetSource
 import inkspire.morphic.core.widgetscript.ScriptData
 import inkspire.morphic.core.widgetscript.WidgetExpression
+import inkspire.morphic.core.widgetscript.withGlobals
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -49,7 +50,7 @@ internal fun WidgetSourceContent(source: WidgetSource, data: ScriptData, globals
 @Composable
 private fun WidgetGroup(source: WidgetSource.Overlap, data: ScriptData, globals: WidgetGlobals) {
     val inner = remember(source.globals, globals) { globals.inside(source) }
-    val scoped = remember(data, inner) { if (inner === globals) data else GlobalScopedData(data, inner.asScriptValues()) }
+    val scoped = remember(data, inner) { if (inner === globals) data else data.withGlobals(inner.asScriptValues()) }
     WidgetOverlap(source.layers, scoped, inner)
 }
 
