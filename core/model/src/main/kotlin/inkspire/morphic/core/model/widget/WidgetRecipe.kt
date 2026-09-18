@@ -24,10 +24,20 @@ data class WidgetRecipe(
 )
 
 /**
- * Every imported picture this recipe draws or holds — hidden layers included, since hiding is not removing. What a
- * sweep of stored pictures keeps.
+ * Every imported picture this recipe draws or holds — hidden layers included, since hiding is not removing, and a
+ * shape's own picture even while a setting overrides it, since unbinding brings it back. What a sweep of stored
+ * pictures keeps, so a place a picture can live that is missing here is a picture deleted from under its widget.
  */
-val WidgetRecipe.imagePaths: Set<String> get() = layers.flatMapTo(mutableSetOf()) { it.imagePaths() }
+val WidgetRecipe.imagePaths: Set<String>
+    get() = (globals.picturePaths() + layers.flatMap { it.imagePaths() }).toSet()
 
-private fun WidgetLayerSpec.imagePaths(): List<String> =
-    listOfNotNull((source as? WidgetSource.Image)?.path) + source.children.orEmpty().flatMap { it.imagePaths() }
+private fun WidgetLayerSpec.imagePaths(): List<String> = when (val source = source) {
+    is WidgetSource.Image -> listOf(source.path)
+    is WidgetSource.Shape -> listOfNotNull(source.picture?.path)
+    is WidgetSource.Overlap -> source.globals.picturePaths() + source.layers.flatMap { it.imagePaths() }
+    is WidgetSource.Stack -> source.layers.flatMap { it.imagePaths() }
+    is WidgetSource.Text, is WidgetSource.Progress -> emptyList()
+}
+
+private fun List<WidgetGlobal>.picturePaths(): List<String> =
+    mapNotNull { (it as? WidgetGlobal.Picture)?.value?.path }

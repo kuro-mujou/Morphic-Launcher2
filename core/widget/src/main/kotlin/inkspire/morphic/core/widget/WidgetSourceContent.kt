@@ -12,9 +12,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.paint
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -86,7 +89,12 @@ private fun WidgetText(source: WidgetSource.Text, data: ScriptData, globals: Wid
     )
 }
 
-/** Fills exactly the layer's box — a shape has no size of its own, so with a content extent it draws nothing. */
+/**
+ * Fills exactly the layer's box — a shape has no size of its own, so with a content extent it draws nothing.
+ *
+ * With a picture, the picture fills the shape cropped and the color is washed over it at the picture's tint. Until the
+ * picture has decoded, and if its file is gone, the shape draws as it would without one.
+ */
 @Composable
 private fun WidgetShape(source: WidgetSource.Shape, globals: WidgetGlobals) {
     val shape = when (source.kind) {
@@ -94,22 +102,30 @@ private fun WidgetShape(source: WidgetSource.Shape, globals: WidgetGlobals) {
             RoundedCornerShape(globals.number(source.cornerRadiusGlobal, source.cornerRadius).coerceAtLeast(0f).dp)
         WidgetSource.Shape.Kind.OVAL -> CircleShape
     }
-    Spacer(Modifier.background(Color(globals.color(source.colorGlobal, source.color)), shape))
+    val color = Color(globals.color(source.colorGlobal, source.color))
+    val picture = globals.picture(source.pictureGlobal, source.picture)
+    val bitmap = rememberPicture(picture?.path)
+    val painter = remember(bitmap) { bitmap?.let(::BitmapPainter) }
+    Spacer(
+        if (picture == null || painter == null) {
+            Modifier.background(color, shape)
+        } else {
+            // `paint` draws the picture before its content, so the wash after it in the chain lands on top.
+            Modifier
+                .clip(shape)
+                .paint(painter, sizeToIntrinsics = false, contentScale = ContentScale.Crop)
+                .background(color.copy(alpha = picture.tint.coerceIn(0f, 1f)))
+        },
+    )
 }
 
 /**
  * The picture at the source's path, decoded off the main thread; nothing is drawn until it arrives, or at all if the
  * file is missing.
- *
- * Decoded at full resolution. That is only safe because whatever imports a picture is expected to store a copy sized
- * for a widget — an import that keeps the camera's original would cost its whole size in memory on every render.
  */
 @Composable
 private fun WidgetImage(source: WidgetSource.Image) {
-    val bitmap by produceState<ImageBitmap?>(null, source.path) {
-        value = withContext(Dispatchers.IO) { BitmapFactory.decodeFile(source.path)?.asImageBitmap() }
-    }
-    bitmap?.let {
+    rememberPicture(source.path)?.let {
         Image(
             bitmap = it,
             contentDescription = null,
@@ -119,4 +135,19 @@ private fun WidgetImage(source: WidgetSource.Image) {
             },
         )
     }
+}
+
+/**
+ * The stored picture at [path], decoded off the main thread — null while it decodes, when the file is missing, and
+ * for no path.
+ *
+ * Decoded at full resolution. That is only safe because `WidgetImageStore` keeps a copy sized for a widget — a picture
+ * stored as the camera took it would cost its whole size in memory on every render.
+ */
+@Composable
+private fun rememberPicture(path: String?): ImageBitmap? {
+    val bitmap by produceState<ImageBitmap?>(null, path) {
+        value = path?.let { withContext(Dispatchers.IO) { BitmapFactory.decodeFile(it)?.asImageBitmap() } }
+    }
+    return bitmap
 }

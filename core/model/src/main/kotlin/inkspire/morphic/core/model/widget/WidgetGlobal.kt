@@ -55,4 +55,10 @@ sealed interface WidgetGlobal {
     @Serializable
     @SerialName("text")
     data class Text(override val name: String, override val label: String, val value: String) : WidgetGlobal
+
+    /** A picture, or none — a design offers "no picture" as a value, so [value] null is a choice, not a gap. */
+    @Serializable
+    @SerialName("picture")
+    data class Picture(override val name: String, override val label: String, val value: WidgetPicture? = null) :
+        WidgetGlobal
 }

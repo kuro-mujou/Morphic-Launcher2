@@ -120,15 +120,22 @@ internal object TemplateParts {
 
     fun h24() = WidgetGlobal.Switch("h24", "24-hour", true)
 
-    /** The card every design sits on, and the two settings each offers for it. */
+    /** The card every design sits on, and the settings each offers for it. */
     fun panelGlobals() = listOf(
         WidgetGlobal.Color("panel", "Background", Panel),
+        WidgetGlobal.Picture("picture", "Background picture"),
         WidgetGlobal.Number("round", "Corner roundness", value = 28f, min = 0f, max = 48f),
     )
 
-    /** A dark translucent card under the text, so white reads over any wallpaper. */
+    /** A dark translucent card under the text, so white reads over any wallpaper — or over a picture put on it. */
     fun panel() = WidgetLayerSpec(
-        WidgetSource.Shape(color = Panel, cornerRadius = 28f, colorGlobal = "panel", cornerRadiusGlobal = "round"),
+        WidgetSource.Shape(
+            color = Panel,
+            cornerRadius = 28f,
+            colorGlobal = "panel",
+            cornerRadiusGlobal = "round",
+            pictureGlobal = "picture",
+        ),
         width = WidgetExtent.Fill,
         height = WidgetExtent.Fill,
     )

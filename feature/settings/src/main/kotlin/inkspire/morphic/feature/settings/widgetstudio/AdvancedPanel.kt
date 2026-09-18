@@ -113,6 +113,7 @@ private fun LayerEditor(
                     initial = null,
                     expanded = expanded == field.key,
                     onExpand = { expanded = if (expanded == field.key) null else field.key },
+                    importPicture = viewModel::importPicture,
                     onChange = { viewModel.set(field, it) },
                 )
 

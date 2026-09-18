@@ -183,4 +183,36 @@ class WidgetRecipeTest {
         )
         assertEquals(setOf("a.png", "b.png"), recipe.imagePaths)
     }
+
+    @Test
+    fun `a background picture is found in a shape, the recipe's settings and a block's`() {
+        val recipe = WidgetRecipe(
+            layers = listOf(
+                WidgetLayerSpec(WidgetSource.Shape(picture = WidgetPicture("shape.png"), pictureGlobal = "picture")),
+                WidgetLayerSpec(
+                    WidgetSource.Overlap(
+                        globals = listOf(WidgetGlobal.Picture("photo", "Photo", WidgetPicture("block.png"))),
+                    ),
+                ),
+            ),
+            globals = listOf(
+                WidgetGlobal.Picture("picture", "Background picture", WidgetPicture("global.png")),
+                WidgetGlobal.Picture("none", "Unset"),
+            ),
+        )
+        assertEquals(setOf("shape.png", "block.png", "global.png"), recipe.imagePaths)
+    }
+
+    @Test
+    fun `the stored form of a shape's picture is pinned`() {
+        val json = Json { encodeDefaults = false }
+        val stored = json.encodeToString(
+            WidgetGlobal.serializer(),
+            WidgetGlobal.Picture("picture", "Background picture", WidgetPicture("p.png", tint = 0.5f)),
+        )
+        assertEquals(
+            """{"type":"picture","name":"picture","label":"Background picture","value":{"path":"p.png","tint":0.5}}""",
+            stored,
+        )
+    }
 }

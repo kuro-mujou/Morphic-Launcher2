@@ -1,5 +1,6 @@
 package inkspire.morphic.feature.settings.widgetstudio
 
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -212,6 +213,7 @@ private fun StyleSheet(
             StylePanel(
                 globals = state.globals,
                 initial = state.initial[state.selected].orEmpty(),
+                importPicture = viewModel::importPicture,
                 onChange = viewModel::set,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -358,6 +360,7 @@ private fun PartPicker(parts: List<StylePart>, selected: Int?, onSelect: (Int?) 
 private fun StylePanel(
     globals: List<WidgetGlobal>,
     initial: Map<String, WidgetGlobal>,
+    importPicture: (Uri, (String) -> Unit) -> Unit,
     onChange: (WidgetGlobal) -> Unit,
     modifier: Modifier = Modifier,
     footer: @Composable () -> Unit,
@@ -383,6 +386,7 @@ private fun StylePanel(
                 initial = initial[global.name],
                 expanded = expanded == global.name,
                 onExpand = { expanded = if (expanded == global.name) null else global.name },
+                importPicture = importPicture,
                 onChange = onChange,
             )
         }

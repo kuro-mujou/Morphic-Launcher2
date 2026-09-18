@@ -59,7 +59,9 @@ private fun List<WidgetGlobal>.flipped(name: String): List<WidgetGlobal> = map {
         is WidgetGlobal.Switch -> global.copy(value = !global.value)
         is WidgetGlobal.Choice ->
             if (global.options.isEmpty()) global else global.copy(selected = (global.selected + 1) % global.options.size)
-        is WidgetGlobal.Color, is WidgetGlobal.Number, is WidgetGlobal.Font, is WidgetGlobal.Text -> global
+        is WidgetGlobal.Color, is WidgetGlobal.Number, is WidgetGlobal.Font, is WidgetGlobal.Text,
+        is WidgetGlobal.Picture,
+        -> global
     }
 }
 

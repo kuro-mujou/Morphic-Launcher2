@@ -28,6 +28,15 @@ class WidgetGlobals(globals: List<WidgetGlobal>, private val outer: WidgetGlobal
     fun font(name: String?, fallback: WidgetSource.Text.Font): WidgetSource.Text.Font =
         (get(name) as? WidgetGlobal.Font)?.value ?: fallback
 
+    /**
+     * The picture a [WidgetGlobal.Picture] named [name] holds — **including none**, which is that global's answer and
+     * not a reason to fall back to [fallback]: a design whose person removed its picture must draw without one.
+     */
+    fun picture(name: String?, fallback: WidgetPicture?): WidgetPicture? = when (val global = get(name)) {
+        is WidgetGlobal.Picture -> global.value
+        else -> fallback
+    }
+
     /** Every setting in scope, the nearest of each name — what someone choosing one of them is offered. */
     val all: List<WidgetGlobal>
         get() = outer?.all.orEmpty().filter { it.name !in byName } + byName.values
@@ -48,6 +57,8 @@ class WidgetGlobals(globals: List<WidgetGlobal>, private val outer: WidgetGlobal
             is WidgetGlobal.Choice -> global.options.getOrElse(global.selected) { "" }
             is WidgetGlobal.Font -> global.value.name.lowercase()
             is WidgetGlobal.Text -> global.value
+            // Whether there is one — the path is storage, and nothing a formula could show means anything.
+            is WidgetGlobal.Picture -> if (global.value != null) "1" else "0"
         }
     }
 }

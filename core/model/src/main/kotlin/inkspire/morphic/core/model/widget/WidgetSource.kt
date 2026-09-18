@@ -54,11 +54,17 @@ sealed interface WidgetSource {
     }
 
     /**
-     * A filled shape, stretched to the layer's box.
+     * A filled shape, stretched to the layer's box — and, with a [picture], a picture cropped to that shape. A
+     * widget's background card is one, which is why a picture is a fill here rather than a layer of its own: the
+     * card's corners, and the setting that rounds them, clip it for free.
+     *
+     * With a picture, [color] is drawn **over** it at the picture's tint rather than at its own alpha, so the one
+     * "Background" color stays meaningful either way: a card color without a picture, a wash over one with.
      *
      * @property cornerRadius in dp, for [Kind.RECTANGLE]; an [Kind.OVAL] has no corners.
      * @property colorGlobal a [WidgetGlobal.Color] that decides [color] instead, when it names one.
      * @property cornerRadiusGlobal a [WidgetGlobal.Number] that decides [cornerRadius] instead.
+     * @property pictureGlobal a [WidgetGlobal.Picture] that decides [picture] instead — its having none included.
      */
     @Serializable
     @SerialName("shape")
@@ -68,6 +74,8 @@ sealed interface WidgetSource {
         val cornerRadius: Float = 0f,
         val colorGlobal: String? = null,
         val cornerRadiusGlobal: String? = null,
+        val picture: WidgetPicture? = null,
+        val pictureGlobal: String? = null,
     ) : WidgetSource {
 
         @Serializable
@@ -164,6 +172,21 @@ sealed interface WidgetSource {
         /** Where a layer sits across the axis: its top or left edge, the middle, or its bottom or right edge. */
         @Serializable
         enum class Align { START, CENTER, END }
+    }
+}
+
+/**
+ * An imported picture filling a [WidgetSource.Shape], with the share of the shape's color washed over it.
+ *
+ * @property path the stored copy, as `WidgetImageStore` wrote it.
+ * @property tint 0–1: how much of the shape's color covers the picture — what keeps white text readable over a bright
+ *   photo. The color's own alpha is not used, since the picker that sets it always hands back an opaque one.
+ */
+@Serializable
+data class WidgetPicture(val path: String, val tint: Float = DefaultTint) {
+    companion object {
+        /** Enough to read white text over most photos while still showing them. */
+        const val DefaultTint = 0.35f
     }
 }
 

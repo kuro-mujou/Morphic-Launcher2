@@ -137,4 +137,14 @@ class WidgetGlobalsTest {
         assertEquals(globals.all.size, inner.size)
         assertEquals(5, (inner.single { it.name == "text" } as WidgetGlobal.Color).value)
     }
+
+    @Test
+    fun `a picture setting holding none draws none, rather than the shape's own`() {
+        val own = WidgetPicture("own.png")
+        val removed = WidgetGlobals(listOf(WidgetGlobal.Picture("picture", "Background picture")))
+        assertEquals(null, removed.picture("picture", fallback = own))
+        assertEquals(own, removed.picture(null, fallback = own))
+        assertEquals(own, globals.picture("text", fallback = own))
+        assertEquals("0", removed.asScriptValues()["picture"])
+    }
 }

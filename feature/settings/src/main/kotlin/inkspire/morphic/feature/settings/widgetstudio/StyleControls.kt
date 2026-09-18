@@ -1,5 +1,9 @@
 package inkspire.morphic.feature.settings.widgetstudio
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,12 +21,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.component.button.MorphicButton
+import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
 import inkspire.morphic.core.designsystem.component.color.MorphicColorPicker
 import inkspire.morphic.core.designsystem.component.field.MorphicTextField
@@ -30,6 +37,7 @@ import inkspire.morphic.core.designsystem.component.slider.MorphicSliderRow
 import inkspire.morphic.core.designsystem.component.toggle.MorphicSwitchRow
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.widget.WidgetGlobal
+import inkspire.morphic.core.model.widget.WidgetPicture
 import inkspire.morphic.core.model.widget.WidgetSource
 import kotlinx.coroutines.flow.drop
 
@@ -39,13 +47,17 @@ import kotlinx.coroutines.flow.drop
  * @param initial the value when the screen opened, which a slider's reset returns to: a design's own default is not
  *   stored, and "how it was before I started" is the undo a person reaches for here.
  * @param expanded whether a color's picker is open; one at a time, so the list stays a list.
+ * @param importPicture stores a picked picture and hands back its path — the ViewModel's, so an import outlives the
+ *   control that started it.
  */
+@Suppress("LongParameterList") // A value, its baseline, its open state, and where edits and pictures go.
 @Composable
 internal fun StyleControl(
     global: WidgetGlobal,
     initial: WidgetGlobal?,
     expanded: Boolean,
     onExpand: () -> Unit,
+    importPicture: (Uri, (String) -> Unit) -> Unit,
     onChange: (WidgetGlobal) -> Unit,
 ) {
     when (global) {
@@ -84,8 +96,61 @@ internal fun StyleControl(
         }
 
         is WidgetGlobal.Text -> TextControl(global, onChange)
+        is WidgetGlobal.Picture -> PictureControl(global, initial, importPicture, onChange)
     }
 }
+
+/**
+ * A picture from the system photo picker — chosen, changed or removed — and, once there is one, how much of the
+ * background color washes over it. The tint is absent without a picture, since it would have nothing to tint.
+ */
+@Composable
+private fun PictureControl(
+    global: WidgetGlobal.Picture,
+    initial: WidgetGlobal?,
+    importPicture: (Uri, (String) -> Unit) -> Unit,
+    onChange: (WidgetGlobal) -> Unit,
+) {
+    val picture = global.value
+    // No storage permission: the photo picker hands over only the picture chosen.
+    val request = remember { PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly) }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) {
+            importPicture(uri) { path ->
+                onChange(global.copy(value = WidgetPicture(path, picture?.tint ?: WidgetPicture.DefaultTint)))
+            }
+        }
+    }
+    Labeled(global.label) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MorphicButton(onClick = { picker.launch(request) }, style = MorphicButtonStyle.Tonal) {
+                Text(if (picture == null) "Choose" else "Change")
+            }
+            if (picture != null) {
+                MorphicButton(onClick = { onChange(global.copy(value = null)) }, style = MorphicButtonStyle.Tonal) {
+                    Text("Remove")
+                }
+            }
+        }
+    }
+    if (picture != null) {
+        MorphicSliderRow(
+            value = picture.tint * Percent,
+            valueRange = 0f..MaxTintPercent,
+            default = ((initial as? WidgetGlobal.Picture)?.value?.tint ?: WidgetPicture.DefaultTint) * Percent,
+            what = "Tint",
+            label = "Tint",
+            valueLabel = { "%.0f%%".format(it) },
+            onPreview = { onChange(global.copy(value = picture.copy(tint = it / Percent))) },
+            onCommit = { onChange(global.copy(value = picture.copy(tint = it / Percent))) },
+        )
+    }
+}
+
+private const val Percent = 100f
+
+/** Past this the wash hides the picture it is meant to sit on. */
+private const val MaxTintPercent = 90f
 
 /** A swatch that opens the full picker beneath it. */
 @Composable

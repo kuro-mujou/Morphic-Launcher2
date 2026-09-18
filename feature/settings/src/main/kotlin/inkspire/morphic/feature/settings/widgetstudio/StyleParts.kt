@@ -84,7 +84,7 @@ internal fun WidgetRecipe.withoutUnusedGlobals(): WidgetRecipe {
 /** Every global name this layer and everything inside it binds a property to. */
 private fun WidgetLayerSpec.readNames(): List<String> = listOfNotNull(visibleGlobal) + when (val source = source) {
     is WidgetSource.Text -> listOfNotNull(source.colorGlobal, source.sizeGlobal, source.fontGlobal)
-    is WidgetSource.Shape -> listOfNotNull(source.colorGlobal, source.cornerRadiusGlobal)
+    is WidgetSource.Shape -> listOfNotNull(source.colorGlobal, source.cornerRadiusGlobal, source.pictureGlobal)
     is WidgetSource.Progress -> listOfNotNull(source.colorGlobal, source.trackColorGlobal)
     is WidgetSource.Overlap -> source.layers.flatMap { it.readNames() }
     is WidgetSource.Stack -> source.layers.flatMap { it.readNames() }

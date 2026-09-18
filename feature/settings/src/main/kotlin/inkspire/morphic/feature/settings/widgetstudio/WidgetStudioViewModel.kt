@@ -279,6 +279,14 @@ class WidgetStudioViewModel(
         }
     }
 
+    /**
+     * Imports the picture at [uri] and hands its stored path to [then] — for a picture setting, which decides where it
+     * goes. On the ViewModel's scope, so leaving the control mid-import does not lose the picture.
+     */
+    fun importPicture(uri: Uri, then: (String) -> Unit) {
+        viewModelScope.launch { images.import(uri)?.let(then) }
+    }
+
     /** Removes the layer open in Advanced, undoably like a block; the group it was in is opened. */
     fun removeLayer() {
         val path = focus.value.path

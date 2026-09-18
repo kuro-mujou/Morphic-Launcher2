@@ -184,6 +184,17 @@ private fun shapeFields(source: WidgetSource.Shape, scope: WidgetGlobals): List<
             l.edit<WidgetSource.Shape> { it.copy(cornerRadius = v) }
         }
     },
+    boundOr(
+        scope,
+        source.pictureGlobal,
+        "picture",
+        "Picture",
+        { l -> l.edit<WidgetSource.Shape> { it.copy(pictureGlobal = null) } },
+    ) {
+        LayerField.Setting("picture", WidgetGlobal.Picture("picture", "Picture", source.picture)) { l, g ->
+            l.edit<WidgetSource.Shape> { it.copy(picture = (g as WidgetGlobal.Picture).value) }
+        }
+    },
 )
 
 private fun progressFields(source: WidgetSource.Progress, scope: WidgetGlobals): List<LayerField> = listOf(
