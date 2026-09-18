@@ -134,7 +134,7 @@ object BuiltInWidgetTemplates {
                     height = WidgetExtent.Fill,
                 ),
                 WidgetLayerSpec(
-                    WidgetSource.Text(Time, size = 40f, weight = 300, colorGlobal = "text", fontGlobal = "font"),
+                    WidgetSource.Text(Time, size = 34f, weight = 300, colorGlobal = "text", fontGlobal = "font"),
                     offsetY = -6f,
                 ),
                 WidgetLayerSpec(
@@ -195,7 +195,7 @@ object BuiltInWidgetTemplates {
                     offsetY = 16f,
                 ),
                 WidgetLayerSpec(
-                    WidgetSource.Text("\$df(d)\$", size = 54f, weight = 300, colorGlobal = "text", fontGlobal = "font"),
+                    WidgetSource.Text("\$df(d)\$", size = 48f, weight = 300, colorGlobal = "text", fontGlobal = "font"),
                     offsetY = 2f,
                 ),
                 WidgetLayerSpec(
@@ -302,9 +302,9 @@ object BuiltInWidgetTemplates {
             layers = listOf(
                 panel(),
                 WidgetLayerSpec(
-                    batteryDial(ring = 7f, textSize = 18f),
+                    batteryDial(ring = 6f, textSize = 15f),
                     offsetY = -10f,
-                    width = WidgetExtent.Fraction(value = 0.74f),
+                    width = WidgetExtent.Fraction(value = 0.8f),
                     height = WidgetExtent.Dp(value = 76f),
                 ),
                 WidgetLayerSpec(

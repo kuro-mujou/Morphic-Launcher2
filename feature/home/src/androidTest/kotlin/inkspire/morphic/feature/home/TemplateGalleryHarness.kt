@@ -35,8 +35,8 @@ import java.time.ZoneId
 import java.util.Locale
 
 /**
- * Draws every template in the library at the size HOME gives its span, and saves each as a PNG — the library is a
- * design job, and whether a design works is judged by looking at it.
+ * Draws every template in the library as HOME does — its span's cells, less `WidgetCellInset` — and saves each as a
+ * PNG: the library is a design job, and whether a design works is judged by looking at it.
  *
  * **A viewer, not an assertion.** Each template is drawn at two cell sizes (the default phone grid's, and a denser
  * one) to show it re-lays, and over a light and a dark backdrop, since a design has to read over whatever wallpaper
@@ -85,7 +85,9 @@ class TemplateGalleryHarness {
                 WidgetRender(
                     frame.template.recipe,
                     data,
-                    Modifier.size(frame.cell.width * span.cols, frame.cell.height * span.rows),
+                    Modifier
+                        .size(frame.cell.width * span.cols, frame.cell.height * span.rows)
+                        .then(WidgetCellInset),
                 )
             }
         }
