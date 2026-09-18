@@ -51,6 +51,58 @@ internal fun WidgetRecipe.without(part: Int): WidgetRecipe =
     if (part in layers.indices) copy(layers = layers.filterIndexed { index, _ -> index != part }) else this
 
 /**
+ * [part] moved one step up (+1) or down (-1) the draw order, trading places with the next **block** that way — never
+ * with the background, which would hide the block behind it — or null when no block lies that way.
+ *
+ * @return the recipe and the index the part now has.
+ */
+internal fun WidgetRecipe.restacked(part: Int, step: Int): Pair<WidgetRecipe, Int>? {
+    val blocks = parts().map { it.index }
+    val other = blocks.getOrNull(blocks.indexOf(part) + step)?.takeIf { part in blocks } ?: return null
+    val swapped = layers.toMutableList().apply {
+        set(part, layers[other])
+        set(other, layers[part])
+    }
+    return copy(layers = swapped) to other
+}
+
+/**
+ * This recipe without the widget-level settings nothing reads any more — what a removed block leaves behind when the
+ * design gave it a switch at the widget's level ("Show date" with no date). A control that changes nothing does not
+ * stay on the Style tab.
+ *
+ * Conservative on purpose: a setting counts as read when any binding anywhere names it, or any formula mentions it in
+ * a `gv` call, even inside a block whose own setting of that name would shadow it. Keeping one too many costs a row;
+ * dropping one still in use breaks the widget.
+ */
+internal fun WidgetRecipe.withoutUnusedGlobals(): WidgetRecipe {
+    val read = layers.flatMap { it.readNames() }.toSet()
+    val formulas = layers.flatMap { it.formulas() }
+    fun mentioned(name: String): Boolean {
+        val call = Regex("""gv\(\s*"?${Regex.escape(name)}"?\s*\)""")
+        return formulas.any(call::containsMatchIn)
+    }
+    return copy(globals = globals.filter { it.name in read || mentioned(it.name) })
+}
+
+/** Every global name this layer and everything inside it binds a property to. */
+private fun WidgetLayerSpec.readNames(): List<String> = listOfNotNull(visibleGlobal) + when (val source = source) {
+    is WidgetSource.Text -> listOfNotNull(source.colorGlobal, source.sizeGlobal, source.fontGlobal)
+    is WidgetSource.Shape -> listOfNotNull(source.colorGlobal, source.cornerRadiusGlobal)
+    is WidgetSource.Progress -> listOfNotNull(source.colorGlobal, source.trackColorGlobal)
+    is WidgetSource.Overlap -> source.layers.flatMap { it.readNames() }
+    is WidgetSource.Image -> emptyList()
+}
+
+/** Every formula this layer and everything inside it evaluates. */
+private fun WidgetLayerSpec.formulas(): List<String> = when (val source = source) {
+    is WidgetSource.Text -> listOf(source.text)
+    is WidgetSource.Progress -> listOf(source.value)
+    is WidgetSource.Overlap -> source.layers.flatMap { it.formulas() }
+    is WidgetSource.Shape, is WidgetSource.Image -> emptyList()
+}
+
+/**
  * These per-part values after [part]'s layer is removed: its own entry gone, and every later part's moved down one
  * index with its layer — without which a later block's reset would return it to its neighbor's values.
  */

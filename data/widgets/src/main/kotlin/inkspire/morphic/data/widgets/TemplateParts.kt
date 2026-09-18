@@ -45,6 +45,29 @@ internal object TemplateParts {
     fun wholeBlock(name: String, globals: List<WidgetGlobal>, layers: List<WidgetLayerSpec>) =
         block(name, globals, layers, width = WidgetExtent.Fill, height = WidgetExtent.Fill)
 
+    /**
+     * One line of text inside a block, in the block's font, placed around the block's center — or against the side
+     * [anchor] names, which is how a block's lines share a left or right edge.
+     *
+     * @param color the global it takes its color from, or null for the muted second color every design uses.
+     */
+    @Suppress("LongParameterList") // A text's look and its place, which every line states.
+    fun line(
+        text: String,
+        size: Float,
+        weight: Int = 400,
+        color: String? = null,
+        anchor: WidgetAnchor = WidgetAnchor.CENTER,
+        x: Float = 0f,
+        y: Float = 0f,
+    ) = WidgetLayerSpec(
+        WidgetSource.Text(text, size = size, weight = weight, color = Muted, colorGlobal = color, fontGlobal = "font"),
+        anchor = anchor,
+        offsetX = x,
+        offsetY = y,
+    )
+
+
     /** A battery ring with its percentage inside, as a group so the two stay together wherever it is placed. */
     fun batteryDial(ring: Float, textSize: Float) = WidgetSource.Overlap(
         listOf(

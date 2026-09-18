@@ -24,6 +24,7 @@ import inkspire.morphic.core.widget.WidgetRender
 import inkspire.morphic.core.widgetscript.BatteryReading
 import inkspire.morphic.core.widgetscript.ScriptData
 import inkspire.morphic.core.widgetscript.SystemReading
+import inkspire.morphic.data.widgets.BuiltInBlocks
 import inkspire.morphic.data.widgets.BuiltInWidgetTemplates
 import inkspire.morphic.data.widgets.WidgetTemplate
 import org.junit.Rule
@@ -42,7 +43,8 @@ import java.util.Locale
  * one) to show it re-lays, and over a light and a dark backdrop, since a design has to read over whatever wallpaper
  * it lands on.
  *
- * Files go to this test app's own `files/templategallery`, which a fresh run overwrites. Run it with `am instrument`
+ * Files go to this test app's own `files/templategallery` — and each library block, on a widget's background, to
+ * `files/blockgallery` — which a fresh run overwrites. Run it with `am instrument`
  * rather than the Gradle task, which uninstalls the test app and the renders with it:
  *
  * ```
@@ -103,6 +105,38 @@ class TemplateGalleryHarness {
                     }
                 }
             }
+        }
+    }
+
+    @Test
+    fun renderBlocks() {
+        val out = File(context.filesDir, "blockgallery").apply { deleteRecursively(); mkdirs() }
+        // Each block as it lands when added: centered on a 4 × 2 widget's background, at the phone's cell.
+        val background = BuiltInWidgetTemplates.all.first().recipe.let { recipe ->
+            recipe.copy(layers = recipe.layers.filter { it.name == null })
+        }
+        var current by mutableStateOf(BuiltInBlocks.all.first())
+        compose.setContent {
+            Box(
+                Modifier
+                    .background(Dark)
+                    .padding(16.dp)
+                    .testTag("frame"),
+            ) {
+                WidgetRender(
+                    background.copy(layers = background.layers + current.layer),
+                    data,
+                    Modifier
+                        .size(PhoneCell.width * 4, PhoneCell.height * 2)
+                        .then(WidgetCellInset),
+                )
+            }
+        }
+        BuiltInBlocks.all.forEach { block ->
+            current = block
+            compose.waitForIdle()
+            val bitmap = compose.onNodeWithTag("frame").captureToImage().asAndroidBitmap()
+            File(out, "${block.id}.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
     }
 

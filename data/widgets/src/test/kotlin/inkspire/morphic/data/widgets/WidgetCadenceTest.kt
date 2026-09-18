@@ -91,4 +91,14 @@ class WidgetCadenceTest {
             assert(tick == null || tick > ClockTick.SECOND) { "${template.id} ticks $tick" }
         }
     }
+
+    @Test
+    fun `no library block wakes every second`() {
+        // The same guard for what a user adds by hand: a block ticking per second would cost battery on every widget
+        // it is added to.
+        BuiltInBlocks.all.forEach { block ->
+            val tick = WidgetCadence.of(WidgetRecipe(listOf(block.layer))).clockTick
+            assert(tick == null || tick > ClockTick.SECOND) { "${block.id} ticks $tick" }
+        }
+    }
 }

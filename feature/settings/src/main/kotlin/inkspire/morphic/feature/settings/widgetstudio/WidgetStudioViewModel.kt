@@ -11,6 +11,8 @@ import inkspire.morphic.core.widget.movedTo
 import inkspire.morphic.core.widget.scaledBy
 import inkspire.morphic.core.widgetscript.ScriptData
 import inkspire.morphic.data.layout.LayoutRepository
+import inkspire.morphic.data.widgets.BuiltInBlocks
+import inkspire.morphic.data.widgets.WidgetBlock
 import inkspire.morphic.data.widgets.WidgetCadence
 import inkspire.morphic.data.widgets.WidgetDataRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -41,6 +43,7 @@ import kotlin.time.Duration.Companion.milliseconds
  * @property initial each part's globals as they were when the screen opened, by part and then name — what a reset
  *   returns to.
  * @property removed the name of the block just removed, while that removal can still be undone.
+ * @property library the blocks on offer while the Add sheet is open, and null while it is closed.
  */
 data class WidgetStudioState(
     val recipe: WidgetRecipe? = null,
@@ -49,12 +52,19 @@ data class WidgetStudioState(
     val selected: Int? = null,
     val initial: Map<Int?, Map<String, WidgetGlobal>> = emptyMap(),
     val removed: String? = null,
+    val library: List<WidgetBlock>? = null,
 ) {
     /** The blocks there are to select. */
     val parts: List<StylePart> get() = recipe?.parts().orEmpty()
 
     /** The settings of whatever is selected — all the Style tab shows. */
     val globals: List<WidgetGlobal> get() = recipe?.globalsOf(selected).orEmpty()
+
+    /** Whether the selected block has a block above it to move past. */
+    val canRaise: Boolean get() = selected?.let { recipe?.restacked(it, +1) } != null
+
+    /** Whether the selected block has a block below it to move past. */
+    val canLower: Boolean get() = selected?.let { recipe?.restacked(it, -1) } != null
 }
 
 /**
@@ -77,6 +87,7 @@ class WidgetStudioViewModel(
     private val selected = MutableStateFlow<Int?>(null)
     private val initial = MutableStateFlow<Map<Int?, Map<String, WidgetGlobal>>>(emptyMap())
     private val undo = MutableStateFlow<Removal?>(null)
+    private val picking = MutableStateFlow(false)
     private var pendingSave: Job? = null
 
     init {
@@ -96,11 +107,13 @@ class WidgetStudioViewModel(
 
     /**
      * Live readings for whatever the recipe reads *now* — a switch that shows a battery line subscribes to the battery
-     * the moment it is turned on, through the same cadence HOME uses.
+     * the moment it is turned on, through the same cadence HOME uses. While the Add sheet is open it reads what every
+     * block on offer reads too, so a battery block previewed on a clock shows the battery rather than nothing.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    private val data = recipe.filterNotNull()
-        .map(WidgetCadence::of)
+    private val data = combine(recipe.filterNotNull(), picking) { recipe, picking ->
+        WidgetCadence.of(if (picking) recipe.copy(layers = recipe.layers + BuiltInBlocks.all.map { it.layer }) else recipe)
+    }
         .distinctUntilChanged()
         .flatMapLatest(widgetData::data)
 
@@ -112,8 +125,9 @@ class WidgetStudioViewModel(
             selected,
             initial,
             undo,
-        ) { (recipe, data, missing), selected, initial, undo ->
-            WidgetStudioState(recipe, data, missing, selected, initial, undo?.name)
+            picking,
+        ) { (recipe, data, missing), selected, initial, undo, picking ->
+            WidgetStudioState(recipe, data, missing, selected, initial, undo?.name, BuiltInBlocks.all.takeIf { picking })
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(StopTimeoutMs), WidgetStudioState())
 
     /** Styles [part] — a block by its layer index, or the widget itself for null. */
@@ -153,10 +167,39 @@ class WidgetStudioViewModel(
         val current = recipe.value ?: return
         val name = current.parts().firstOrNull { it.index == part }?.name ?: return
         val before = Removal(name, current, initial.value, part)
-        edit { it.without(part) }
+        edit { it.without(part).withoutUnusedGlobals() }
         initial.value = before.initial.afterRemoving(part)
         selected.value = null
         undo.value = before
+    }
+
+    /** Opens or closes the sheet of blocks to add. */
+    fun showLibrary(open: Boolean) {
+        picking.value = open
+    }
+
+    /**
+     * Adds [block] on top of the widget, centered and selected — the drag and pinch that follow are how it is placed,
+     * since only the person adding it knows where it should go.
+     */
+    fun add(block: WidgetBlock) {
+        val current = recipe.value ?: return
+        val index = current.layers.size
+        edit { it.copy(layers = it.layers + block.layer) }
+        initial.value += index to current.copy(layers = current.layers + block.layer).globalsOf(index).associateBy { it.name }
+        selected.value = index
+        picking.value = false
+    }
+
+    /** Moves the selected block one step up ([step] +1) or down (-1) among the blocks, keeping it selected. */
+    fun restack(step: Int) {
+        val part = selected.value ?: return
+        val (next, index) = recipe.value?.restacked(part, step) ?: return
+        edit { next }
+        // The two blocks traded indices, so their baselines trade with them.
+        val baselines = initial.value
+        initial.value = baselines + (part to baselines[index].orEmpty()) + (index to baselines[part].orEmpty())
+        selected.value = index
     }
 
     /** Puts back the block [removeSelected] took out, selected again. */

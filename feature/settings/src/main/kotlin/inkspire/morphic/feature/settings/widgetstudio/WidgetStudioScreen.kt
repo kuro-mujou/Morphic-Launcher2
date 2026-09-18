@@ -2,7 +2,9 @@ package inkspire.morphic.feature.settings.widgetstudio
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
@@ -80,7 +82,6 @@ import org.koin.core.parameter.parametersOf
 fun WidgetStudioScreen(route: WidgetStudioRoute, onBack: () -> Unit, modifier: Modifier = Modifier) {
     val viewModel: WidgetStudioViewModel = koinViewModel { parametersOf(route) }
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val colors = LocalMorphicColors.current
     val snackbar = remember { SnackbarHostState() }
     BackHandler(onBack = onBack)
     // A removal is undoable for as long as its prompt shows, and not after — the prompt is the only way back.
@@ -136,39 +137,101 @@ fun WidgetStudioScreen(route: WidgetStudioRoute, onBack: () -> Unit, modifier: M
                     .padding(16.dp),
             )
             if (state.recipe != null) {
-                Column(
-                    Modifier
+                StyleSheet(
+                    state = state,
+                    viewModel = viewModel,
+                    modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
-                        .background(colors.background, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
-                ) {
-                    if (state.parts.isNotEmpty()) {
-                        PartPicker(
-                            parts = state.parts,
-                            selected = state.selected,
-                            onSelect = viewModel::select,
-                            modifier = Modifier
-                                .uiInsetsPadding(WindowInsetsSides.Horizontal)
-                                .padding(start = 20.dp, end = 20.dp, top = 20.dp),
-                        )
-                    }
-                    // Keyed on the part, so a control left open in one does not open its namesake in the next.
-                    key(state.selected) {
-                        StylePanel(
-                            globals = state.globals,
-                            initial = state.initial[state.selected].orEmpty(),
-                            onChange = viewModel::set,
-                            // Only a block can be removed; the widget itself is what the blocks sit on.
-                            onRemove = state.selected?.let { { viewModel.removeSelected() } },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                        )
-                    }
+                        .weight(1f),
+                )
+            }
+        }
+    }
+
+    val library = state.library
+    val recipe = state.recipe
+    if (library != null && recipe != null) {
+        BlockPicker(
+            blocks = library,
+            recipe = recipe,
+            data = state.data,
+            size = DpSize(route.widthDp.dp, route.heightDp.dp),
+            onPick = viewModel::add,
+            onDismiss = { viewModel.showLibrary(false) },
+        )
+    }
+}
+
+/** The panel under the preview: which part is being styled, that part's settings, and what can be done to it. */
+@Composable
+private fun StyleSheet(state: WidgetStudioState, viewModel: WidgetStudioViewModel, modifier: Modifier = Modifier) {
+    val colors = LocalMorphicColors.current
+    Column(modifier.background(colors.background, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))) {
+        if (state.parts.isNotEmpty()) {
+            PartPicker(
+                parts = state.parts,
+                selected = state.selected,
+                onSelect = viewModel::select,
+                modifier = Modifier
+                    .uiInsetsPadding(WindowInsetsSides.Horizontal)
+                    .padding(start = 20.dp, end = 20.dp, top = 20.dp),
+            )
+        }
+        // Keyed on the part, so a control left open in one does not open its namesake in the next.
+        key(state.selected) {
+            StylePanel(
+                globals = state.globals,
+                initial = state.initial[state.selected].orEmpty(),
+                onChange = viewModel::set,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+            ) {
+                if (state.selected == null) {
+                    FooterButton("Add block") { viewModel.showLibrary(true) }
+                } else {
+                    BlockActions(state, viewModel)
                 }
             }
         }
     }
+}
+
+/** What can be done to the selected block besides restyling it: move it up or down the stack, or remove it. */
+@Composable
+private fun BlockActions(state: WidgetStudioState, viewModel: WidgetStudioViewModel) {
+    // Each direction is offered only when there is a block that way to move past.
+    if (state.canRaise || state.canLower) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 16.dp)) {
+            if (state.canLower) {
+                MorphicButton(
+                    onClick = { viewModel.restack(-1) },
+                    style = MorphicButtonStyle.Tonal,
+                    modifier = Modifier.weight(1f),
+                ) { Text("Send back") }
+            }
+            if (state.canRaise) {
+                MorphicButton(
+                    onClick = { viewModel.restack(+1) },
+                    style = MorphicButtonStyle.Tonal,
+                    modifier = Modifier.weight(1f),
+                ) { Text("Bring forward") }
+            }
+        }
+    }
+    FooterButton("Remove block", viewModel::removeSelected)
+}
+
+/** One full-width action under a part's settings. */
+@Composable
+private fun FooterButton(label: String, onClick: () -> Unit) {
+    MorphicButton(
+        onClick = onClick,
+        style = MorphicButtonStyle.Tonal,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp),
+    ) { Text(label) }
 }
 
 /**
@@ -256,16 +319,16 @@ private fun PartPicker(parts: List<StylePart>, selected: Int?, onSelect: (Int?) 
 }
 
 /**
- * Every setting of the selected part, one control each — or a plain line when it has none — and, for a block, a way to
- * remove it.
+ * Every setting of the selected part, one control each — or a plain line when it has none — with [footer], the part's
+ * actions, under them.
  */
 @Composable
 private fun StylePanel(
     globals: List<WidgetGlobal>,
     initial: Map<String, WidgetGlobal>,
     onChange: (WidgetGlobal) -> Unit,
-    onRemove: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    footer: @Composable () -> Unit,
 ) {
     val colors = LocalMorphicColors.current
     var expanded by rememberSaveable { mutableStateOf<String?>(null) }
@@ -291,14 +354,6 @@ private fun StylePanel(
                 onChange = onChange,
             )
         }
-        onRemove?.let { remove ->
-            MorphicButton(
-                onClick = remove,
-                style = MorphicButtonStyle.Tonal,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp),
-            ) { Text("Remove block") }
-        }
+        footer()
     }
 }

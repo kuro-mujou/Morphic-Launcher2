@@ -89,4 +89,37 @@ class StylePartsTest {
 
         assertEquals(mapOf(null to "widget", 1 to "date", 2 to "battery"), baselines.afterRemoving(1))
     }
+
+    @Test
+    fun `a block trades places with the next block that way, never with the background`() {
+        val (up, index) = recipe.restacked(1, +1)!!
+        assertEquals(listOf("Date", "Time"), up.parts().map { it.name })
+        assertEquals(2, index)
+
+        // The Time block is the lowest block; below it is only the background, which it must not go behind.
+        assertNull(recipe.restacked(1, -1))
+        assertNull(recipe.restacked(2, +1))
+    }
+
+    @Test
+    fun `a widget setting nothing reads any more is dropped, and one still read is kept`() {
+        val shown = WidgetLayerSpec(WidgetSource.Shape(colorGlobal = "panel"))
+        val formula = WidgetLayerSpec(WidgetSource.Text("\$gv(name)\$"))
+        val stale = WidgetGlobal.Switch("showDate", "Show date", true)
+        val name = WidgetGlobal.Text("name", "Name", "Ada")
+        val panel = WidgetGlobal.Color("panel", "Background", 3)
+        val widget = WidgetRecipe(listOf(shown, formula), globals = listOf(stale, name, panel))
+
+        assertEquals(listOf(name, panel), widget.withoutUnusedGlobals().globals)
+    }
+
+    @Test
+    fun `a setting read only from inside a block still counts as read`() {
+        val block = WidgetLayerSpec(
+            WidgetSource.Overlap(listOf(WidgetLayerSpec(WidgetSource.Text("x"), visibleGlobal = "secs"))),
+            name = "Time",
+        )
+        val secs = WidgetGlobal.Switch("secs", "Seconds", false)
+        assertEquals(listOf(secs), WidgetRecipe(listOf(block), globals = listOf(secs)).withoutUnusedGlobals().globals)
+    }
 }

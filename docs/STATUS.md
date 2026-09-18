@@ -2214,6 +2214,9 @@ surface.** "Widget" alone means the launcher's own; hosting *another app's* is `
 - WS7b: in that preview a drag moves a block (re-pinned on release to the anchor nearest where it landed, through
   `movedTo`, the inverse of the placement arithmetic) and a pinch scales it (`WidgetLayerSpec.scale`, applied in
   layout). A selected block can be removed, undoably while the prompt shows.
+- WS7c: a library of twelve blocks (`BuiltInBlocks`) added from the Style screen's **Add block** sheet, each previewed
+  on the widget's own background with live data; blocks can be sent back or brought forward among themselves, and
+  removing one drops widget settings nothing reads any more.
 
 `feature:shell` gained a detekt baseline with one entry:
 `LauncherShell` reached 100 lines with the Style route's callback, and wants splitting. **Compose UI tests need espresso ≥ 3.6 on this emulator**

@@ -23,6 +23,7 @@ import inkspire.morphic.data.widgets.TemplateParts.block
 import inkspire.morphic.data.widgets.TemplateParts.chargingOr
 import inkspire.morphic.data.widgets.TemplateParts.font
 import inkspire.morphic.data.widgets.TemplateParts.h24
+import inkspire.morphic.data.widgets.TemplateParts.line
 import inkspire.morphic.data.widgets.TemplateParts.panel
 import inkspire.morphic.data.widgets.TemplateParts.panelGlobals
 import inkspire.morphic.data.widgets.TemplateParts.text
@@ -384,34 +385,7 @@ object BuiltInWidgetTemplates {
         ),
     )
 
-    /** A clock's time as a block of its own: its color, font and 24-hour switch. */
-    private fun timeBlock(size: Float, weight: Int, anchor: WidgetAnchor, offsetX: Float) = block(
-        name = "Time",
-        globals = listOf(text(), font(), h24()),
-        layers = listOf(line(Time, size = size, weight = weight, color = "text")),
-        anchor = anchor,
-        offsetX = offsetX,
-    )
-
-    /**
-     * One line of text inside a block, in the block's font, placed around the block's center — or against the side
-     * [anchor] names, which is how a block's lines share a left or right edge.
-     *
-     * @param color the global it takes its color from, or null for the muted second color every design uses.
-     */
-    @Suppress("LongParameterList") // A text's look and its place, which every line states.
-    private fun line(
-        text: String,
-        size: Float,
-        weight: Int = 400,
-        color: String? = null,
-        anchor: WidgetAnchor = WidgetAnchor.CENTER,
-        x: Float = 0f,
-        y: Float = 0f,
-    ) = WidgetLayerSpec(
-        WidgetSource.Text(text, size = size, weight = weight, color = Muted, colorGlobal = color, fontGlobal = "font"),
-        anchor = anchor,
-        offsetX = x,
-        offsetY = y,
-    )
+    /** The library's time block, placed. */
+    private fun timeBlock(size: Float, weight: Int, anchor: WidgetAnchor, offsetX: Float) =
+        BuiltInBlocks.time(size, weight).copy(anchor = anchor, offsetX = offsetX)
 }
