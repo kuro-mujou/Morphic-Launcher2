@@ -52,7 +52,7 @@ import kotlin.math.roundToInt
  * dropped. Taps reach `onOpenInner` instead, which only fires for a gesture the machine actually resolved as a tap.
  *
  * **An empty container draws a "+", and it is a plain glyph — not a button.** Something has to be drawn — an empty
- * cell that cannot be removed reads as a rendering fault, which is `WidgetCell`'s argument for naming an unresolvable
+ * cell that cannot be removed reads as a rendering fault, which is `AppWidgetCell`'s argument for naming an unresolvable
  * widget. A tap on it reaches the add flow the same way a tap on a slot reaches its app: through the cell's one
  * gesture contract (`onOpen`), which resolves the empty container to its settings. It used to be a real `IconButton`,
  * and that reintroduced the exact overlap the rule above removes — a long-press raised the container's menu and the

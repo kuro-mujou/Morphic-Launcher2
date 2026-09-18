@@ -82,6 +82,7 @@ import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.designsystem.surface.surfaceDoubleTap
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.AppWidgetInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.DropIntent
@@ -95,16 +96,15 @@ import inkspire.morphic.core.model.ItemGesture
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.WidgetAreaGrid
-import inkspire.morphic.core.model.WidgetInfo
 import inkspire.morphic.core.model.asItemGesture
 import inkspire.morphic.core.model.sideZoneEdge
 import inkspire.morphic.core.model.toGridConfig
 import inkspire.morphic.data.apps.LetterBucket
+import inkspire.morphic.data.appwidgets.AppWidgetHostController
+import inkspire.morphic.data.layout.AppWidgetSpan
 import inkspire.morphic.data.layout.LayoutChange
-import inkspire.morphic.data.layout.WidgetSpan
-import inkspire.morphic.data.widgets.AppWidgetHostController
 import inkspire.morphic.feature.home.widgetpicker.WidgetPickerSheet
-import inkspire.morphic.feature.home.widgetpicker.rememberWidgetAddFlow
+import inkspire.morphic.feature.home.widgetpicker.rememberAppWidgetAddFlow
 import org.koin.compose.koinInject
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -296,10 +296,10 @@ internal fun HomeListSurface(
     // The add flow, reporting into the **widget area** — this pairing's home for widgets. Same shape as the pager
     // pairing's; what differs is the zone and the grid, which is the whole reason each surface owns its own.
     val widgetHost = koinInject<AppWidgetHostController>()
-    val addWidget = rememberWidgetAddFlow(widgetHost) { bound ->
+    val addWidget = rememberAppWidgetAddFlow(widgetHost) { bound ->
         val geo = areaGeometry
         val span = geo?.let {
-            WidgetSpan.forWidget(
+            AppWidgetSpan.forWidget(
                 bound.targetCols, bound.targetRows,
                 bound.minWidthPx, bound.minHeightPx,
                 it.cellW, it.cellH, areaConfig,
@@ -309,8 +309,8 @@ internal fun HomeListSurface(
         // the widget area is one grid drawn all at once, so a widget it accepts is already on screen. What it can do
         // that the pager cannot is *refuse* — see `HomeViewModel.freeRect` — which is why the picker below is given a
         // capacity test and this is left to report a plain failure.
-        span != null && viewModel.placeWidget(
-            widget = WidgetInfo(
+        span != null && viewModel.placeAppWidget(
+            widget = AppWidgetInfo(
                 appWidgetId = bound.appWidgetId,
                 providerPackage = bound.provider.packageName,
                 providerClass = bound.provider.className,
@@ -345,7 +345,7 @@ internal fun HomeListSurface(
                 title = widget.info.label.ifBlank { "Widget" },
                 anchor = anchor,
                 actions = listOf(
-                    MenuAction("Remove widget") { viewModel.removeWidget(widget.info.appWidgetId) },
+                    MenuAction("Remove widget") { viewModel.removeAppWidget(widget.info.appWidgetId) },
                 ),
             )
         }
@@ -477,7 +477,7 @@ internal fun HomeListSurface(
                     gestureConfig = gestureConfig,
                     dragItem = { it.gridItem },
                     placement = { it.placement },
-                    acceptsItem = { it is GridItem.Widget || it is GridItem.WidgetContainer },
+                    acceptsItem = { it is GridItem.AppWidget || it is GridItem.WidgetContainer },
                     // The same shared planner the pager pairing's two zones use — a zone is described by its
                     // geometry, its dimensions and its occupants, not by an algorithm of its own.
                     planner = { item, finger, grabInItem ->
@@ -519,7 +519,7 @@ internal fun HomeListSurface(
                     // Only a widget can be here — `acceptsItem` refuses everything else, and nothing seeds it — so
                     // anything the state reports for this zone that is not one is a row we cannot draw.
                     (item as? HomeItem.Widget)?.let {
-                        WidgetCell(
+                        AppWidgetCell(
                             appWidgetId = it.info.appWidgetId,
                             label = it.info.label.ifBlank { "Widget" },
                             modifier = cellModifier,

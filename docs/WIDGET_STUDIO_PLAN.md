@@ -1,6 +1,6 @@
 # Widget Studio
 
-**Status:** design locked, **nothing built** (2026-09-07). The third studio, after the icon studio (done) and the
+**Status:** design locked (2026-09-07); **WS0 done** (2026-09-18), nothing of ours built yet. The third studio, after the icon studio (done) and the
 wallpaper studio (nearly). This is the *what and in what order*; the open questions at the end are real.
 
 **Covers:** a built-in editor for user-authored, data-bound, live-rendered widgets — plus the expression language
@@ -209,7 +209,7 @@ changes every minute. A baked widget is a screenshot.
 | Its position on HOME | `widget_design_placement` — keyed `designId + orientation`, carrying `zone` + `@Embedded GridPlacement` | **yes** |
 | Global *values* for a placed instance | on the placement row or its own table (WS6 decides) | no |
 
-This mirrors `widget`/`widget_placement` exactly, which is the point — a Morphic widget is a HOME item of the same
+This mirrors `app_widget`/`app_widget_placement` exactly, which is the point — a Morphic widget is a HOME item of the same
 kind as a hosted one, so it stores the same way. Coordinate placement, per the arrangement table in CLAUDE.md.
 
 **The recipe and its instance values are different rows on purpose.** A design is authored once; the same design
@@ -252,7 +252,7 @@ exists. Everything from WS7 on raises the ceiling rather than making it work.
 
 | # | Slice | Delivers |
 |---|---|---|
-| **WS0** | **The rename** | `data:widgets` → `data:appwidgets`; `WidgetInfo`→`AppWidgetInfo`, `WidgetCell`→`AppWidgetCell`, `widgetpicker/`→`appwidgetpicker/`; tables `widget`→`app_widget`, `widget_placement`→`app_widget_placement`. **Container types keep their generic names** — a container will eventually hold both kinds. |
+| **WS0** ✅ | **The rename** | `data:widgets` → `data:appwidgets`; `WidgetInfo`→`AppWidgetInfo`, `WidgetCell`→`AppWidgetCell`, `GridItem.Widget`→`GridItem.AppWidget`, the catalog/provider/add-flow types likewise; tables `widget`→`app_widget`, `widget_placement`→`app_widget_placement` (DB v4, a destructive bump). **Container types keep their generic names** — a container will eventually hold both kinds — and so does **`widgetpicker/`**: it already offers both containers and will offer ours at WS5, so it is the add-a-widget sheet, not an app-widget one. **`GridItem.AppWidget` keeps `@SerialName("widget")`** — it is on the wire in stored gesture assignments — so ours takes a different serial name when it becomes a `GridItem`. |
 | **WS1** | **The language** | `core:widgetscript`: lexer, parser, AST, evaluator over pure functions + `if`. `WidgetExpression.providers` present and empty. Heavy unit tests; this is the slice that earns them. |
 | **WS2** | **The model** | `core:model/widget`: recipe, layer spec, Text/Shape/Image sources, `WidgetGlobal`, block declaration. Serialization round-trip test, as `WallpaperRecipeTest` does. |
 | **WS3** | **The renderer** | `core:widget`: `WidgetRender(recipe, data)` for Text/Shape/Image in an Overlap container, anchor+offset placement. Test harness, no persistence. |

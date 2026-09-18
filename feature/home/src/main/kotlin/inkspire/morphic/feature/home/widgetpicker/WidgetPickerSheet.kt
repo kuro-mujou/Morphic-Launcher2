@@ -65,9 +65,9 @@ import inkspire.morphic.core.designsystem.component.field.MorphicTextField
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.IconArrangement
-import inkspire.morphic.data.layout.WidgetSpan
-import inkspire.morphic.data.widgets.WidgetProvider
-import inkspire.morphic.data.widgets.WidgetProviderGroup
+import inkspire.morphic.data.appwidgets.AppWidgetProvider
+import inkspire.morphic.data.appwidgets.AppWidgetProviderGroup
+import inkspire.morphic.data.layout.AppWidgetSpan
 import inkspire.morphic.feature.home.ArrangementShapeRow
 import inkspire.morphic.feature.home.ContainerAddGlyph
 import inkspire.morphic.feature.home.HomeViewModel
@@ -104,7 +104,7 @@ import org.koin.androidx.compose.koinViewModel
  *   be a promise nothing keeps.
  * @param cellWidthPx the measured cell size of that grid; a widget's span is its declared cell size, or its stated
  *   minimum divided by this when it declares none. Zero before the surface has been measured, which
- *   [WidgetSpan.forWidget] answers with no label at all rather than a wrong one.
+ *   [AppWidgetSpan.forWidget] answers with no label at all rather than a wrong one.
  * @param onAddWidget **null while nothing can place a widget yet**, which hides the Add button rather than
  *   disabling it — the same nullable-lambda shape `AppsScreen`'s settings
  *   verb use for a destination that does not exist yet. The placement slice passes a real lambda and the button
@@ -127,10 +127,10 @@ internal fun WidgetPickerSheet(
     cellHeightPx: Float,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
-    onAddWidget: ((WidgetProvider) -> Unit)? = null,
+    onAddWidget: ((AppWidgetProvider) -> Unit)? = null,
     onAddIconContainer: ((IconArrangement) -> Unit)? = null,
     onAddWidgetContainer: (() -> Unit)? = null,
-    hasRoomFor: (WidgetSpan) -> Boolean = { true },
+    hasRoomFor: (AppWidgetSpan) -> Boolean = { true },
 ) {
     val viewModel = koinViewModel<WidgetPickerViewModel>()
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -207,8 +207,8 @@ internal fun WidgetPickerSheet(
  */
 @Composable
 private fun ListPane(
-    groups: List<WidgetProviderGroup>?,
-    onOpen: (WidgetProviderGroup) -> Unit,
+    groups: List<AppWidgetProviderGroup>?,
+    onOpen: (AppWidgetProviderGroup) -> Unit,
     onDismiss: () -> Unit,
     components: List<ComponentKind> = emptyList(),
     onOpenComponent: (ComponentKind) -> Unit = {},
@@ -316,7 +316,7 @@ private enum class ComponentKind(
  * `LauncherMenuHost` holds one request for two kinds of menu.
  */
 private sealed interface PickerEntry {
-    data class Widgets(val group: WidgetProviderGroup) : PickerEntry
+    data class Widgets(val group: AppWidgetProviderGroup) : PickerEntry
     data class Component(val kind: ComponentKind) : PickerEntry
 }
 
@@ -384,7 +384,7 @@ private fun ComponentRow(kind: ComponentKind, onClick: () -> Unit) {
  * the row is worth it, since an app with one widget is a single tap away from Add and an app with nine is a browse.
  */
 @Composable
-private fun AppRow(group: WidgetProviderGroup, onClick: () -> Unit) {
+private fun AppRow(group: AppWidgetProviderGroup, onClick: () -> Unit) {
     val colors = LocalMorphicColors.current
     Row(
         modifier = Modifier
@@ -430,13 +430,13 @@ private fun AppRow(group: WidgetProviderGroup, onClick: () -> Unit) {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun DetailPane(
-    group: WidgetProviderGroup,
+    group: AppWidgetProviderGroup,
     grid: GridConfig?,
     cellWidthPx: Float,
     cellHeightPx: Float,
     onBack: () -> Unit,
-    onAddWidget: ((WidgetProvider) -> Unit)?,
-    hasRoomFor: (WidgetSpan) -> Boolean,
+    onAddWidget: ((AppWidgetProvider) -> Unit)?,
+    hasRoomFor: (AppWidgetSpan) -> Boolean,
 ) {
     val pagerState = rememberPagerState { group.providers.size }
     val current = group.providers.getOrNull(pagerState.currentPage)
@@ -465,7 +465,7 @@ private fun DetailPane(
         ) { page ->
             val provider = group.providers[page]
             val span = spanOf(provider, grid, cellWidthPx, cellHeightPx)
-            WidgetPage(
+            AppWidgetPage(
                 provider = provider,
                 // Both null together — `spanOf` answers null for a null grid — but written as one test rather than
                 // leaning on that, since an early return here would blank the whole page instead of its size line.
@@ -508,7 +508,7 @@ private fun ComponentDetailPane(
     onBack: () -> Unit,
     onAddIconContainer: ((IconArrangement) -> Unit)?,
     onAddWidgetContainer: (() -> Unit)?,
-    hasRoomFor: (WidgetSpan) -> Boolean,
+    hasRoomFor: (AppWidgetSpan) -> Boolean,
 ) {
     val span = grid?.let { containerSpan(it) }
     val fits = span == null || hasRoomFor(span)
@@ -620,7 +620,7 @@ private fun ComponentPage(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // The same translucent fill a widget's preview gets — see [WidgetPage] — and here it is what makes the tile
+        // The same translucent fill a widget's preview gets — see [AppWidgetPage] — and here it is what makes the tile
         // visible at all. A container over the film fills with its own scrim, which *is* `colors.surface`, so an
         // opaque box behind it would be that exact color and the preview would be a "+" floating on nothing.
         Box(
@@ -667,7 +667,7 @@ private fun ComponentPage(
 
 /** One widget: its published preview at the top, the cells it would occupy underneath. */
 @Composable
-private fun WidgetPage(provider: WidgetProvider, sizeLabel: String, roomless: Boolean) {
+private fun AppWidgetPage(provider: AppWidgetProvider, sizeLabel: String, roomless: Boolean) {
     val colors = LocalMorphicColors.current
     Column(
         modifier = Modifier
@@ -769,13 +769,13 @@ private fun Dots(current: Int, count: Int, modifier: Modifier = Modifier) {
  * either way; the widget's name above it still reads on its own.
  */
 private fun spanOf(
-    provider: WidgetProvider,
+    provider: AppWidgetProvider,
     grid: GridConfig?,
     cellWidthPx: Float,
     cellHeightPx: Float,
-): WidgetSpan? {
+): AppWidgetSpan? {
     if (grid == null) return null
-    return WidgetSpan.forWidget(
+    return AppWidgetSpan.forWidget(
         targetCols = provider.targetCols,
         targetRows = provider.targetRows,
         minWidthPx = provider.minWidthPx,
@@ -792,7 +792,7 @@ private fun spanOf(
  * `HomeViewModel.ContainerSpan` rather than a literal, for [spanOf]'s reason applied to the other kind of entry: the
  * number the page prints and the number the placement searches for have to be one number.
  */
-private fun containerSpan(grid: GridConfig): WidgetSpan {
+private fun containerSpan(grid: GridConfig): AppWidgetSpan {
     val span = HomeViewModel.ContainerSpan * grid.cellMultiplier
-    return WidgetSpan(rowSpan = span, colSpan = span)
+    return AppWidgetSpan(rowSpan = span, colSpan = span)
 }

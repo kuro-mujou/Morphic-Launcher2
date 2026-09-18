@@ -1,11 +1,11 @@
 package inkspire.morphic.data.layout
 
+import inkspire.morphic.core.model.AppWidgetInfo
 import inkspire.morphic.core.model.ArrangementKey
 import inkspire.morphic.core.model.Folder
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.IconContainer
 import inkspire.morphic.core.model.WidgetContainer
-import inkspire.morphic.core.model.WidgetInfo
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -45,7 +45,7 @@ interface LayoutRepository {
     fun widgetContainers(): Flow<List<WidgetContainer>>
 
     /** Metadata for the bound widgets referenced by placements / widget containers. */
-    fun widgets(): Flow<List<WidgetInfo>>
+    fun appWidgets(): Flow<List<AppWidgetInfo>>
 
     /**
      * Applies [changes] to [arrangement]'s layout as one unit — the single write path. [arrangement] scopes

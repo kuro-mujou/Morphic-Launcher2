@@ -1,9 +1,9 @@
 package inkspire.morphic.feature.home.containersettings
 
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.AppWidgetInfo
 import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.core.model.WidgetContainerAxis
-import inkspire.morphic.core.model.WidgetInfo
 import inkspire.morphic.data.layout.PlacedItem
 import inkspire.morphic.feature.home.ContainerIcon
 
@@ -45,7 +45,7 @@ sealed interface ContainerSettings {
      * for why that is one op rather than three.
      */
     data class Widget(
-        val widgets: List<WidgetInfo>,
+        val widgets: List<AppWidgetInfo>,
         val axis: WidgetContainerAxis,
         val autoRotate: Boolean,
         val resetOnReturn: Boolean,

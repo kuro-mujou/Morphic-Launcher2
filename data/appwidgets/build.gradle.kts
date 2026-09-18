@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "inkspire.morphic.data.widgets"
+    namespace = "inkspire.morphic.data.appwidgets"
 }
 
 dependencies {

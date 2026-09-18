@@ -71,14 +71,14 @@ Check the placement DAO actually has a delete-by-widget; add it if not.
 ### 1d. Two KDoc claims that are false
 
 - `RemoveFromWidgetContainer` says "the widget is unbound". It only removes the membership row. Unbinding is
-  `data:widgets`' job — `PlaceWidget`'s own KDoc says so ("this store only keeps records"). Correct the sentence.
+  `data:appwidgets`' job — `PlaceAppWidget`'s own KDoc says so ("this store only keeps records"). Correct the sentence.
 - `WidgetContainer` says widgets are "**stacked** along `axis`". L1 *pages* them (`ContainerPager`) — see §2a.
 
 ### 1e. Orphaned widget rows when a container is deleted
 
 `RemoveFromGrid(GridItem.WidgetContainer(id))` deletes the container row; membership and placement cascade. The
 contained widgets' **`widget` definition rows do not**, and neither do their allocated `appWidgetId`s. Removing a
-widget container must therefore do what `HomeViewModel.removeWidget` does, once per contained widget: delete the
+widget container must therefore do what `HomeViewModel.removeAppWidget` does, once per contained widget: delete the
 definition and call `widgetHost.deleteId`. See §3c.
 
 ---
@@ -138,7 +138,7 @@ but `launcherItemGestures` takes `awaitFirstDown(requireUnconsumed = false)` and
 ### 2e. The empty state: an affordance, not a button
 
 An empty container must draw *something* — an empty cell that cannot be removed reads as a rendering fault, which
-is the same argument `WidgetCell` makes for naming an unresolvable widget.
+is the same argument `AppWidgetCell` makes for naming an unresolvable widget.
 
 - **Widget container**: a real "+" button, opening the existing `rememberWidgetAddFlow`. This one works today.
 - **Icon container**: a "+" **glyph on the plate, not a tap target** — inert, saying "drag an app here". Its
@@ -190,7 +190,7 @@ Unit-testable if `data:layout` grows a Room test; otherwise it is verified by sl
 1. `core:designsystem/container/IconArrangements.kt` — `ArrangementSlot` + `IconArrangement.slots(…)` (§2b),
    plus `IconArrangementsTest`.
 2. `HomeState.kt` — `HomeItem.IconContainer(container, icons: List<ContainerIcon>, …)` and
-   `HomeItem.WidgetContainer(container, widgets: List<WidgetInfo>, …)`; a `ContainerIcon` sum type
+   `HomeItem.WidgetContainer(container, widgets: List<AppWidgetInfo>, …)`; a `ContainerIcon` sum type
    (`App(AppInfo)` / `Folder(FolderModel, List<AppInfo>)`) mirroring how `HomeItem.Folder` carries resolved apps.
    Extend `HomeState.appInfo` to look inside icon containers — a drag out of one must resolve to something
    drawable, the same reason folders are searched there.
@@ -214,14 +214,14 @@ costs nothing — it reuses the add flow the surface already holds.
 ### 3c. Slice 2 — filling and emptying by drag
 
 1. `HomeDropPlanning.canMerge` — allow `App`/`Folder` onto `GridItem.IconContainer`, and `Widget` onto
-   `GridItem.Widget` and onto `GridItem.WidgetContainer`. Its KDoc already predicts this ("container merges arrive
+   `GridItem.AppWidget` and onto `GridItem.WidgetContainer`. Its KDoc already predicts this ("container merges arrive
    with those item types").
 2. `HomeViewModel.mergeChanges` — the new target arms:
    - app/folder onto an icon container → `AddToIconContainer`;
    - widget onto a widget → `CreateWidgetContainer(axis = HORIZONTAL, widgetIds = [target, dragged], at = target's
      placement)`, which is `CreateFolder`'s shape exactly (the pair takes the target's cell);
    - widget onto a widget container → `AddToWidgetContainer`.
-3. `removeWidgetContainer(id)` — §1e: for each contained widget, `RemoveFromGrid(GridItem.Widget)` plus
+3. `removeWidgetContainer(id)` — §1e: for each contained widget, `RemoveFromGrid(GridItem.AppWidget)` plus
    `widgetHost.deleteId`, then `RemoveFromGrid(GridItem.WidgetContainer)`. One method, so no caller has to know.
 4. **Extraction**: dragging an item *out* of a container. `RemoveFrom*Container` changes membership only, so a
    landing pairs it with a `Move` — the APPS pager's composition rule, already stated in CLAUDE.md. Auto-dissolve

@@ -10,19 +10,19 @@ import inkspire.morphic.core.model.HomeZone
 
 /** Where a widget ([appWidgetId]) sits in a home [zone] for a given [arrangement]; position embeds [GridPlacement]. */
 @Entity(
-    tableName = "widget_placement",
+    tableName = "app_widget_placement",
     primaryKeys = ["appWidgetId", "arrangement"],
     indices = [Index(value = ["arrangement", "page"])],
     foreignKeys = [
         ForeignKey(
-            entity = WidgetEntity::class,
+            entity = AppWidgetEntity::class,
             parentColumns = ["appWidgetId"],
             childColumns = ["appWidgetId"],
             onDelete = ForeignKey.CASCADE,
         ),
     ],
 )
-data class WidgetPlacementEntity(
+data class AppWidgetPlacementEntity(
     val appWidgetId: Int,
     val arrangement: ArrangementKey,
     val zone: HomeZone = HomeZone.MAIN,

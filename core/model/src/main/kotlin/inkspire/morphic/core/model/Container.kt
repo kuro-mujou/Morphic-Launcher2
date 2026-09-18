@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * Anything that can occupy a position on a home grid (main area or dock). These five are the "same level"
- * peers: apps and widgets are referenced directly; folders and containers by their id (defined in [Folder] /
+ * peers: apps and app widgets are referenced directly; folders and containers by their id (defined in [Folder] /
  * [IconContainer] / [WidgetContainer]). Pair a [GridItem] with a [GridPlacement] to record where it sits.
  *
  * **Short [SerialName]s, because this now reaches a user's stored blob** — a per-item gesture assignment is keyed by
@@ -19,7 +19,7 @@ sealed interface GridItem {
     data class App(val component: ComponentKey) : GridItem
     @Serializable
     @SerialName("widget")
-    data class Widget(val appWidgetId: Int) : GridItem
+    data class AppWidget(val appWidgetId: Int) : GridItem
     @Serializable
     @SerialName("folder")
     data class Folder(val folderId: Long) : GridItem
@@ -199,7 +199,7 @@ enum class WidgetContainerAxis { HORIZONTAL, VERTICAL }
 
 /**
  * A grid item that groups widgets into one cell, **one shown at a time**, swiped between along [axis]. Holds bound
- * widget ids only; per-widget metadata is in [WidgetInfo].
+ * widget ids only; per-widget metadata is in [AppWidgetInfo].
  *
  * **Paged, not stacked.** Dividing one cell's footprint between the contained widgets would shrink each of them,
  * which is the opposite of why a user groups widgets: each still wants the whole footprint, and what the container

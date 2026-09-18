@@ -339,7 +339,7 @@ what each zone *holds*, and every difference below follows from that rather than
   branch, returning early before `IconLayoutControls`. Defaults are L1's `WidgetAreaSettings`: 280dp, 4×3 portrait,
   3×4 landscape — far thicker than a dock's 96dp, which is the difference between the two zones stated as a number.
 - **It renders empty today, and that is a missing feature rather than a missing surface.** Widgets are unbuilt
-  (`GridItem.Widget` has no cell), so nothing can be placed in it — but the zone is real: measured, fitted, and
+  (`GridItem.AppWidget` has no cell), so nothing can be placed in it — but the zone is real: measured, fitted, and
   registered as a `CoordinateDragGrid` drop target that **accepts widgets only**. That is L1's `areaReject` rule
   expressed as `DropZone.accepts` instead of as a check at drop time, so an app carried over it falls through to the
   list beneath rather than being rejected on release.
@@ -727,22 +727,22 @@ into three when it was costed, because as one slice it was `BackdropEffect` + th
   turned out to belong to the **film** (`Modifier.filmBackdrop`), since each borrows the window's edges, so what reads
   the sliders and draws the rim is the **container tile** and the **icon plate**.
 
-**Widgets are built: the picker, the host, the cell.** `data:widgets` holds two types with deliberately different
-jobs — `WidgetCatalog` answers "what *could* be added?" from `AppWidgetManager` with no host at all (a live read,
+**Widgets are built: the picker, the host, the cell.** `data:appwidgets` holds two types with deliberately different
+jobs — `AppWidgetCatalog` answers "what *could* be added?" from `AppWidgetManager` with no host at all (a live read,
 not a cache, for `AppShortcuts`' reason), and `AppWidgetHostController` owns the one `AppWidgetHost` per process.
-The distinction runs all the way through: `WidgetProvider` has no id and `BoundWidget` does.
+The distinction runs all the way through: `AppWidgetProvider` has no id and `BoundAppWidget` does.
 - **An allocated `appWidgetId` is a resource, not a value.** It outlives the process, so a widget whose id is
   allocated but never placed is a leak the user can neither see nor clear. Every path that abandons the add gives
-  it back, which is why `WidgetAddFlow`'s callback returns a **Boolean** — the caller says whether it *kept* the
-  widget. Removing one is likewise two halves that must both happen (`HomeViewModel.removeWidget`): the layout
+  it back, which is why `AppWidgetAddFlow`'s callback returns a **Boolean** — the caller says whether it *kept* the
+  widget. Removing one is likewise two halves that must both happen (`HomeViewModel.removeAppWidget`): the layout
   rows, and the id.
-- **`LayoutChange.PlaceWidget` writes the definition *and* the placement.** A widget cannot be `Move`d onto the
+- **`LayoutChange.PlaceAppWidget` writes the definition *and* the placement.** A widget cannot be `Move`d onto the
   grid the way an app can: an app is a component the cache already knows, while a widget's provider and label live
   in a row only this op writes, so a bare `Move` would leave a placement resolving to nothing.
 - **The add flow decides nothing about placement.** L1's controller held the home state, both grid configs, four
   cell sizes and the surface kind so it could place the widget itself — fourteen mutable fields reassigned every
   composition. Here it owns only the activity-result choreography (silent bind → system dialog if refused → the
-  provider's configuration screen if it has one) and hands back a `BoundWidget`.
+  provider's configuration screen if it has one) and hands back a `BoundAppWidget`.
 - **`startListening` is scoped to the launcher being on screen**, from `LauncherShell` — a provider only pushes to
   a listening host, so a clock stops ticking without it. Not `MainActivity`, which also hosts settings.
 - **A widget's footprint is the item's, not the grid's** — and assuming otherwise was one bug with three faces.
@@ -757,7 +757,7 @@ The distinction runs all the way through: `WidgetProvider` has no id and `BoundW
   receives the same touches we do and fires its own click on `ACTION_UP`, which is why long-pressing a widget and
   releasing used to trigger it. The gesture machine cannot help — it only decides whether *we* open the item — and
   consuming the release does not either, because the interop layer hands the up to the view on the Initial pass,
-  before a Main-pass node could consume. `WidgetCell` sends a synthetic **`ACTION_CANCEL`** instead, driven off
+  before a Main-pass node could consume. `AppWidgetCell` sends a synthetic **`ACTION_CANCEL`** instead, driven off
   two signals it already has (`LocalMenuHost.request`, the coordinator's `isDragging`) rather than a second
   long-press timer to keep in step with ours. AOSP's Launcher3 does the same from a `CheckLongPressHelper`.
   `ItemGesturePhase.ownsFinger` came out of the same investigation and is a separate, smaller correction: the item
@@ -837,7 +837,7 @@ been eight.
 
 **Next after that: HOME's second pairing is built, so widgets are the thing it is waiting on.** `LIST_WITH_WIDGET_AREA`
 renders, is configurable, and reorders — and its widget area is an empty, correctly-sized, correctly-refusing drop
-zone until `GridItem.Widget` has a cell. Two things become owed the moment it does: re-homing what a shrink evicts
+zone until `GridItem.AppWidget` has a cell. Two things become owed the moment it does: re-homing what a shrink evicts
 (the widget area's `settleDock`, which cannot evict to a list), and seeding it.
 
 Also open: on the surface swipe, **the five transitions past SLIDE** are all that is left of L1's `CrossPager` — the

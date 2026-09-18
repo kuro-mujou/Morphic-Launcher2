@@ -42,7 +42,7 @@ include(":data:layout")
 include(":data:settings")
 include(":data:setup")
 include(":data:wallpaper")
-include(":data:widgets")
+include(":data:appwidgets")
 
 include(":feature:home")
 include(":feature:apps")

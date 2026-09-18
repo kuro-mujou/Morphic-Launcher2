@@ -31,7 +31,7 @@ import inkspire.morphic.core.designsystem.menu.LocalMenuHost
 import inkspire.morphic.core.designsystem.surface.EmbeddedViewTouchFrame
 import inkspire.morphic.core.designsystem.surface.LocalSurfaceGestureLock
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
-import inkspire.morphic.data.widgets.AppWidgetHostController
+import inkspire.morphic.data.appwidgets.AppWidgetHostController
 import org.koin.compose.koinInject
 
 /**
@@ -39,7 +39,7 @@ import org.koin.compose.koinInject
  *
  * An `AndroidView` around an [AppWidgetHostView], which is the only way to draw a widget: its content is
  * `RemoteViews` inflated from another process, so there is no Compose equivalent and nothing to port. L1's
- * `WidgetCell` is the same three calls; the differences are below.
+ * `AppWidgetCell` is the same three calls; the differences are below.
  *
  * **It tells the widget how big it is, and that is not optional.** A provider lays itself out from the size the
  * host reports, not from the space the view happens to occupy — a clock renders at its default size in a cell
@@ -62,7 +62,7 @@ import org.koin.compose.koinInject
  * a rendering fault, where a labeled one invites the long-press that removes it.
  */
 @Composable
-internal fun WidgetCell(
+internal fun AppWidgetCell(
     appWidgetId: Int,
     label: String,
     modifier: Modifier = Modifier,

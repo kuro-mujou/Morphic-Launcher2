@@ -78,8 +78,8 @@ import inkspire.morphic.core.model.SwipeDirection
 import inkspire.morphic.core.model.pagerSlot
 import inkspire.morphic.core.model.wallpaper.LuminanceMap
 import inkspire.morphic.core.model.wallpaper.WallpaperBrightness
+import inkspire.morphic.data.appwidgets.AppWidgetHostController
 import inkspire.morphic.data.settings.SideBinding
-import inkspire.morphic.data.widgets.AppWidgetHostController
 import inkspire.morphic.feature.apps.AppsScreen
 import inkspire.morphic.feature.apps.scrollAxes
 import inkspire.morphic.feature.home.HomeScreen
@@ -146,7 +146,7 @@ fun LauncherShell(
     val device = currentDeviceConfiguration()
     LaunchedEffect(device) { viewModel.setDevice(device) }
 
-    if (interactive) ListenForWidgets()
+    if (interactive) ListenForAppWidgets()
 
     // The launcher's dark/light input is **wallpaper brightness**, not the system's dark-mode switch: chrome sits
     // directly on the picture with nothing between, so what it has to contrast is the picture. Settings is the other
@@ -347,7 +347,7 @@ fun LauncherShell(
  * means — the Activity also hosts settings, where no widget is drawn — and not for a preview, which is a picture.
  */
 @Composable
-private fun ListenForWidgets() {
+private fun ListenForAppWidgets() {
     val widgetHost = koinInject<AppWidgetHostController>()
     LifecycleStartEffect(widgetHost) {
         widgetHost.startListening()

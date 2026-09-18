@@ -1,5 +1,6 @@
 package inkspire.morphic.data.layout
 
+import inkspire.morphic.core.model.AppWidgetInfo
 import inkspire.morphic.core.model.ArrangementKey
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.Folder
@@ -9,7 +10,6 @@ import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.IconContainer
 import inkspire.morphic.core.model.WidgetContainer
-import inkspire.morphic.core.model.WidgetInfo
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -181,7 +181,7 @@ private class FakeLayoutRepository(
 
     override fun widgetContainers(): Flow<List<WidgetContainer>> = flowOf(emptyList())
 
-    override fun widgets(): Flow<List<WidgetInfo>> = flowOf(emptyList())
+    override fun appWidgets(): Flow<List<AppWidgetInfo>> = flowOf(emptyList())
 
     override suspend fun apply(arrangement: ArrangementKey, changes: List<LayoutChange>) = Unit
 

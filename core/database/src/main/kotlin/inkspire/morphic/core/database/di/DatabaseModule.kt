@@ -21,8 +21,8 @@ val databaseModule = module {
     single { get<LauncherDatabase>().folderDao() }
     single { get<LauncherDatabase>().folderItemDao() }
     single { get<LauncherDatabase>().folderPlacementDao() }
-    single { get<LauncherDatabase>().widgetDao() }
-    single { get<LauncherDatabase>().widgetPlacementDao() }
+    single { get<LauncherDatabase>().appWidgetDao() }
+    single { get<LauncherDatabase>().appWidgetPlacementDao() }
     single { get<LauncherDatabase>().widgetContainerDao() }
     single { get<LauncherDatabase>().widgetContainerItemDao() }
     single { get<LauncherDatabase>().widgetContainerPlacementDao() }

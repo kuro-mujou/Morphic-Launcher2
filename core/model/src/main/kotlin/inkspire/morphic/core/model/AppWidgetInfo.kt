@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
  * ([providerPackage] / [providerClass]), and a display [label].
  */
 @Serializable
-data class WidgetInfo(
+data class AppWidgetInfo(
     val appWidgetId: Int,
     val providerPackage: String,
     val providerClass: String,

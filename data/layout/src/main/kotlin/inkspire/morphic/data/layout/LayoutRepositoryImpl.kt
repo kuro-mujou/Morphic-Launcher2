@@ -7,6 +7,7 @@ import inkspire.morphic.core.database.entity.FolderItemEntity
 import inkspire.morphic.core.database.entity.IconContainerEntity
 import inkspire.morphic.core.database.entity.WidgetContainerEntity
 import inkspire.morphic.core.database.entity.WidgetContainerItemEntity
+import inkspire.morphic.core.model.AppWidgetInfo
 import inkspire.morphic.core.model.ArrangementKey
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.Folder
@@ -14,14 +15,13 @@ import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.IconContainer
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.WidgetContainer
-import inkspire.morphic.core.model.WidgetInfo
 import inkspire.morphic.data.layout.mapper.foldersOf
 import inkspire.morphic.data.layout.mapper.iconContainersOf
+import inkspire.morphic.data.layout.mapper.toAppWidgetInfo
 import inkspire.morphic.data.layout.mapper.toEntity
 import inkspire.morphic.data.layout.mapper.toEntry
 import inkspire.morphic.data.layout.mapper.toIconItem
 import inkspire.morphic.data.layout.mapper.toRow
-import inkspire.morphic.data.layout.mapper.toWidgetInfo
 import inkspire.morphic.data.layout.mapper.widgetContainersOf
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -89,8 +89,8 @@ internal class LayoutRepositoryImpl(
             widgetContainersOf(containers, items)
         }
 
-    override fun widgets(): Flow<List<WidgetInfo>> =
-        daos.widget.observeAll().map { widgets -> widgets.map { it.toWidgetInfo() } }
+    override fun appWidgets(): Flow<List<AppWidgetInfo>> =
+        daos.widget.observeAll().map { widgets -> widgets.map { it.toAppWidgetInfo() } }
 
     override suspend fun apply(arrangement: ArrangementKey, changes: List<LayoutChange>) {
         withContext(dispatchers.io) {
@@ -130,7 +130,7 @@ internal class LayoutRepositoryImpl(
      * — a sweep rather than a check here, because [replacePlacements] can strip the last one as well.
      *
      * **Widgets and widget containers are deliberately still global.** Destroying a widget is only half the job —
-     * the `AppWidgetHost` unbind is `data:widgets`' half — and no caller can decide whether to unbind without being
+     * the `AppWidgetHost` unbind is `data:appwidgets`' half — and no caller can decide whether to unbind without being
      * told whether another posture still holds it. See [LayoutChange.RemoveFromGrid].
      */
     private suspend fun removeFromGrid(arrangement: ArrangementKey, item: GridItem) = when (item) {
@@ -138,7 +138,7 @@ internal class LayoutRepositoryImpl(
         is GridItem.Folder -> daos.folderPlacement.delete(item.folderId, arrangement)
         is GridItem.IconContainer -> daos.iconContainerPlacement.delete(item.containerId, arrangement)
         is GridItem.WidgetContainer -> daos.widgetContainer.delete(item.containerId)
-        is GridItem.Widget -> daos.widget.delete(item.appWidgetId)
+        is GridItem.AppWidget -> daos.widget.delete(item.appWidgetId)
     }
 
     /**
@@ -191,7 +191,7 @@ internal class LayoutRepositoryImpl(
                 is GridItem.Folder ->
                     daos.folderPlacement.upsert(listOf(item.toEntity(arrangement, change.zone, change.to)))
 
-                is GridItem.Widget ->
+                is GridItem.AppWidget ->
                     daos.widgetPlacement.upsert(listOf(item.toEntity(arrangement, change.zone, change.to)))
 
                 is GridItem.IconContainer ->
@@ -206,11 +206,11 @@ internal class LayoutRepositoryImpl(
             // ── A newly bound widget: its definition, then where it sits ──
             // In that order, because the placement is the row a surface joins *through* the definition — writing
             // it first would emit a placement the UI resolves to nothing for as long as the two writes are apart.
-            is LayoutChange.PlaceWidget -> {
+            is LayoutChange.PlaceAppWidget -> {
                 daos.widget.upsert(change.widget.toEntity())
                 daos.widgetPlacement.upsert(
                     listOf(
-                        GridItem.Widget(change.widget.appWidgetId)
+                        GridItem.AppWidget(change.widget.appWidgetId)
                             .toEntity(arrangement, change.zone, change.at),
                     ),
                 )
@@ -253,7 +253,7 @@ internal class LayoutRepositoryImpl(
             // ── Widget containers ──
             is LayoutChange.CreateWidgetContainer -> {
                 val id = daos.widgetContainer.insert(WidgetContainerEntity(axis = change.axis))
-                change.widgetIds.forEach { detachWidget(arrangement, it) }
+                change.widgetIds.forEach { detachAppWidget(arrangement, it) }
                 daos.widgetContainerItem.upsert(
                     change.widgetIds.mapIndexed { i, w -> WidgetContainerItemEntity(id, w, i) },
                 )
@@ -263,11 +263,11 @@ internal class LayoutRepositoryImpl(
             }
 
             is LayoutChange.AddToWidgetContainer -> {
-                // Definition first, then membership — `PlaceWidget`'s order and its reason: the membership row is
+                // Definition first, then membership — `PlaceAppWidget`'s order and its reason: the membership row is
                 // what a surface joins *through* the definition, so writing it first would emit a container holding
                 // a widget that resolves to nothing for as long as the two writes are apart.
                 daos.widget.upsert(change.widget.toEntity())
-                detachWidget(arrangement, change.widget.appWidgetId)
+                detachAppWidget(arrangement, change.widget.appWidgetId)
                 val next = (daos.widgetContainerItem.maxSortOrder(change.containerId) ?: -1) + 1
                 daos.widgetContainerItem.upsert(
                     listOf(WidgetContainerItemEntity(change.containerId, change.widget.appWidgetId, next)),
@@ -382,7 +382,7 @@ internal class LayoutRepositoryImpl(
     }
 
     /**
-     * [detachIconItem] for a widget — same two jobs, on `widget_container_item` and `widget_placement`.
+     * [detachIconItem] for a widget — same two jobs, on `widget_container_item` and `app_widget_placement`.
      *
      * The silent-drop here comes from the key and the index disagreeing: the primary key is
      * `(containerId, appWidgetId)` while the unique index is on `appWidgetId` alone, so re-homing a widget conflicts
@@ -391,7 +391,7 @@ internal class LayoutRepositoryImpl(
      * The widget's **definition row is deliberately untouched**: it is still bound and still ours, it has only moved.
      * Destroying a widget is [LayoutChange.RemoveFromGrid] plus the host's own unbind, never this.
      */
-    private suspend fun detachWidget(arrangement: ArrangementKey, appWidgetId: Int) {
+    private suspend fun detachAppWidget(arrangement: ArrangementKey, appWidgetId: Int) {
         daos.widgetContainerItem.removeByWidget(appWidgetId)
         daos.widgetPlacement.delete(appWidgetId, arrangement)
     }

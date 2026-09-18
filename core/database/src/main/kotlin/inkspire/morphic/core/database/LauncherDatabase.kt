@@ -10,6 +10,8 @@ import inkspire.morphic.core.database.converter.IconArrangementConverter
 import inkspire.morphic.core.database.converter.WidgetContainerAxisConverter
 import inkspire.morphic.core.database.dao.AppInfoDao
 import inkspire.morphic.core.database.dao.AppPlacementDao
+import inkspire.morphic.core.database.dao.AppWidgetDao
+import inkspire.morphic.core.database.dao.AppWidgetPlacementDao
 import inkspire.morphic.core.database.dao.AppsPagerItemDao
 import inkspire.morphic.core.database.dao.CategoryDao
 import inkspire.morphic.core.database.dao.CategoryItemDao
@@ -24,10 +26,10 @@ import inkspire.morphic.core.database.dao.IconOverrideDao
 import inkspire.morphic.core.database.dao.WidgetContainerDao
 import inkspire.morphic.core.database.dao.WidgetContainerItemDao
 import inkspire.morphic.core.database.dao.WidgetContainerPlacementDao
-import inkspire.morphic.core.database.dao.WidgetDao
-import inkspire.morphic.core.database.dao.WidgetPlacementDao
 import inkspire.morphic.core.database.entity.AppInfoEntity
 import inkspire.morphic.core.database.entity.AppPlacementEntity
+import inkspire.morphic.core.database.entity.AppWidgetEntity
+import inkspire.morphic.core.database.entity.AppWidgetPlacementEntity
 import inkspire.morphic.core.database.entity.AppsPagerItemEntity
 import inkspire.morphic.core.database.entity.CategoryEntity
 import inkspire.morphic.core.database.entity.CategoryItemEntity
@@ -42,8 +44,6 @@ import inkspire.morphic.core.database.entity.IconOverrideEntity
 import inkspire.morphic.core.database.entity.WidgetContainerEntity
 import inkspire.morphic.core.database.entity.WidgetContainerItemEntity
 import inkspire.morphic.core.database.entity.WidgetContainerPlacementEntity
-import inkspire.morphic.core.database.entity.WidgetEntity
-import inkspire.morphic.core.database.entity.WidgetPlacementEntity
 
 /**
  * The launcher's Room database: cached app metadata, home placements (per `ArrangementKey`), folders, widgets,
@@ -61,8 +61,8 @@ import inkspire.morphic.core.database.entity.WidgetPlacementEntity
         FolderEntity::class,
         FolderItemEntity::class,
         FolderPlacementEntity::class,
-        WidgetEntity::class,
-        WidgetPlacementEntity::class,
+        AppWidgetEntity::class,
+        AppWidgetPlacementEntity::class,
         WidgetContainerEntity::class,
         WidgetContainerItemEntity::class,
         WidgetContainerPlacementEntity::class,
@@ -75,7 +75,7 @@ import inkspire.morphic.core.database.entity.WidgetPlacementEntity
         CategoryItemEntity::class,
         HomeListItemEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(
@@ -91,8 +91,8 @@ abstract class LauncherDatabase : RoomDatabase() {
     abstract fun folderDao(): FolderDao
     abstract fun folderItemDao(): FolderItemDao
     abstract fun folderPlacementDao(): FolderPlacementDao
-    abstract fun widgetDao(): WidgetDao
-    abstract fun widgetPlacementDao(): WidgetPlacementDao
+    abstract fun appWidgetDao(): AppWidgetDao
+    abstract fun appWidgetPlacementDao(): AppWidgetPlacementDao
     abstract fun widgetContainerDao(): WidgetContainerDao
     abstract fun widgetContainerItemDao(): WidgetContainerItemDao
     abstract fun widgetContainerPlacementDao(): WidgetContainerPlacementDao

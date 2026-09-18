@@ -13,10 +13,10 @@ import kotlin.math.ceil
  * special case. Turning it back into the "3 × 2" a *user* would recognize is a division by the multiplier, and
  * [visualLabel] is the one place that happens.
  *
- * Ported from L1's `WidgetSpan`, with the arguments folded into the [GridConfig] the caller already has rather
+ * Ported from L1's `AppWidgetSpan`, with the arguments folded into the [GridConfig] the caller already has rather
  * than passed as three loose ints beside it.
  */
-data class WidgetSpan(val colSpan: Int, val rowSpan: Int) {
+data class AppWidgetSpan(val colSpan: Int, val rowSpan: Int) {
 
     /**
      * The span as the user reads it — whole visual cells, "3 × 2".
@@ -60,10 +60,10 @@ data class WidgetSpan(val colSpan: Int, val rowSpan: Int) {
             cellWidthPx: Float,
             cellHeightPx: Float,
             config: GridConfig,
-        ): WidgetSpan? {
+        ): AppWidgetSpan? {
             if (targetCols > 0 && targetRows > 0) {
                 val multiplier = config.cellMultiplier.coerceAtLeast(1)
-                return WidgetSpan(
+                return AppWidgetSpan(
                     colSpan = (targetCols * multiplier).coerceIn(multiplier, config.cols),
                     rowSpan = (targetRows * multiplier).coerceIn(multiplier, config.rows),
                 )
@@ -89,10 +89,10 @@ data class WidgetSpan(val colSpan: Int, val rowSpan: Int) {
             cellWidthPx: Float,
             cellHeightPx: Float,
             config: GridConfig,
-        ): WidgetSpan? {
+        ): AppWidgetSpan? {
             if (cellWidthPx <= 0f || cellHeightPx <= 0f) return null
             val multiplier = config.cellMultiplier.coerceAtLeast(1)
-            return WidgetSpan(
+            return AppWidgetSpan(
                 colSpan = ceil(minWidthPx / cellWidthPx).toInt().coerceIn(multiplier, config.cols),
                 rowSpan = ceil(minHeightPx / cellHeightPx).toInt().coerceIn(multiplier, config.rows),
             )

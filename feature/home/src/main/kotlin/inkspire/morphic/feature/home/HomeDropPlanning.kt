@@ -106,7 +106,7 @@ internal fun canMerge(dragged: GridItem, target: GridItem): Boolean {
     return when (target) {
         is GridItem.App, is GridItem.Folder -> dragged is GridItem.App
         is GridItem.IconContainer -> dragged is GridItem.App || dragged is GridItem.Folder
-        is GridItem.Widget, is GridItem.WidgetContainer -> false
+        is GridItem.AppWidget, is GridItem.WidgetContainer -> false
     }
 }
 

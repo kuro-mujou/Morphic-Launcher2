@@ -1,5 +1,6 @@
 package inkspire.morphic.data.layout
 
+import inkspire.morphic.core.model.AppWidgetInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
@@ -7,7 +8,6 @@ import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.WidgetContainerAxis
-import inkspire.morphic.core.model.WidgetInfo
 
 /**
  * The write-command vocabulary for the HOME layout — one value per intended change to *where items sit and
@@ -72,15 +72,15 @@ sealed interface LayoutChange {
      * batch rather than here, because an arrangement's last placement can also go through
      * `LayoutRepository.replacePlacements`.
      *
-     * **[GridItem.Widget] and [GridItem.WidgetContainer] remain global**, and that asymmetry is on purpose: their
+     * **[GridItem.AppWidget] and [GridItem.WidgetContainer] remain global**, and that asymmetry is on purpose: their
      * definitions own an allocated `appWidgetId`, so destroying one is meaningless without the `AppWidgetHost` unbind
-     * that only `data:widgets` can perform. Per-arrangement removal would mean telling the caller whether *this* was
+     * that only `data:appwidgets` can perform. Per-arrangement removal would mean telling the caller whether *this* was
      * the last posture holding the widget, which none of them can currently ask.
      *
      * The referenced **app stays installed** — this is a layout detach, never an uninstall.
      *
-     * **This drops records only; it unbinds nothing.** A [GridItem.Widget]'s definition row goes, but releasing the
-     * `appWidgetId` is an `AppWidgetHost` call and therefore `data:widgets`' job — a caller does both (see
+     * **This drops records only; it unbinds nothing.** A [GridItem.AppWidget]'s definition row goes, but releasing the
+     * `appWidgetId` is an `AppWidgetHost` call and therefore `data:appwidgets`' job — a caller does both (see
      * `HomeViewModel.removeWidget`).
      *
      * **A [GridItem.WidgetContainer] is the case that bites**, because the cascade looks complete and is not:
@@ -96,7 +96,7 @@ sealed interface LayoutChange {
      * **Why a widget cannot just be `Move`d onto the grid the way an app is.** An app is identified by a component
      * the app cache already knows, so a placement row is the whole of "it is on home". A widget is identified by
      * an `appWidgetId` the platform has just handed us, and nothing else in the launcher has ever heard of it —
-     * its provider and label live in a row only this command writes. `Move` on a [GridItem.Widget] would leave a
+     * its provider and label live in a row only this command writes. `Move` on a [GridItem.AppWidget] would leave a
      * placement pointing at a widget with no definition, which renders as nothing.
      *
      * The pair is one op rather than two for the reason `CreateFolder` is: the two rows are meaningless apart, and
@@ -104,10 +104,10 @@ sealed interface LayoutChange {
      *
      * It is the mirror of [RemoveFromGrid] on a widget, which drops the definition and lets the placement cascade.
      * What neither of them does is talk to the `AppWidgetHost` — allocating and releasing the id belongs to
-     * `data:widgets`, and this store only keeps records.
+     * `data:appwidgets`, and this store only keeps records.
      */
-    data class PlaceWidget(
-        val widget: WidgetInfo,
+    data class PlaceAppWidget(
+        val widget: AppWidgetInfo,
         val at: GridPlacement,
         val zone: HomeZone = HomeZone.MAIN,
     ) : LayoutChange
@@ -204,14 +204,14 @@ sealed interface LayoutChange {
     /**
      * Adds bound [widget] to widget container [containerId] — recording its definition as well as its membership.
      *
-     * **It carries a [WidgetInfo] rather than a bare id for [PlaceWidget]'s reason, one holder over.** A membership
+     * **It carries a [AppWidgetInfo] rather than a bare id for [PlaceAppWidget]'s reason, one holder over.** A membership
      * row joins *through* the definition, so a container given an id nothing else has heard of resolves to a
      * container holding nothing — the same unrenderable half-state a bare `Move` would produce on the grid. Taking
      * the whole thing makes that unrepresentable instead of relying on the caller to have written the definition
      * first. The upsert is idempotent, so the other caller — a widget dragged in off the grid, whose definition is
      * already there — pays nothing for it and has the value to hand anyway.
      */
-    data class AddToWidgetContainer(val containerId: Long, val widget: WidgetInfo) : LayoutChange
+    data class AddToWidgetContainer(val containerId: Long, val widget: AppWidgetInfo) : LayoutChange
 
     /**
      * Removes widget [appWidgetId] from container [containerId] — **membership only**. The widget keeps its

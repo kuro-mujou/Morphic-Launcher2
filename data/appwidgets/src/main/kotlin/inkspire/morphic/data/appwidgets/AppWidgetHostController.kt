@@ -1,4 +1,4 @@
-package inkspire.morphic.data.widgets
+package inkspire.morphic.data.appwidgets
 
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetHostView
@@ -13,21 +13,21 @@ import timber.log.Timber
 /**
  * One bound widget — an `appWidgetId` the host has allocated and the platform has attached to a provider.
  *
- * The counterpart of [WidgetProvider], and the distinction is the whole shape of the add flow: a provider is
+ * The counterpart of [AppWidgetProvider], and the distinction is the whole shape of the add flow: a provider is
  * something that *could* be added and has no id, while this exists on the device and will keep existing until the
  * host is told to delete the id. Everything after binding deals in this.
  *
  * @property configure the provider's configuration activity, or null when it has none — which is the branch the
  *   add flow turns on, since a widget with a configuration screen must show it before it can be placed.
  * @property targetCols the provider's declared width **in cells** (`targetCellWidth`, Android 12+), or 0. The
- *   placement prefers it, for the reason `WidgetSpan.forWidget` gives — it is the same number the picker showed.
+ *   placement prefers it, for the reason `AppWidgetSpan.forWidget` gives — it is the same number the picker showed.
  * @property targetRows the declared height in cells, the same way.
  * @property minWidthPx the size the provider asks for, in pixels — the placement's fallback when no target is
- *   declared, for `WidgetSpan` to turn into a footprint.
+ *   declared, for `AppWidgetSpan` to turn into a footprint.
  * @property resize the smallest the provider says it can still *draw* at — the resize floor, a different claim from
- *   the add size; see [WidgetResizeRules].
+ *   the add size; see [AppWidgetResizeRules].
  */
-data class BoundWidget(
+data class BoundAppWidget(
     val appWidgetId: Int,
     val provider: ComponentName,
     val label: String,
@@ -36,7 +36,7 @@ data class BoundWidget(
     val targetRows: Int,
     val minWidthPx: Int,
     val minHeightPx: Int,
-    val resize: WidgetResizeRules,
+    val resize: AppWidgetResizeRules,
 )
 
 /**
@@ -55,7 +55,7 @@ data class BoundWidget(
  *   back to `minWidth` when it declares none. A minimum larger than the size it asks to be *added* at would be a
  *   contradiction; taking the smaller of the two is the reading that can always be satisfied.
  */
-data class WidgetResizeRules(
+data class AppWidgetResizeRules(
     val minWidthPx: Int,
     val minHeightPx: Int,
 )
@@ -63,7 +63,7 @@ data class WidgetResizeRules(
 /**
  * The launcher's [AppWidgetHost] — what lets this app *display* another app's widget rather than merely list it.
  *
- * [WidgetCatalog] answers "what could be added?" with no host at all; everything here is about a widget that will
+ * [AppWidgetCatalog] answers "what could be added?" with no host at all; everything here is about a widget that will
  * actually exist: allocating an id, getting the platform to bind it to a provider, building the view that draws
  * it, and giving the id back when the widget is removed.
  *
@@ -108,7 +108,7 @@ interface AppWidgetHostController {
     fun bindAllowed(appWidgetId: Int, provider: ComponentName): Boolean
 
     /** What [appWidgetId] is bound to, or null when it is unbound or the provider has gone. */
-    fun boundWidget(appWidgetId: Int): BoundWidget?
+    fun boundAppWidget(appWidgetId: Int): BoundAppWidget?
 
     /**
      * Remembers the live view drawing [appWidgetId], so [snapshot] can find it. Called by the cell that hosts it.
@@ -208,9 +208,9 @@ internal class DefaultAppWidgetHostController(
     override fun bindAllowed(appWidgetId: Int, provider: ComponentName): Boolean =
         runCatching { appWidgetManager.bindAppWidgetIdIfAllowed(appWidgetId, provider) }.getOrDefault(false)
 
-    override fun boundWidget(appWidgetId: Int): BoundWidget? {
+    override fun boundAppWidget(appWidgetId: Int): BoundAppWidget? {
         val info = appWidgetManager.getAppWidgetInfo(appWidgetId) ?: return null
-        return BoundWidget(
+        return BoundAppWidget(
             appWidgetId = appWidgetId,
             provider = info.provider,
             label = info.loadLabel(appContext.packageManager).orEmpty(),
@@ -219,7 +219,7 @@ internal class DefaultAppWidgetHostController(
             targetRows = info.targetRows(),
             minWidthPx = info.minWidth,
             minHeightPx = info.minHeight,
-            resize = WidgetResizeRules(
+            resize = AppWidgetResizeRules(
                 // `minResizeWidth` is optional and defaults to 0, which would mean "no minimum at all" — so the
                 // add-time minimum stands in, and the smaller of the two wins where a provider declares both.
                 minWidthPx = info.minResizeWidth.takeIf { it > 0 }?.coerceAtMost(info.minWidth) ?: info.minWidth,

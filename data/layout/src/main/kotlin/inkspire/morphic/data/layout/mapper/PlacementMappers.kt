@@ -1,10 +1,10 @@
 package inkspire.morphic.data.layout.mapper
 
 import inkspire.morphic.core.database.entity.AppPlacementEntity
+import inkspire.morphic.core.database.entity.AppWidgetPlacementEntity
 import inkspire.morphic.core.database.entity.FolderPlacementEntity
 import inkspire.morphic.core.database.entity.IconContainerPlacementEntity
 import inkspire.morphic.core.database.entity.WidgetContainerPlacementEntity
-import inkspire.morphic.core.database.entity.WidgetPlacementEntity
 import inkspire.morphic.core.model.ArrangementKey
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
@@ -25,7 +25,7 @@ private fun entry(item: GridItem, placement: GridPlacement, zone: HomeZone): Pai
 
 internal fun AppPlacementEntity.toEntry() = entry(GridItem.App(component), placement, zone)
 internal fun FolderPlacementEntity.toEntry() = entry(GridItem.Folder(folderId), placement, zone)
-internal fun WidgetPlacementEntity.toEntry() = entry(GridItem.Widget(appWidgetId), placement, zone)
+internal fun AppWidgetPlacementEntity.toEntry() = entry(GridItem.AppWidget(appWidgetId), placement, zone)
 internal fun IconContainerPlacementEntity.toEntry() = entry(GridItem.IconContainer(containerId), placement, zone)
 internal fun WidgetContainerPlacementEntity.toEntry() = entry(GridItem.WidgetContainer(containerId), placement, zone)
 
@@ -35,8 +35,8 @@ internal fun GridItem.App.toEntity(arrangement: ArrangementKey, zone: HomeZone, 
 internal fun GridItem.Folder.toEntity(arrangement: ArrangementKey, zone: HomeZone, placement: GridPlacement) =
     FolderPlacementEntity(folderId, arrangement, zone, placement)
 
-internal fun GridItem.Widget.toEntity(arrangement: ArrangementKey, zone: HomeZone, placement: GridPlacement) =
-    WidgetPlacementEntity(appWidgetId, arrangement, zone, placement)
+internal fun GridItem.AppWidget.toEntity(arrangement: ArrangementKey, zone: HomeZone, placement: GridPlacement) =
+    AppWidgetPlacementEntity(appWidgetId, arrangement, zone, placement)
 
 internal fun GridItem.IconContainer.toEntity(arrangement: ArrangementKey, zone: HomeZone, placement: GridPlacement) =
     IconContainerPlacementEntity(containerId, arrangement, zone, placement)

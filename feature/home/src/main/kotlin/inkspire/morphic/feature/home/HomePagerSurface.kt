@@ -58,6 +58,7 @@ import inkspire.morphic.core.designsystem.surface.ReportScrollEdges
 import inkspire.morphic.core.designsystem.surface.ScrollEdges
 import inkspire.morphic.core.designsystem.surface.surfaceDoubleTap
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.AppWidgetInfo
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridConfig
@@ -67,15 +68,14 @@ import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.ItemGesture
 import inkspire.morphic.core.model.SwipeDirection
-import inkspire.morphic.core.model.WidgetInfo
 import inkspire.morphic.core.model.asItemGesture
+import inkspire.morphic.data.appwidgets.AppWidgetHostController
+import inkspire.morphic.data.appwidgets.AppWidgetResizeRules
+import inkspire.morphic.data.layout.AppWidgetSpan
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.LayoutChange
-import inkspire.morphic.data.layout.WidgetSpan
-import inkspire.morphic.data.widgets.AppWidgetHostController
-import inkspire.morphic.data.widgets.WidgetResizeRules
 import inkspire.morphic.feature.home.widgetpicker.WidgetPickerSheet
-import inkspire.morphic.feature.home.widgetpicker.rememberWidgetAddFlow
+import inkspire.morphic.feature.home.widgetpicker.rememberAppWidgetAddFlow
 import org.koin.compose.koinInject
 import kotlin.math.ceil
 import kotlin.math.roundToInt
@@ -98,7 +98,7 @@ private val DockZoneId = ZoneId("home-dock")
 internal const val UnnamedFolder = "Folder"
 
 /** The same fallback for a widget whose provider publishes no label. Internal, since a container's pages draw one. */
-internal const val UnnamedWidget = "Widget"
+internal const val UnnamedAppWidget = "Widget"
 
 /**
  * Menu titles for the two containers.
@@ -666,9 +666,9 @@ internal fun HomePagerSurface(
 
     // **The add flow, and the placement it reports back to.** The flow owns the activity-result choreography
     // (bind, then the provider's configuration screen); *where* the widget goes is this surface's, because only it
-    // knows the grid and the cells it was measured at. Returning false releases the id — see `WidgetAddFlow`.
-    val addWidget = rememberWidgetAddFlow(widgetHost) { bound ->
-        val info = WidgetInfo(
+    // knows the grid and the cells it was measured at. Returning false releases the id — see `AppWidgetAddFlow`.
+    val addWidget = rememberAppWidgetAddFlow(widgetHost) { bound ->
+        val info = AppWidgetInfo(
             appWidgetId = bound.appWidgetId,
             providerPackage = bound.provider.packageName,
             providerClass = bound.provider.className,
@@ -676,13 +676,13 @@ internal fun HomePagerSurface(
         )
         val geo = geometry
         val span = geo?.let {
-            WidgetSpan.forWidget(
+            AppWidgetSpan.forWidget(
                 bound.targetCols, bound.targetRows,
                 bound.minWidthPx, bound.minHeightPx,
                 it.cellW, it.cellH, config,
             )
         }
-        val at = span?.let { viewModel.placeWidget(widget = info, span = it, zone = HomeZone.MAIN, config = config) }
+        val at = span?.let { viewModel.placeAppWidget(widget = info, span = it, zone = HomeZone.MAIN, config = config) }
         pageToReveal = at?.page
         at != null
     }
@@ -889,7 +889,7 @@ internal fun HomePagerSurface(
             // A widget cannot be re-drawn the way a cell can — its content is another app's views — so the proxy
             // is a snapshot of the one on screen, taken once when the drag starts. See
             // `AppWidgetHostController.snapshot`.
-            val draggedWidget = session.item as? GridItem.Widget
+            val draggedWidget = session.item as? GridItem.AppWidget
             val widgetShot = remember(draggedWidget) { draggedWidget?.let { widgetHost.snapshot(it.appWidgetId) } }
             // A **widget container** is the same problem one level up, and the page to capture answers itself:
             // `snapshot` returns null for a widget that is not currently composed, and a pager composes the page it
@@ -909,7 +909,7 @@ internal fun HomePagerSurface(
                 // grabbed by a small centred icon, so `grabInItem` is near centre for it anyway; forcing the centre
                 // keeps it exactly where it was and cannot drift if that small target is ever off-centre.
                 val grab = when (session.item) {
-                    is GridItem.Widget, is GridItem.WidgetContainer, is GridItem.IconContainer -> session.grabInItem
+                    is GridItem.AppWidget, is GridItem.WidgetContainer, is GridItem.IconContainer -> session.grabInItem
                     is GridItem.App, is GridItem.Folder -> GrabCenter
                 }
                 FloatingDragIcon(
@@ -1142,9 +1142,9 @@ private fun HomeItemCell(
         is HomeItem.App ->
             AppCell(app = item.info, modifier = cellModifier, metrics = metrics, itemGestures = itemGestures)
 
-        is HomeItem.Widget -> WidgetCell(
+        is HomeItem.Widget -> AppWidgetCell(
             appWidgetId = item.info.appWidgetId,
-            label = item.info.label.ifBlank { UnnamedWidget },
+            label = item.info.label.ifBlank { UnnamedAppWidget },
             modifier = cellModifier,
             itemGestures = itemGestures,
         )
@@ -1220,7 +1220,7 @@ private fun geometryFor(zone: HomeZone, main: GridGeometry?, dock: GridGeometry?
 internal sealed interface HomeResizeRules {
 
     /** A widget, bounded by what its provider says it can be drawn at. */
-    data class Widget(val rules: WidgetResizeRules) : HomeResizeRules
+    data class Widget(val rules: AppWidgetResizeRules) : HomeResizeRules
 
     /** An icon or widget container, bounded by the grid rather than by any provider. */
     data object Container : HomeResizeRules
@@ -1239,7 +1239,7 @@ internal sealed interface HomeResizeRules {
  * container *lands*, and a default placement is not a minimum.
  */
 private fun HomeResizeRules.asResizeBounds(geometry: GridGeometry, config: GridConfig): ResizeBounds = when (this) {
-    // Both axes always: the provider's `resizeMode` is not honored here — see `WidgetResizeRules`.
+    // Both axes always: the provider's `resizeMode` is not honored here — see `AppWidgetResizeRules`.
     is HomeResizeRules.Widget -> ResizeBounds(
         horizontal = true,
         vertical = true,

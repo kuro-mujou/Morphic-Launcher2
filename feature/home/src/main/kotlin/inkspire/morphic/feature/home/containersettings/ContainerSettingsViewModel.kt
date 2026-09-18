@@ -3,20 +3,20 @@ package inkspire.morphic.feature.home.containersettings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.AppWidgetInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DeviceConfiguration
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.WidgetContainerAxis
-import inkspire.morphic.core.model.WidgetInfo
 import inkspire.morphic.core.model.arrangementKey
 import inkspire.morphic.data.apps.AppRepository
+import inkspire.morphic.data.appwidgets.AppWidgetHostController
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.settings.OrientationSettings
 import inkspire.morphic.data.settings.SettingsRepository
-import inkspire.morphic.data.widgets.AppWidgetHostController
 import inkspire.morphic.feature.home.ContainerIcon
 import inkspire.morphic.feature.home.HomeViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -133,7 +133,7 @@ class ContainerSettingsViewModel(
     /** The widget container's. No app cache in it — a widget resolves through the layout store's own definitions. */
     private fun widgetState() = combine(
         layoutRepository.widgetContainers(),
-        layoutRepository.widgets(),
+        layoutRepository.appWidgets(),
     ) { containers, widgets ->
         val container = containers.firstOrNull { it.id == route.containerId }
             ?: return@combine ContainerSettingsState()
@@ -216,13 +216,13 @@ class ContainerSettingsViewModel(
     fun removeWidget(appWidgetId: Int) {
         write(
             LayoutChange.RemoveFromWidgetContainer(route.containerId, appWidgetId),
-            LayoutChange.RemoveFromGrid(GridItem.Widget(appWidgetId)),
+            LayoutChange.RemoveFromGrid(GridItem.AppWidget(appWidgetId)),
         )
         widgetHost.deleteId(appWidgetId)
     }
 
     /** Files a widget the add flow has just bound into this container. */
-    fun addWidget(widget: WidgetInfo) {
+    fun addWidget(widget: AppWidgetInfo) {
         write(LayoutChange.AddToWidgetContainer(route.containerId, widget))
     }
 

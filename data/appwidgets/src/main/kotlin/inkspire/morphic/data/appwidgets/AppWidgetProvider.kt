@@ -1,4 +1,4 @@
-package inkspire.morphic.data.widgets
+package inkspire.morphic.data.appwidgets
 
 import android.content.ComponentName
 import android.graphics.Bitmap
@@ -7,7 +7,7 @@ import android.graphics.Bitmap
  * One installed app widget, as the picker needs to show it.
  *
  * **A read of the platform, not a stored thing.** Nothing here is persisted: what a launcher keeps once a widget is
- * placed is `WidgetInfo` in `core:model` — an allocated `appWidgetId` and the provider that answers for it — where
+ * placed is `AppWidgetInfo` in `core:model` — an allocated `appWidgetId` and the provider that answers for it — where
  * this describes a widget that *could* be added and has no id yet. Keeping them apart is what stops a picker row
  * looking like a placed widget with a missing field.
  *
@@ -19,13 +19,13 @@ import android.graphics.Bitmap
  *   it is someone else's artwork, read fresh for a sheet that is about to be shown and thrown away when it closes.
  * @property targetCols the default width the provider declares **in cells** (`targetCellWidth`, Android 12+), or
  *   0 when it declares none. This is the widget's own answer to "how big am I", so it is preferred over the
- *   min-pixel derivation when placing — see `WidgetSpan.forWidget`.
+ *   min-pixel derivation when placing — see `AppWidgetSpan.forWidget`.
  * @property targetRows the default height in cells, the same way.
  * @property minWidthPx the smallest size the provider says it can be drawn at, in pixels — the fallback the picker
  *   turns into a "4 × 2" label when no target is declared, and what the placement sizes from then. Left in the
  *   platform's own units because only the grid knows what a cell is.
  */
-data class WidgetProvider(
+data class AppWidgetProvider(
     val component: ComponentName,
     val label: String,
     val preview: Bitmap?,
@@ -45,8 +45,8 @@ data class WidgetProvider(
  * It is also a fact about the catalog rather than a choice about presentation: a widget belongs to the app that
  * ships it whether or not anything draws it in sections.
  */
-data class WidgetProviderGroup(
+data class AppWidgetProviderGroup(
     val packageName: String,
     val appLabel: String,
-    val providers: List<WidgetProvider>,
+    val providers: List<AppWidgetProvider>,
 )

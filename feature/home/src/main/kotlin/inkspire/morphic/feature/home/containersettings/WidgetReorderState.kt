@@ -7,7 +7,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import inkspire.morphic.core.model.WidgetInfo
+import inkspire.morphic.core.model.AppWidgetInfo
 
 /**
  * The live state of a drag-reorder over a widget container's contents.
@@ -54,7 +54,7 @@ internal class WidgetReorderState {
      * because something else changed the container while this screen held an order — a widget added or removed —
      * and at that point the stored list is the newer answer. Reconciling would be guessing where the newcomer goes.
      */
-    fun shown(stored: List<WidgetInfo>): List<WidgetInfo> {
+    fun shown(stored: List<AppWidgetInfo>): List<AppWidgetInfo> {
         val ids = order ?: return stored
         val byId = stored.associateBy { it.appWidgetId }
         if (byId.size != ids.size || !byId.keys.containsAll(ids)) {
@@ -66,11 +66,11 @@ internal class WidgetReorderState {
     }
 
     /** Clears a committed order once the store has caught up with it, so the two never disagree silently. */
-    fun settled(stored: List<WidgetInfo>) {
+    fun settled(stored: List<AppWidgetInfo>) {
         if (dragged == null && order == stored.map { it.appWidgetId }) order = null
     }
 
-    fun begin(appWidgetId: Int, stored: List<WidgetInfo>) {
+    fun begin(appWidgetId: Int, stored: List<AppWidgetInfo>) {
         order = shown(stored).map { it.appWidgetId }
         dragged = appWidgetId
         offset = 0f
@@ -109,7 +109,7 @@ internal class WidgetReorderState {
      * The held order is *kept* on a real move — it is what the list draws until the store answers with the same
      * thing, which is [settled]'s job.
      */
-    fun drop(stored: List<WidgetInfo>): List<Int>? {
+    fun drop(stored: List<AppWidgetInfo>): List<Int>? {
         val ids = order
         dragged = null
         offset = 0f

@@ -53,7 +53,7 @@ Migrated + refactored all L1 model. Key cleanups (don't-port-verbatim outcomes):
 - **Placement** — `GridRect`+`AppPosition`→`GridPlacement`; `GridEdge`→`GridEditorEdge`; `HomeGrid`/`DockGrid`
   objects→`GridBlueprint` values.
 - **Containers** — unified item alphabets: `GridItem` (on-grid peers) + `IconItem` (app|folder, replaces the
-  duplicate `DrawerSlot`/`IconContainerItem`); `Folder`/`IconContainer`/`WidgetContainer`/`WidgetInfo` all `@Serializable`.
+  duplicate `DrawerSlot`/`IconContainerItem`); `Folder`/`IconContainer`/`WidgetContainer`/`AppWidgetInfo` all `@Serializable`.
 - **Apps chrome** — `TabBarPosition`+`SearchPosition` (both were wrong `{TOP,BOTTOM,HIDDEN}`) → `VerticalEdge`
   (tab bar, no HIDDEN) + sealed `SearchPlacement` (Pinned/InHeader/Hidden).
 - **Backdrop** — `WallpaperEffect`+`WallpaperEffectParams` → one sealed `BackdropEffect` (+`BlurTone`); renamed
@@ -165,7 +165,7 @@ this entry, which is only the summary.
       the layout reacts to the resulting `AppEvent` removal and prunes placements. Uninstall is available
       wherever an app shows — including the APPS drawer, where it is the *only* removal (you can't "remove"
       an app from the full installed-app list).
-- Geometry ⚠️: `GridOccupancy`, `PlacementResolver`, `GridReflow`, `GridEdit`, `DockGridEdit`, `WidgetSpan`.
+- Geometry ⚠️: `GridOccupancy`, `PlacementResolver`, `GridReflow`, `GridEdit`, `DockGridEdit`, `AppWidgetSpan`.
 - 🔧 FLOW engine (`FlowReflow`, `SpreadPush`, `PushPath`): Launcher 1's `FLOW_TO_DRAWER_PLAN` **drops FLOW from
   home**. Decide up front whether L2 even ports these, or moves the packed-grid behavior straight to the drawer.
 - 🔧 `GridEdit` vs `DockGridEdit` are near-duplicate edge-edit passes — unify into one edge-edit operation
@@ -175,11 +175,11 @@ this entry, which is only the summary.
 - `IconOverrideRepository`(+`IconOverrideMapper`), `CustomIconStore`, `SkinImageStore`, `IconInspector`,
   `IconPackManager`, `InstalledIconPack`, sources (`LauncherAppsIconSource`, `PackAwareIconSource`), `di/IconsModule`.
 
-### B10 — `data:widgets` — `AppWidgetHostController` + `di/WidgetsModule` (depends on database; MIUI quirks apply).
+### B10 — `data:appwidgets` — `AppWidgetHostController` + `di/AppWidgetsModule` (depends on database; MIUI quirks apply).
 
 ### Suggested build order
 `core:model` (finish G3–G6 as needed) → `core:common` → `core:database` → `core:icon` → `data:settings` →
-`data:apps` → `data:layout` → `data:icons` → `data:widgets` → `core:designsystem`/`core:navigation` (as
+`data:apps` → `data:layout` → `data:icons` → `data:appwidgets` → `core:designsystem`/`core:navigation` (as
 `feature:*` screens demand them).
 
 ### Arrangement persistence model (locked 2026-07-23)

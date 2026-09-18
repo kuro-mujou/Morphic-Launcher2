@@ -1,4 +1,4 @@
-package inkspire.morphic.data.widgets
+package inkspire.morphic.data.appwidgets
 
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
@@ -25,7 +25,7 @@ import java.text.Collator
  * one needs no host at all, which is why there isn't one yet. `AppWidgetManager` answers "what could be added?" on
  * its own.
  */
-interface WidgetCatalog {
+interface AppWidgetCatalog {
 
     /**
      * The installed widgets, grouped by app and sorted for display — apps by name, and each app's widgets by name
@@ -38,23 +38,23 @@ interface WidgetCatalog {
      * Blocking work (a `PackageManager` lookup and a rasterized preview per widget) is moved off the caller's
      * thread here, since there is exactly one caller shape — a sheet about to be shown.
      */
-    suspend fun installed(): List<WidgetProviderGroup>
+    suspend fun installed(): List<AppWidgetProviderGroup>
 }
 
 /**
- * Default [WidgetCatalog], over [AppWidgetManager].
+ * Default [AppWidgetCatalog], over [AppWidgetManager].
  *
  * **It does retain a [Context], unlike `DefaultLauncherAppsWrapper`, and it has to**: loading another app's
  * preview drawable is a resource inflation and takes one. The *application* context, so this is safe to hold as an
  * application-scoped singleton — the rule that class states is about never holding a view or activity context, and
  * it already keeps `Resources` from the same place for the same reason.
  *
- * `internal` so only Koin constructs it — consumers depend on the [WidgetCatalog] interface.
+ * `internal` so only Koin constructs it — consumers depend on the [AppWidgetCatalog] interface.
  */
-internal class DefaultWidgetCatalog(
+internal class DefaultAppWidgetCatalog(
     context: Context,
     private val dispatchers: AppDispatchers,
-) : WidgetCatalog {
+) : AppWidgetCatalog {
 
     private val appContext: Context = context.applicationContext
     private val appWidgetManager: AppWidgetManager = AppWidgetManager.getInstance(appContext)
@@ -66,7 +66,7 @@ internal class DefaultWidgetCatalog(
      */
     private val resources = appContext.resources
 
-    override suspend fun installed(): List<WidgetProviderGroup> = withContext(dispatchers.io) {
+    override suspend fun installed(): List<AppWidgetProviderGroup> = withContext(dispatchers.io) {
         val densityDpi = resources.displayMetrics.densityDpi
         val collator = Collator.getInstance()
 
@@ -89,7 +89,7 @@ internal class DefaultWidgetCatalog(
         infos: List<AppWidgetProviderInfo>,
         densityDpi: Int,
         collator: Collator,
-    ): WidgetProviderGroup? {
+    ): AppWidgetProviderGroup? {
         val appLabel = runCatching {
             packageManager.getApplicationInfo(packageName, 0).loadLabel(packageManager).toString()
         }.getOrNull() ?: infos.firstOrNull()?.loadLabel(packageManager).orEmpty()
@@ -97,7 +97,7 @@ internal class DefaultWidgetCatalog(
 
         val providers = infos
             .map { info ->
-                WidgetProvider(
+                AppWidgetProvider(
                     component = info.provider,
                     label = info.loadLabel(packageManager).orEmpty(),
                     preview = info.preview(densityDpi),
@@ -109,7 +109,7 @@ internal class DefaultWidgetCatalog(
             }
             .sortedWith { a, b -> collator.compare(a.label, b.label) }
 
-        return WidgetProviderGroup(packageName, appLabel, providers)
+        return AppWidgetProviderGroup(packageName, appLabel, providers)
     }
 
     /**

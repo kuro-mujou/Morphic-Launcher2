@@ -5,7 +5,7 @@ import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.HomeZone
-import inkspire.morphic.data.widgets.WidgetResizeRules
+import inkspire.morphic.data.appwidgets.AppWidgetResizeRules
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -20,7 +20,7 @@ import org.junit.Test
  */
 class HomeResizeTest {
 
-    private val widget = GridItem.Widget(appWidgetId = 7)
+    private val widget = GridItem.AppWidget(appWidgetId = 7)
     private val neighbor: GridItem = GridItem.App(ComponentKey(packageName = "com.example", className = "Main"))
     private val grid = GridConfig(rows = 4, cols = 4)
     private val at = GridPlacement(page = 0, row = 0, col = 0, rowSpan = 1, colSpan = 1)
@@ -32,7 +32,7 @@ class HomeResizeTest {
     ) = HomeResize(
         item = widget,
         zone = HomeZone.MAIN,
-        rules = HomeResizeRules.Widget(WidgetResizeRules(minWidthPx = 0, minHeightPx = 0)),
+        rules = HomeResizeRules.Widget(AppWidgetResizeRules(minWidthPx = 0, minHeightPx = 0)),
         placement = placement,
         moves = moves,
         refused = refused,

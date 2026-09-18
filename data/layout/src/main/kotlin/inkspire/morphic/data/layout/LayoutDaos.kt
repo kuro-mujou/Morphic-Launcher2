@@ -1,6 +1,8 @@
 package inkspire.morphic.data.layout
 
 import inkspire.morphic.core.database.dao.AppPlacementDao
+import inkspire.morphic.core.database.dao.AppWidgetDao
+import inkspire.morphic.core.database.dao.AppWidgetPlacementDao
 import inkspire.morphic.core.database.dao.FolderDao
 import inkspire.morphic.core.database.dao.FolderItemDao
 import inkspire.morphic.core.database.dao.FolderPlacementDao
@@ -10,8 +12,6 @@ import inkspire.morphic.core.database.dao.IconContainerPlacementDao
 import inkspire.morphic.core.database.dao.WidgetContainerDao
 import inkspire.morphic.core.database.dao.WidgetContainerItemDao
 import inkspire.morphic.core.database.dao.WidgetContainerPlacementDao
-import inkspire.morphic.core.database.dao.WidgetDao
-import inkspire.morphic.core.database.dao.WidgetPlacementDao
 
 /**
  * The Room DAOs [LayoutRepositoryImpl] reads and writes, bundled so the repository takes one dependency instead
@@ -21,7 +21,7 @@ import inkspire.morphic.core.database.dao.WidgetPlacementDao
 class LayoutDaos(
     val appPlacement: AppPlacementDao,
     val folderPlacement: FolderPlacementDao,
-    val widgetPlacement: WidgetPlacementDao,
+    val widgetPlacement: AppWidgetPlacementDao,
     val iconContainerPlacement: IconContainerPlacementDao,
     val widgetContainerPlacement: WidgetContainerPlacementDao,
     val folder: FolderDao,
@@ -30,5 +30,5 @@ class LayoutDaos(
     val iconContainerItem: IconContainerItemDao,
     val widgetContainer: WidgetContainerDao,
     val widgetContainerItem: WidgetContainerItemDao,
-    val widget: WidgetDao,
+    val widget: AppWidgetDao,
 )

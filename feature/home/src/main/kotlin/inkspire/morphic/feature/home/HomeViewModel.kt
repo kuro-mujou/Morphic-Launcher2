@@ -2,6 +2,7 @@ package inkspire.morphic.feature.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import inkspire.morphic.core.model.AppWidgetInfo
 import inkspire.morphic.core.model.ArrangementKey
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DeviceConfiguration
@@ -22,7 +23,6 @@ import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.core.model.SyncMode
 import inkspire.morphic.core.model.WidgetContainer
 import inkspire.morphic.core.model.WidgetContainerAxis
-import inkspire.morphic.core.model.WidgetInfo
 import inkspire.morphic.core.model.arrangementKey
 import inkspire.morphic.core.model.blueprint
 import inkspire.morphic.core.model.linkedCounterpart
@@ -34,6 +34,8 @@ import inkspire.morphic.core.model.sideSlot
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.apps.GestureActionRunner
+import inkspire.morphic.data.appwidgets.AppWidgetHostController
+import inkspire.morphic.data.layout.AppWidgetSpan
 import inkspire.morphic.data.layout.FreeGridPlanner
 import inkspire.morphic.data.layout.GridOccupancy
 import inkspire.morphic.data.layout.GridReflow
@@ -41,7 +43,6 @@ import inkspire.morphic.data.layout.HomeListRepository
 import inkspire.morphic.data.layout.LayoutChange
 import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.layout.PlacedItem
-import inkspire.morphic.data.layout.WidgetSpan
 import inkspire.morphic.data.layout.copyArrangement
 import inkspire.morphic.data.layout.copyArrangementIfEmpty
 import inkspire.morphic.data.layout.mirrorArrangementIfEmpty
@@ -52,7 +53,6 @@ import inkspire.morphic.data.settings.OrientationSettings
 import inkspire.morphic.data.settings.SettingsRepository
 import inkspire.morphic.data.settings.SurfaceRegister
 import inkspire.morphic.data.settings.homeZoneGrids
-import inkspire.morphic.data.widgets.AppWidgetHostController
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -366,7 +366,7 @@ class HomeViewModel(
     private val definitions: Flow<HomeDefinitions> =
         combine(
             layoutRepository.folders(),
-            layoutRepository.widgets(),
+            layoutRepository.appWidgets(),
             layoutRepository.iconContainers(),
             layoutRepository.widgetContainers(),
             ::HomeDefinitions,
@@ -400,7 +400,7 @@ class HomeViewModel(
                             )
                         }
 
-                        is GridItem.Widget ->
+                        is GridItem.AppWidget ->
                             widgetById[item.appWidgetId]?.let { HomeItem.Widget(it, at.placement, at.zone) }
                         // Both containers resolve their *contents* here too, for the folder's reason: the cell draws
                         // them, so re-resolving per frame in the UI would put this join in the wrong layer twice.
@@ -623,14 +623,14 @@ class HomeViewModel(
      * The second half is why this is not a plain `RemoveFromGrid`. An allocated id is a resource that outlives this
      * process: dropping our rows alone would leave the platform believing the widget still exists, keeping the
      * provider updating something nobody can see, with no way for the user to reach it again. `data:layout` cannot
-     * do it — the host belongs to `data:widgets` and the store deliberately only keeps records — so the two halves
+     * do it — the host belongs to `data:appwidgets` and the store deliberately only keeps records — so the two halves
      * meet here, which is the same shape as the top-action band's Uninstall (a layout change beside a system call).
      *
      * Order matters only for what a failure would leave behind: the rows go first, so a host that refuses the
      * release leaves an orphaned id rather than a cell drawing a widget the layout no longer knows about.
      */
-    fun removeWidget(appWidgetId: Int) {
-        applyChanges(listOf(LayoutChange.RemoveFromGrid(GridItem.Widget(appWidgetId))))
+    fun removeAppWidget(appWidgetId: Int) {
+        applyChanges(listOf(LayoutChange.RemoveFromGrid(GridItem.AppWidget(appWidgetId))))
         widgetHost.deleteId(appWidgetId)
     }
 
@@ -646,9 +646,9 @@ class HomeViewModel(
      *   them what they just added. Null when nothing of that size fits, in which case **nothing is written** and the
      *   caller still owns the id — a widget half-added is worse than one not added.
      */
-    fun placeWidget(widget: WidgetInfo, span: WidgetSpan, zone: HomeZone, config: GridConfig): GridPlacement? {
+    fun placeAppWidget(widget: AppWidgetInfo, span: AppWidgetSpan, zone: HomeZone, config: GridConfig): GridPlacement? {
         val at = freeRect(zone, config, rowSpan = span.rowSpan, colSpan = span.colSpan) ?: return null
-        applyChanges(listOf(LayoutChange.PlaceWidget(widget, at, zone)))
+        applyChanges(listOf(LayoutChange.PlaceAppWidget(widget, at, zone)))
         return at
     }
 
@@ -701,7 +701,7 @@ class HomeViewModel(
     /**
      * Takes widget container [containerId] off HOME — **with every widget inside it, and their ids**.
      *
-     * This is [removeWidget]'s rule applied once per contained widget, and it is not optional: deleting the
+     * This is [removeAppWidget]'s rule applied once per contained widget, and it is not optional: deleting the
      * container row cascades its *membership* rows, but `widget_container_item` has no foreign key to the `widget`
      * table, so each contained widget's definition and its allocated `appWidgetId` would outlive the container with
      * nothing left pointing at them. A leak the user can neither see nor clear — the reason this is one method
@@ -718,7 +718,7 @@ class HomeViewModel(
             ?.container?.widgetIds
             .orEmpty()
         applyChanges(
-            widgetIds.map { LayoutChange.RemoveFromGrid(GridItem.Widget(it)) } +
+            widgetIds.map { LayoutChange.RemoveFromGrid(GridItem.AppWidget(it)) } +
                 LayoutChange.RemoveFromGrid(GridItem.WidgetContainer(containerId)),
         )
         widgetIds.forEach(widgetHost::deleteId)
@@ -732,7 +732,7 @@ class HomeViewModel(
      * takes no items — and nothing to be optimistic about, since the id is autogenerated and the surface has no way
      * to guess it. `applyChanges` re-syncs from the store after a structural op for exactly this case.
      *
-     * @return where it landed, or null when nothing of that size fits — [placeWidget]'s contract exactly.
+     * @return where it landed, or null when nothing of that size fits — [placeAppWidget]'s contract exactly.
      */
     fun createIconContainer(zone: HomeZone, config: GridConfig, arrangement: IconArrangement): GridPlacement? {
         val at = freeContainerRect(zone, config) ?: return null
@@ -775,7 +775,7 @@ class HomeViewModel(
     /**
      * The first free [ContainerSpan]-sized rect on [zone]'s grid, or null when the zone is full.
      *
-     * Searched rather than given a cell for [placeWidget]'s reason: the picker is reached from a long-press whose
+     * Searched rather than given a cell for [placeAppWidget]'s reason: the picker is reached from a long-press whose
      * position says where the *menu* opened, not where a container will fit.
      */
     private fun freeContainerRect(zone: HomeZone, config: GridConfig): GridPlacement? {
@@ -1362,7 +1362,7 @@ private data class HomeSizing(
  */
 private data class HomeDefinitions(
     val folders: List<Folder>,
-    val widgets: List<WidgetInfo>,
+    val widgets: List<AppWidgetInfo>,
     val iconContainers: List<IconContainer>,
     val widgetContainers: List<WidgetContainer>,
 )

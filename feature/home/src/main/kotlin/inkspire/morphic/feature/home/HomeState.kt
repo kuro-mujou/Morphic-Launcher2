@@ -2,6 +2,7 @@ package inkspire.morphic.feature.home
 
 import inkspire.morphic.core.model.AlphabetStripStyle
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.AppWidgetInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridItem
@@ -11,7 +12,6 @@ import inkspire.morphic.core.model.HomeLayout
 import inkspire.morphic.core.model.HomeZone
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.IconSizing
-import inkspire.morphic.core.model.WidgetInfo
 import inkspire.morphic.data.apps.LetterBucket
 import inkspire.morphic.data.settings.HomeItemGestures
 import inkspire.morphic.core.model.Folder as FolderModel
@@ -53,11 +53,11 @@ sealed interface HomeItem {
      * widgets needed no change to any of them.
      */
     data class Widget(
-        val info: WidgetInfo,
+        val info: AppWidgetInfo,
         override val placement: GridPlacement,
         override val zone: HomeZone,
     ) : HomeItem {
-        override val gridItem: GridItem get() = GridItem.Widget(info.appWidgetId)
+        override val gridItem: GridItem get() = GridItem.AppWidget(info.appWidgetId)
     }
 
     /**
@@ -93,12 +93,12 @@ sealed interface HomeItem {
      * A placed widget container: the [container] definition plus the resolved [widgets] it pages between, in
      * container order.
      *
-     * [widgets] is the same [WidgetInfo] a loose [Widget] carries, because a contained widget is hosted exactly as
+     * [widgets] is the same [AppWidgetInfo] a loose [Widget] carries, because a contained widget is hosted exactly as
      * a placed one is — what the container changes is *where* it draws and *when* it is visible, not what it is.
      */
     data class WidgetContainer(
         val container: WidgetContainerModel,
-        val widgets: List<WidgetInfo>,
+        val widgets: List<AppWidgetInfo>,
         override val placement: GridPlacement,
         override val zone: HomeZone,
     ) : HomeItem {
@@ -158,7 +158,7 @@ internal fun IconItem.asGridItem(): GridItem = when (this) {
 internal fun GridItem.asIconItem(): IconItem? = when (this) {
     is GridItem.App -> IconItem.App(component)
     is GridItem.Folder -> IconItem.Folder(folderId)
-    is GridItem.Widget, is GridItem.IconContainer, is GridItem.WidgetContainer -> null
+    is GridItem.AppWidget, is GridItem.IconContainer, is GridItem.WidgetContainer -> null
 }
 
 

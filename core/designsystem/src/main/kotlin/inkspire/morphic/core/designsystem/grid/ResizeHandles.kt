@@ -36,7 +36,7 @@ enum class ResizeHandle(
  *
  * Which axes may move and how small the item may get are decisions above this layer, so they are passed in. The
  * launcher's current answer for widgets is "both axes, always": a provider's `resizeMode` is deliberately not
- * honored, because providers under-declare it constantly (see `WidgetResizeRules` in `data:widgets`). The
+ * honored, because providers under-declare it constantly (see `AppWidgetResizeRules` in `data:appwidgets`). The
  * single-axis case is still expressible, and drawn correctly — a `horizontal = false` frame shows two pills and no
  * corners — so the policy can change without this changing.
  *

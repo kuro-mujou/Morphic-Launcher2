@@ -25,7 +25,7 @@ dependencies {
     // directly on the picture and has to contrast it. This module owns the theme boundary for every launcher surface,
     // so it is the one that has to ask.
     // The AppWidgetHost's listening window is "the launcher is on screen", which is what this composable means.
-    implementation(projects.data.widgets)
+    implementation(projects.data.appwidgets)
 
     implementation(projects.data.wallpaper)
 

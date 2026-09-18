@@ -73,22 +73,22 @@ import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppInfo
+import inkspire.morphic.core.model.AppWidgetInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.WidgetContainerAxis
-import inkspire.morphic.core.model.WidgetInfo
-import inkspire.morphic.data.widgets.AppWidgetHostController
-import inkspire.morphic.data.widgets.WidgetProvider
+import inkspire.morphic.data.appwidgets.AppWidgetHostController
+import inkspire.morphic.data.appwidgets.AppWidgetProvider
 import inkspire.morphic.feature.home.AppSelectionSheet
 import inkspire.morphic.feature.home.ArrangementPicker
 import inkspire.morphic.feature.home.ContainerIcon
 import inkspire.morphic.feature.home.IconContainerCell
-import inkspire.morphic.feature.home.UnnamedWidget
+import inkspire.morphic.feature.home.UnnamedAppWidget
 import inkspire.morphic.feature.home.asIconItem
 import inkspire.morphic.feature.home.listKey
 import inkspire.morphic.feature.home.widgetpicker.WidgetPickerSheet
-import inkspire.morphic.feature.home.widgetpicker.rememberWidgetAddFlow
+import inkspire.morphic.feature.home.widgetpicker.rememberAppWidgetAddFlow
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import org.koin.core.parameter.parametersOf
@@ -206,9 +206,9 @@ private fun ContainerSettingsContent(
     // The add flow, owned here now that the picker is opened from this screen rather than from the surface. The
     // widget always goes into *this* container, so unlike home's there is no target to remember and no free cell to
     // find — the container already has a placement, and each of its pages fills it.
-    val addWidget = rememberWidgetAddFlow(koinInject<AppWidgetHostController>()) { bound ->
+    val addWidget = rememberAppWidgetAddFlow(koinInject<AppWidgetHostController>()) { bound ->
         viewModel.addWidget(
-            WidgetInfo(
+            AppWidgetInfo(
                 appWidgetId = bound.appWidgetId,
                 providerPackage = bound.provider.packageName,
                 providerClass = bound.provider.className,
@@ -477,7 +477,7 @@ private fun ContainerSheets(
     sheet: ContainerSheet?,
     availableApps: List<AppInfo>,
     onAddApps: (List<ComponentKey>) -> Unit,
-    onAddWidget: (WidgetProvider) -> Unit,
+    onAddWidget: (AppWidgetProvider) -> Unit,
     onDismiss: () -> Unit,
 ) {
     when (sheet) {
@@ -867,7 +867,7 @@ private fun IconContentRow(icon: ContainerIcon, onRemove: () -> Unit) {
  */
 @Composable
 private fun WidgetContentRow(
-    widget: WidgetInfo,
+    widget: AppWidgetInfo,
     dragging: Boolean,
     onDragStart: () -> Unit,
     onDrag: (Float) -> Unit,
@@ -877,7 +877,7 @@ private fun WidgetContentRow(
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalMorphicColors.current
-    val label = widget.label.ifBlank { UnnamedWidget }
+    val label = widget.label.ifBlank { UnnamedAppWidget }
     ContentRow(
         label = label,
         onRemove = onRemove,

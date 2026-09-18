@@ -30,8 +30,8 @@ import inkspire.morphic.core.designsystem.backdrop.OnPanel
 import inkspire.morphic.core.designsystem.drag.requireDragCoordinator
 import inkspire.morphic.core.designsystem.surface.claimSurfaceGestureWhilePressed
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import inkspire.morphic.core.model.AppWidgetInfo
 import inkspire.morphic.core.model.WidgetContainerAxis
-import inkspire.morphic.core.model.WidgetInfo
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -69,7 +69,7 @@ private const val AutoRotateIntervalMs = 5_000L
  */
 @Composable
 internal fun WidgetContainerCell(
-    widgets: List<WidgetInfo>,
+    widgets: List<AppWidgetInfo>,
     axis: WidgetContainerAxis,
     modifier: Modifier = Modifier,
     itemGestures: Modifier = Modifier,
@@ -132,9 +132,9 @@ internal fun WidgetContainerCell(
             }
         }
         val page: @Composable (Int) -> Unit = { index ->
-            WidgetCell(
+            AppWidgetCell(
                 appWidgetId = widgets[index].appWidgetId,
-                label = widgets[index].label.ifBlank { UnnamedWidget },
+                label = widgets[index].label.ifBlank { UnnamedAppWidget },
                 modifier = Modifier.fillMaxSize(),
             )
         }

@@ -3,8 +3,8 @@ package inkspire.morphic.feature.home
 import androidx.compose.ui.geometry.Rect
 import inkspire.morphic.core.designsystem.menu.LauncherMenuHost
 import inkspire.morphic.core.designsystem.menu.MenuAction
+import inkspire.morphic.data.appwidgets.AppWidgetHostController
 import inkspire.morphic.data.layout.LayoutChange
-import inkspire.morphic.data.widgets.AppWidgetHostController
 
 /**
  * What a long-press on a HOME item offers, per kind of item.
@@ -52,21 +52,21 @@ internal fun showHomeItemMenu(
         )
         // A widget offers one verb and no shortcuts stage: it is not an app, so App info and Uninstall would
         // name its *provider* rather than the thing being long-pressed. Removing it also releases the
-        // `appWidgetId` — see [HomeViewModel.removeWidget], which is why this is not a plain `RemoveFromGrid`.
+        // `appWidgetId` — see [HomeViewModel.removeAppWidget], which is why this is not a plain `RemoveFromGrid`.
         is HomeItem.Widget -> menuHost?.show(
-            title = item.info.label.ifBlank { UnnamedWidget },
+            title = item.info.label.ifBlank { UnnamedAppWidget },
             anchor = anchor,
             actions = buildList {
                 // **Every widget is offered a resize**, whatever its `resizeMode` says — see
-                // `WidgetResizeRules` for why that declaration is not honored. What the provider *is*
+                // `AppWidgetResizeRules` for why that declaration is not honored. What the provider *is*
                 // believed about is how small it can be drawn, which is a live read of it rather than
                 // anything the layout stores. A widget the platform can no longer describe gets no row,
                 // because there is nothing to bound the drag with.
-                val rules = widgetHost.boundWidget(item.info.appWidgetId)?.resize
+                val rules = widgetHost.boundAppWidget(item.info.appWidgetId)?.resize
                 if (rules != null) {
                     add(resizeAction(item, HomeResizeRules.Widget(rules), onResize))
                 }
-                add(MenuAction("Remove widget") { viewModel.removeWidget(item.info.appWidgetId) })
+                add(MenuAction("Remove widget") { viewModel.removeAppWidget(item.info.appWidgetId) })
             },
         )
         // No shortcuts stage and no App info — a folder is the launcher's own object, not an installed app.
@@ -108,7 +108,7 @@ internal fun showHomeItemMenu(
         )
         // **Add widget** is what makes the paging reachable before any drag work exists, and it costs nothing —
         // it reuses the add flow this surface already holds, aimed at this container. **Remove container** goes
-        // through the ViewModel rather than being a plain `RemoveFromGrid` for `removeWidget`'s reason, once per
+        // through the ViewModel rather than being a plain `RemoveFromGrid` for `removeAppWidget`'s reason, once per
         // contained widget: the cascade drops membership but not the widgets' definitions or their allocated
         // ids, so the plain op would leak every widget in it.
         is HomeItem.WidgetContainer -> menuHost?.show(
@@ -136,7 +136,7 @@ internal val HomeItem.menuLabel: String
     get() = when (this) {
         is HomeItem.App -> info.label
         is HomeItem.Folder -> folder.label.ifBlank { UnnamedFolder }
-        is HomeItem.Widget -> info.label.ifBlank { UnnamedWidget }
+        is HomeItem.Widget -> info.label.ifBlank { UnnamedAppWidget }
         is HomeItem.IconContainer -> IconContainerTitle
         is HomeItem.WidgetContainer -> WidgetContainerTitle
     }

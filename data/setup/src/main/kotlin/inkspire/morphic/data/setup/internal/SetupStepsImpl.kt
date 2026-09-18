@@ -42,7 +42,7 @@ internal class SetupStepsImpl(
         request,
         wallpaperRepository.wallpaper,
         settingsRepository.iconAppearance,
-        layoutRepository.widgets(),
+        layoutRepository.appWidgets(),
     ) { onboarding, askable, wallpaper, icons, widgets ->
         pendingSetupSteps(
             facts = SetupFacts(

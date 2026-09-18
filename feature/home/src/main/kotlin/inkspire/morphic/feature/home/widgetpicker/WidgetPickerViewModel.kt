@@ -2,8 +2,8 @@ package inkspire.morphic.feature.home.widgetpicker
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import inkspire.morphic.data.widgets.WidgetCatalog
-import inkspire.morphic.data.widgets.WidgetProviderGroup
+import inkspire.morphic.data.appwidgets.AppWidgetCatalog
+import inkspire.morphic.data.appwidgets.AppWidgetProviderGroup
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,13 +16,13 @@ import kotlinx.coroutines.launch
  *   different thing from an empty list and is drawn differently: null is a spinner, empty is a device with no
  *   widgets on it. Collapsing the two would show "no widgets" for the second or so the read takes.
  */
-data class WidgetPickerState(val groups: List<WidgetProviderGroup>? = null)
+data class WidgetPickerState(val groups: List<AppWidgetProviderGroup>? = null)
 
 /**
  * State holder for the widget picker.
  *
  * **A ViewModel for a sheet, because a modal sheet is a screen**: it has its own state, its own lifetime and its
- * own one-shot load. The alternative — `koinInject` a `WidgetCatalog` in the composable and `produceState` over it,
+ * own one-shot load. The alternative — `koinInject` a `AppWidgetCatalog` in the composable and `produceState` over it,
  * which is what L1 did — puts a platform read inside composition and re-runs it on every recomposition key change.
  *
  * **The read happens once, in `init`, and the result is kept.** Scoped to the host screen's `ViewModelStore`, so
@@ -32,7 +32,7 @@ data class WidgetPickerState(val groups: List<WidgetProviderGroup>? = null)
  * exists to keep the *app* cache live, not this. When it matters, this becomes a flow off the same signal.
  */
 class WidgetPickerViewModel(
-    private val widgetCatalog: WidgetCatalog,
+    private val widgetCatalog: AppWidgetCatalog,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(WidgetPickerState())

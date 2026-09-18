@@ -6,13 +6,13 @@ import inkspire.morphic.core.common.di.commonModule
 import inkspire.morphic.core.database.di.databaseModule
 import inkspire.morphic.core.icon.di.iconModule
 import inkspire.morphic.data.apps.di.appsModule
+import inkspire.morphic.data.appwidgets.di.appWidgetsModule
 import inkspire.morphic.data.billing.di.billingModule
 import inkspire.morphic.data.icons.di.iconsModule
 import inkspire.morphic.data.layout.di.layoutModule
 import inkspire.morphic.data.settings.di.settingsModule
 import inkspire.morphic.data.setup.di.setupModule
 import inkspire.morphic.data.wallpaper.di.wallpaperModule
-import inkspire.morphic.data.widgets.di.widgetsModule
 import inkspire.morphic.feature.apps.di.appsSurfaceModule
 import inkspire.morphic.feature.home.di.homeModule
 import inkspire.morphic.feature.onboarding.di.onboardingModule
@@ -43,7 +43,7 @@ class LauncherApplication : Application() {
                 settingsModule,
                 setupModule,
                 wallpaperModule,
-                widgetsModule,
+                appWidgetsModule,
                 homeModule,
                 appsSurfaceModule,
                 settingsSurfaceModule,

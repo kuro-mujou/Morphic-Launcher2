@@ -13,8 +13,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import inkspire.morphic.data.widgets.AppWidgetHostController
-import inkspire.morphic.data.widgets.BoundWidget
+import inkspire.morphic.data.appwidgets.AppWidgetHostController
+import inkspire.morphic.data.appwidgets.BoundAppWidget
 import timber.log.Timber
 
 /** No widget is being added. `AppWidgetManager` uses the same value for "not a real id". */
@@ -41,16 +41,16 @@ private const val NoPendingId = AppWidgetManager.INVALID_APPWIDGET_ID
  *
  * **What it does *not* decide is where the widget goes.** L1's equivalent held the home state, both grid configs,
  * four cell sizes and the surface kind so it could place the widget itself — fourteen mutable fields reassigned on
- * every composition. Here the caller receives a [BoundWidget] and answers whether it kept it, so the flow needs to
+ * every composition. Here the caller receives a [BoundAppWidget] and answers whether it kept it, so the flow needs to
  * know nothing about grids at all.
  *
  * @param onBound called with the bound, configured widget. **Return true if it was placed** (the caller now owns
  *   the id) and false if it could not be — this releases the id in that case.
  */
 @Stable
-class WidgetAddFlow internal constructor(
+class AppWidgetAddFlow internal constructor(
     private val host: AppWidgetHostController,
-    private val onBound: (BoundWidget) -> Boolean,
+    private val onBound: (BoundAppWidget) -> Boolean,
 ) {
 
     /** The id being added, or [NoPendingId]. Only one add is in flight at a time — the picker is modal. */
@@ -103,7 +103,7 @@ class WidgetAddFlow internal constructor(
      * returns OK. Placing first would put a half-set-up widget on the grid.
      */
     private fun configureOrFinish(id: Int) {
-        val configure = host.boundWidget(id)?.configure
+        val configure = host.boundAppWidget(id)?.configure
         if (configure == null) {
             finish(id)
         } else {
@@ -119,7 +119,7 @@ class WidgetAddFlow internal constructor(
     /** Hands the finished widget to the caller, and releases the id if it could not take it. */
     private fun finish(id: Int) {
         pendingId = NoPendingId
-        val bound = host.boundWidget(id)
+        val bound = host.boundAppWidget(id)
         if (bound == null) {
             // Bound a moment ago and gone now — the provider was uninstalled mid-flow, or the profile went away.
             Timber.w("Widget %d bound but no longer resolves; releasing it", id)
@@ -140,19 +140,19 @@ class WidgetAddFlow internal constructor(
 }
 
 /**
- * A [WidgetAddFlow] wired to this composition's activity-result launchers.
+ * A [AppWidgetAddFlow] wired to this composition's activity-result launchers.
  *
  * [onBound] is kept current through [rememberUpdatedState], so the flow can be remembered once while still
  * calling back into whatever the surface's *latest* placement logic is — which matters because that logic closes
  * over the grid and its measured geometry, both of which change under it while a configuration screen is open.
  */
 @Composable
-internal fun rememberWidgetAddFlow(
+internal fun rememberAppWidgetAddFlow(
     host: AppWidgetHostController,
-    onBound: (BoundWidget) -> Boolean,
-): WidgetAddFlow {
+    onBound: (BoundAppWidget) -> Boolean,
+): AppWidgetAddFlow {
     val latestOnBound by rememberUpdatedState(onBound)
-    val flow = remember(host) { WidgetAddFlow(host) { latestOnBound(it) } }
+    val flow = remember(host) { AppWidgetAddFlow(host) { latestOnBound(it) } }
 
     val bind = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         flow.onBindResult(it.resultCode)
