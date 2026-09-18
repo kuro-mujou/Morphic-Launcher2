@@ -4,7 +4,9 @@ import inkspire.morphic.core.model.widget.WidgetGlobals
 import inkspire.morphic.core.model.widget.WidgetLayerSpec
 import inkspire.morphic.core.model.widget.WidgetRecipe
 import inkspire.morphic.core.model.widget.WidgetSource
+import inkspire.morphic.core.model.widget.children
 import inkspire.morphic.core.model.widget.resolvedGlobals
+import inkspire.morphic.core.model.widget.withChildren
 
 /**
  * Where a layer sits in a recipe's tree: its index among the recipe's own layers, then among its group's, and so on
@@ -18,18 +20,18 @@ internal fun WidgetRecipe.layerAt(path: LayerPath): WidgetLayerSpec? {
     var layer: WidgetLayerSpec? = null
     path.forEach { index ->
         layer = layers.getOrNull(index) ?: return null
-        layers = (layer?.source as? WidgetSource.Overlap)?.layers.orEmpty()
+        layers = layer?.source?.children.orEmpty()
     }
     return layer
 }
 
 /** What sits directly inside [path] — the recipe's layers for the widget, a group's for a group, nothing otherwise. */
 internal fun WidgetRecipe.childrenAt(path: LayerPath): List<WidgetLayerSpec> =
-    if (path.isEmpty()) layers else (layerAt(path)?.source as? WidgetSource.Overlap)?.layers.orEmpty()
+    if (path.isEmpty()) layers else layerAt(path)?.source?.children.orEmpty()
 
-/** Whether [path] can hold layers: the widget, or a group. */
+/** Whether [path] can hold layers: the widget, or a group of either kind. */
 internal fun WidgetRecipe.isContainer(path: LayerPath): Boolean =
-    path.isEmpty() || layerAt(path)?.source is WidgetSource.Overlap
+    path.isEmpty() || layerAt(path)?.source?.children != null
 
 /** The recipe with [path]'s layer changed by [change]. A path that leads nowhere changes nothing. */
 internal fun WidgetRecipe.updatedAt(path: LayerPath, change: (WidgetLayerSpec) -> WidgetLayerSpec): WidgetRecipe {
@@ -40,10 +42,7 @@ internal fun WidgetRecipe.updatedAt(path: LayerPath, change: (WidgetLayerSpec) -
 /** The recipe with [layers] as what sits directly inside [path]. */
 internal fun WidgetRecipe.withChildrenAt(path: LayerPath, layers: List<WidgetLayerSpec>): WidgetRecipe = when {
     path.isEmpty() -> copy(layers = layers)
-    else -> updatedAt(path) { layer ->
-        val group = layer.source as? WidgetSource.Overlap ?: return@updatedAt layer
-        layer.copy(source = group.copy(layers = layers))
-    }
+    else -> updatedAt(path) { it.copy(source = it.source.withChildren(layers)) }
 }
 
 /** The recipe without the layer at [path]. */
@@ -60,11 +59,12 @@ internal fun WidgetRecipe.removedAt(path: LayerPath): WidgetRecipe {
 internal fun WidgetRecipe.globalsAt(path: LayerPath): WidgetGlobals {
     var scope = resolvedGlobals
     var layers = layers
-    // Every group *above* the layer opens a scope; the layer's own, if it is a group, is for its children.
+    // Every free group *above* the layer opens a scope; the layer's own, if it is a group, is for its children. A stack
+    // declares no settings, so it is walked through without opening one.
     path.dropLast(1).forEach { index ->
-        val group = layers.getOrNull(index)?.source as? WidgetSource.Overlap ?: return scope
-        scope = scope.inside(group)
-        layers = group.layers
+        val source = layers.getOrNull(index)?.source ?: return scope
+        if (source is WidgetSource.Overlap) scope = scope.inside(source)
+        layers = source.children ?: return scope
     }
     return scope
 }
@@ -77,6 +77,7 @@ internal val WidgetLayerSpec.label: String
         is WidgetSource.Image -> "Image"
         is WidgetSource.Progress -> "Progress"
         is WidgetSource.Overlap -> "Group"
+        is WidgetSource.Stack -> "Stack"
     }
 
 /**
@@ -99,8 +100,8 @@ private fun List<WidgetLayerSpec>.updatedAt(
     val next = if (path.size == 1) {
         change(layer)
     } else {
-        val group = layer.source as? WidgetSource.Overlap ?: return null
-        layer.copy(source = group.copy(layers = group.layers.updatedAt(path.drop(1), change) ?: return null))
+        val children = layer.source.children ?: return null
+        layer.copy(source = layer.source.withChildren(children.updatedAt(path.drop(1), change) ?: return null))
     }
     return toMutableList().apply { set(path.first(), next) }
 }

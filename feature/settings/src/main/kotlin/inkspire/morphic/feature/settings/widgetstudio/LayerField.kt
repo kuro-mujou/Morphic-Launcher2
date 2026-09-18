@@ -51,15 +51,33 @@ internal sealed interface LayerField {
  * then where it sits and how, and its name last.
  *
  * @param scope the settings in scope where the layer sits, which decides whether a binding on it is live.
+ * @param inStack the layer is one of a stack's, which places it — so its anchor and offsets, which would change
+ *   nothing there, are not offered.
  */
-internal fun layerFields(layer: WidgetLayerSpec, scope: WidgetGlobals): List<LayerField> =
+internal fun layerFields(layer: WidgetLayerSpec, scope: WidgetGlobals, inStack: Boolean = false): List<LayerField> =
     when (val source = layer.source) {
         is WidgetSource.Text -> textFields(source, scope)
         is WidgetSource.Shape -> shapeFields(source, scope)
         is WidgetSource.Progress -> progressFields(source, scope)
+        is WidgetSource.Stack -> stackFields(source)
         is WidgetSource.Overlap, is WidgetSource.Image -> emptyList()
-    } + placementFields(layer) +
+    } + placementFields(layer).filterNot { inStack && it.key in PlacedByStack } +
         text("name", "Name", layer.name.orEmpty()) { l, value -> l.copy(name = value.ifBlank { null }) }
+
+/** What a stack decides for each of its layers, and so what is not asked of them. */
+private val PlacedByStack = setOf("across", "down", "x", "y")
+
+private fun stackFields(source: WidgetSource.Stack): List<LayerField> = listOf(
+    choice("axis", "Direction", listOf("Down", "Across"), source.axis.ordinal) { l, i ->
+        l.edit<WidgetSource.Stack> { it.copy(axis = WidgetSource.Stack.Axis.entries[i]) }
+    },
+    number("spacing", "Spacing", source.spacing, 0f, MaxSpacing) { l, v ->
+        l.edit<WidgetSource.Stack> { it.copy(spacing = v) }
+    },
+    choice("align", "Align", listOf("Start", "Center", "End"), source.align.ordinal) { l, i ->
+        l.edit<WidgetSource.Stack> { it.copy(align = WidgetSource.Stack.Align.entries[i]) }
+    },
+)
 
 private fun placementFields(layer: WidgetLayerSpec): List<LayerField> = listOf(
     switch("visible", "Visible", layer.visible) { l, value -> l.copy(visible = value) },
@@ -101,75 +119,89 @@ private fun extentFields(
 }
 
 private fun textFields(source: WidgetSource.Text, scope: WidgetGlobals): List<LayerField> = listOf(
-    LayerField.Formula("text", "Text", source.text) { l, v -> l.withText { it.copy(text = v) } },
-    boundOr(scope, source.sizeGlobal, "size", "Size", { l -> l.withText { it.copy(sizeGlobal = null) } }) {
-        number("size", "Size", source.size, MinText, MaxText) { l, v -> l.withText { it.copy(size = v) } }
+    LayerField.Formula("text", "Text", source.text) { l, v -> l.edit<WidgetSource.Text> { it.copy(text = v) } },
+    boundOr(scope, source.sizeGlobal, "size", "Size", { l -> l.edit<WidgetSource.Text> { it.copy(sizeGlobal = null) } }) {
+        number("size", "Size", source.size, MinText, MaxText) { l, v -> l.edit<WidgetSource.Text> { it.copy(size = v) } }
     },
     number("weight", "Weight", source.weight.toFloat(), MinWeight, MaxWeight) { l, v ->
-        l.withText { it.copy(weight = (v / WeightStep).roundToInt() * WeightStep.toInt()) }
+        l.edit<WidgetSource.Text> { it.copy(weight = (v / WeightStep).roundToInt() * WeightStep.toInt()) }
     },
-    boundOr(scope, source.colorGlobal, "color", "Color", { l -> l.withText { it.copy(colorGlobal = null) } }) {
-        color("color", "Color", source.color) { l, v -> l.withText { it.copy(color = v) } }
+    boundOr(scope, source.colorGlobal, "color", "Color", { l -> l.edit<WidgetSource.Text> { it.copy(colorGlobal = null) } }) {
+        color("color", "Color", source.color) { l, v -> l.edit<WidgetSource.Text> { it.copy(color = v) } }
     },
-    boundOr(scope, source.fontGlobal, "font", "Font", { l -> l.withText { it.copy(fontGlobal = null) } }) {
+    boundOr(scope, source.fontGlobal, "font", "Font", { l -> l.edit<WidgetSource.Text> { it.copy(fontGlobal = null) } }) {
         LayerField.Setting("font", WidgetGlobal.Font("font", "Font", source.font)) { l, g ->
-            l.withText { it.copy(font = (g as WidgetGlobal.Font).value) }
+            l.edit<WidgetSource.Text> { it.copy(font = (g as WidgetGlobal.Font).value) }
         }
     },
     choice("align", "Align", listOf("Left", "Center", "Right"), source.align.ordinal) { l, i ->
-        l.withText { it.copy(align = WidgetSource.Text.Align.entries[i]) }
+        l.edit<WidgetSource.Text> { it.copy(align = WidgetSource.Text.Align.entries[i]) }
     },
     number("lines", "Lines", source.maxLines.toFloat(), 1f, MaxLines) { l, v ->
-        l.withText { it.copy(maxLines = v.roundToInt()) }
+        l.edit<WidgetSource.Text> { it.copy(maxLines = v.roundToInt()) }
     },
 )
 
 private fun shapeFields(source: WidgetSource.Shape, scope: WidgetGlobals): List<LayerField> = listOf(
     choice("kind", "Shape", listOf("Rectangle", "Oval"), source.kind.ordinal) { l, i ->
-        l.withShape { it.copy(kind = WidgetSource.Shape.Kind.entries[i]) }
+        l.edit<WidgetSource.Shape> { it.copy(kind = WidgetSource.Shape.Kind.entries[i]) }
     },
-    boundOr(scope, source.colorGlobal, "color", "Color", { l -> l.withShape { it.copy(colorGlobal = null) } }) {
-        color("color", "Color", source.color) { l, v -> l.withShape { it.copy(color = v) } }
+    boundOr(scope, source.colorGlobal, "color", "Color", { l -> l.edit<WidgetSource.Shape> { it.copy(colorGlobal = null) } }) {
+        color("color", "Color", source.color) { l, v -> l.edit<WidgetSource.Shape> { it.copy(color = v) } }
     },
     boundOr(
         scope,
         source.cornerRadiusGlobal,
         "corner",
         "Corner radius",
-        { l -> l.withShape { it.copy(cornerRadiusGlobal = null) } },
+        { l -> l.edit<WidgetSource.Shape> { it.copy(cornerRadiusGlobal = null) } },
     ) {
         number("corner", "Corner radius", source.cornerRadius, 0f, MaxCorner) { l, v ->
-            l.withShape { it.copy(cornerRadius = v) }
+            l.edit<WidgetSource.Shape> { it.copy(cornerRadius = v) }
         }
     },
 )
 
 private fun progressFields(source: WidgetSource.Progress, scope: WidgetGlobals): List<LayerField> = listOf(
-    LayerField.Formula("value", "Value", source.value) { l, v -> l.withProgress { it.copy(value = v) } },
+    LayerField.Formula("value", "Value", source.value) { l, v -> l.edit<WidgetSource.Progress> { it.copy(value = v) } },
     choice("kind", "Kind", listOf("Bar", "Arc"), source.kind.ordinal) { l, i ->
-        l.withProgress { it.copy(kind = WidgetSource.Progress.Kind.entries[i]) }
+        l.edit<WidgetSource.Progress> { it.copy(kind = WidgetSource.Progress.Kind.entries[i]) }
     },
-    number("min", "From", source.min, 0f, MaxRange) { l, v -> l.withProgress { it.copy(min = v) } },
-    number("max", "To", source.max, 0f, MaxRange) { l, v -> l.withProgress { it.copy(max = v) } },
-    boundOr(scope, source.colorGlobal, "color", "Color", { l -> l.withProgress { it.copy(colorGlobal = null) } }) {
-        color("color", "Color", source.color) { l, v -> l.withProgress { it.copy(color = v) } }
+    number("min", "From", source.min, 0f, MaxRange) { l, v -> l.edit<WidgetSource.Progress> { it.copy(min = v) } },
+    number("max", "To", source.max, 0f, MaxRange) { l, v -> l.edit<WidgetSource.Progress> { it.copy(max = v) } },
+    boundOr(
+        scope,
+        source.colorGlobal,
+        "color",
+        "Color",
+        { l -> l.edit<WidgetSource.Progress> { it.copy(colorGlobal = null) } },
+    ) {
+        color("color", "Color", source.color) { l, v -> l.edit<WidgetSource.Progress> { it.copy(color = v) } }
     },
-    boundOr(scope, source.trackColorGlobal, "track", "Track", { l -> l.withProgress { it.copy(trackColorGlobal = null) } }) {
-        color("track", "Track", source.trackColor) { l, v -> l.withProgress { it.copy(trackColor = v) } }
+    boundOr(
+        scope,
+        source.trackColorGlobal,
+        "track",
+        "Track",
+        { l -> l.edit<WidgetSource.Progress> { it.copy(trackColorGlobal = null) } },
+    ) {
+        color("track", "Track", source.trackColor) { l, v -> l.edit<WidgetSource.Progress> { it.copy(trackColor = v) } }
     },
 ) + if (source.kind == WidgetSource.Progress.Kind.ARC) {
     listOf(
         number("thickness", "Thickness", source.thickness, 1f, MaxThickness) { l, v ->
-            l.withProgress { it.copy(thickness = v) }
+            l.edit<WidgetSource.Progress> { it.copy(thickness = v) }
         },
         number("start", "Start angle", source.startAngle, -HalfTurn, HalfTurn) { l, v ->
-            l.withProgress { it.copy(startAngle = v) }
+            l.edit<WidgetSource.Progress> { it.copy(startAngle = v) }
         },
-        number("sweep", "Sweep", source.sweep, MinSweep, FullTurn) { l, v -> l.withProgress { it.copy(sweep = v) } },
-        switch("rounded", "Round ends", source.rounded) { l, v -> l.withProgress { it.copy(rounded = v) } },
+        number("sweep", "Sweep", source.sweep, MinSweep, FullTurn) { l, v ->
+            l.edit<WidgetSource.Progress> { it.copy(sweep = v) }
+        },
+        switch("rounded", "Round ends", source.rounded) { l, v -> l.edit<WidgetSource.Progress> { it.copy(rounded = v) } },
     )
 } else {
-    listOf(switch("rounded", "Round ends", source.rounded) { l, v -> l.withProgress { it.copy(rounded = v) } })
+    listOf(switch("rounded", "Round ends", source.rounded) { l, v -> l.edit<WidgetSource.Progress> { it.copy(rounded = v) } })
 }
 
 /**
@@ -224,14 +256,9 @@ private fun text(key: String, label: String, value: String, apply: (WidgetLayerS
         apply(layer, (global as WidgetGlobal.Text).value)
     }
 
-private fun WidgetLayerSpec.withText(change: (WidgetSource.Text) -> WidgetSource.Text) =
-    (source as? WidgetSource.Text)?.let { copy(source = change(it)) } ?: this
-
-private fun WidgetLayerSpec.withShape(change: (WidgetSource.Shape) -> WidgetSource.Shape) =
-    (source as? WidgetSource.Shape)?.let { copy(source = change(it)) } ?: this
-
-private fun WidgetLayerSpec.withProgress(change: (WidgetSource.Progress) -> WidgetSource.Progress) =
-    (source as? WidgetSource.Progress)?.let { copy(source = change(it)) } ?: this
+/** This layer with its source changed by [change], when the source is an [S]; any other layer as it is. */
+private inline fun <reified S : WidgetSource> WidgetLayerSpec.edit(change: (S) -> S): WidgetLayerSpec =
+    (source as? S)?.let { copy(source = change(it)) } ?: this
 
 /** The anchor's column: 0 left, 1 center, 2 right. */
 private val WidgetAnchor.across: Int get() = ordinal % Sides
@@ -279,3 +306,4 @@ private const val MaxLines = 6f
 private const val MaxCorner = 100f
 private const val MaxRange = 1440f
 private const val MaxThickness = 40f
+private const val MaxSpacing = 48f

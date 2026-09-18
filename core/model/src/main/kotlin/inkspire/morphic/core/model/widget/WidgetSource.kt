@@ -4,8 +4,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * What a widget layer draws. A group is a source too — [Overlap] holds layers — so one type covers leaves and
- * containers, and a recipe is a tree of [WidgetLayerSpec]s.
+ * What a widget layer draws. A group is a source too — [Overlap] and [Stack] hold layers — so one type covers leaves
+ * and containers, and a recipe is a tree of [WidgetLayerSpec]s.
  *
  * The [SerialName]s are the stored contract. A kind this build has never heard of **throws** on decode rather than
  * being skipped, so whatever reads a stored recipe must catch and drop that one recipe, as the icon and wallpaper
@@ -138,6 +138,48 @@ sealed interface WidgetSource {
         val layers: List<WidgetLayerSpec> = emptyList(),
         val globals: List<WidgetGlobal> = emptyList(),
     ) : WidgetSource
+
+    /**
+     * A group whose layers follow one another along an [axis] — "icon, label, value", a column of lines — which
+     * overlapping cannot express: a second line cannot sit under a first whose height depends on its text.
+     *
+     * **The stack places its layers, so their own anchors and offsets are not used.** A layer's size still comes from
+     * its extents, measured against the stack; [align] decides where each sits across the axis.
+     *
+     * @property spacing in dp, between one layer and the next.
+     */
+    @Serializable
+    @SerialName("stack")
+    data class Stack(
+        val layers: List<WidgetLayerSpec> = emptyList(),
+        val axis: Axis = Axis.VERTICAL,
+        val spacing: Float = 0f,
+        val align: Align = Align.START,
+    ) : WidgetSource {
+
+        /** Down the page, or across it. */
+        @Serializable
+        enum class Axis { VERTICAL, HORIZONTAL }
+
+        /** Where a layer sits across the axis: its top or left edge, the middle, or its bottom or right edge. */
+        @Serializable
+        enum class Align { START, CENTER, END }
+    }
+}
+
+/** The layers this source holds, when it is a group of either kind; null for a leaf. */
+val WidgetSource.children: List<WidgetLayerSpec>?
+    get() = when (this) {
+        is WidgetSource.Overlap -> layers
+        is WidgetSource.Stack -> layers
+        is WidgetSource.Text, is WidgetSource.Shape, is WidgetSource.Image, is WidgetSource.Progress -> null
+    }
+
+/** This group holding [layers] instead; a leaf, which holds none, is returned unchanged. */
+fun WidgetSource.withChildren(layers: List<WidgetLayerSpec>): WidgetSource = when (this) {
+    is WidgetSource.Overlap -> copy(layers = layers)
+    is WidgetSource.Stack -> copy(layers = layers)
+    is WidgetSource.Text, is WidgetSource.Shape, is WidgetSource.Image, is WidgetSource.Progress -> this
 }
 
 private const val White = 0xFFFFFFFF.toInt()

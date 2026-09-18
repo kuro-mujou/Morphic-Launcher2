@@ -6,6 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -39,7 +40,7 @@ internal fun WidgetOverlap(
     ) { measurables, constraints ->
         val scales = FloatArray(visible.size) { WidgetPlacement.scaleOf(visible[it]) }
         val placeables = measurables.mapIndexed { i, measurable ->
-            measurable.measure(layerConstraints(visible[i], constraints, density, scales[i]))
+            measurable.measure(layerMeasureConstraints(visible[i], constraints, density, scales[i]))
         }
         // What each layer takes up once scaled — which is what is anchored, hugged and reported, so a pinched block
         // grows from its anchor rather than drifting from it.
@@ -60,17 +61,7 @@ internal fun WidgetOverlap(
             offsetsPx = FloatArray(visible.size) { visible[it].offsetY * density },
         )
         layout(constraints.constrainWidth(xs.first), constraints.constrainHeight(ys.first)) {
-            placeables.forEachIndexed { i, placeable ->
-                if (scales[i] == 1f) {
-                    placeable.place(xs.second[i], ys.second[i])
-                } else {
-                    placeable.placeWithLayer(xs.second[i], ys.second[i]) {
-                        scaleX = scales[i]
-                        scaleY = scales[i]
-                        transformOrigin = TransformOrigin(0f, 0f)
-                    }
-                }
-            }
+            placeables.forEachIndexed { i, placeable -> placeLayer(placeable, xs.second[i], ys.second[i], scales[i]) }
             onLayout?.invoke(
                 // `drawn` filters without copying, so each visible layer is found in the full list by identity — which
                 // two equal layers would defeat if it were by equality.
@@ -95,10 +86,27 @@ private fun axis(fixed: Boolean, size: Int, sizes: IntArray, biases: FloatArray,
     }
 
 /**
- * An exact size on each axis the layer's extent fixes; up to the group's own bound on each it leaves to content — that
- * bound shrunk by the layer's [scale], so content that fills it still fits once scaled up.
+ * [placeable] at ([x], [y]), drawn at [scale] from its top-left — so the box a scaled layer occupies starts where it is
+ * placed, which is what the anchoring and hugging above assumed. Both kinds of group place through this.
  */
-private fun layerConstraints(spec: WidgetLayerSpec, group: Constraints, density: Float, scale: Float): Constraints {
+internal fun Placeable.PlacementScope.placeLayer(placeable: Placeable, x: Int, y: Int, scale: Float) {
+    if (scale == 1f) {
+        placeable.place(x, y)
+    } else {
+        placeable.placeWithLayer(x, y) {
+            scaleX = scale
+            scaleY = scale
+            transformOrigin = TransformOrigin(0f, 0f)
+        }
+    }
+}
+
+/**
+ * An exact size on each axis the layer's extent fixes; up to the group's own bound on each it leaves to content — that
+ * bound shrunk by the layer's [scale], so content that fills it still fits once scaled up. Both kinds of group measure
+ * through this, so an extent means the same inside either.
+ */
+internal fun layerMeasureConstraints(spec: WidgetLayerSpec, group: Constraints, density: Float, scale: Float): Constraints {
     val width = WidgetPlacement.extentPx(spec.width, group.maxWidth, density)
     val height = WidgetPlacement.extentPx(spec.height, group.maxHeight, density)
     return Constraints(
@@ -114,7 +122,7 @@ private fun layerConstraints(spec: WidgetLayerSpec, group: Constraints, density:
  * group's measurables stay in step with its layer list.
  */
 @Composable
-private fun WidgetLayer(spec: WidgetLayerSpec, data: ScriptData, globals: WidgetGlobals) {
+internal fun WidgetLayer(spec: WidgetLayerSpec, data: ScriptData, globals: WidgetGlobals) {
     Box(
         modifier = Modifier.graphicsLayer {
             rotationZ = spec.rotation

@@ -2,6 +2,7 @@ package inkspire.morphic.feature.settings.widgetstudio
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -101,14 +102,14 @@ private fun LayerEditor(state: WidgetStudioState, viewModel: WidgetStudioViewMod
             }
         }
         Labeled("Add layer") {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 NewLayers.forEach { (label, layer) ->
-                    MorphicButton(
-                        onClick = { viewModel.addLayer(layer) },
-                        style = MorphicButtonStyle.Tonal,
-                        modifier = Modifier.weight(1f),
-                    ) { Text(label) }
+                    MorphicButton(onClick = { viewModel.addLayer(layer) }, style = MorphicButtonStyle.Tonal) { Text(label) }
                 }
+
             }
         }
         if (state.layer != null) {
@@ -187,4 +188,5 @@ private val NewLayers: List<Pair<String, WidgetLayerSpec>> = listOf(
         height = WidgetExtent.Dp(value = 8f),
     ),
     "Group" to WidgetLayerSpec(WidgetSource.Overlap(), name = "Group"),
+    "Stack" to WidgetLayerSpec(WidgetSource.Stack(spacing = 4f), name = "Stack"),
 )

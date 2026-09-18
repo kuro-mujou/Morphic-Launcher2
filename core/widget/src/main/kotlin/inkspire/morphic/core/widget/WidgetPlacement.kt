@@ -80,4 +80,14 @@ internal object WidgetPlacement {
         val max = sizes.indices.maxOf { starts[it] + sizes[it] }
         return (max - min) to IntArray(sizes.size) { starts[it] - min }
     }
+
+    /**
+     * A stack's layout along its axis: each child's leading edge, one after another with [spacingPx] between them,
+     * and the length they take together.
+     */
+    fun stackMain(sizes: IntArray, spacingPx: Int): Pair<Int, IntArray> {
+        var at = 0
+        val starts = IntArray(sizes.size) { i -> at.also { at += sizes[i] + spacingPx } }
+        return (if (sizes.isEmpty()) 0 else at - spacingPx) to starts
+    }
 }

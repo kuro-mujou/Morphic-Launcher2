@@ -78,4 +78,13 @@ class LayerFieldTest {
         val fixed = WidgetLayerSpec(WidgetSource.Shape(), width = WidgetExtent.Dp(40f))
         assertEquals(40f, (layerFields(fixed, none).setting("width.dp").control as WidgetGlobal.Number).value)
     }
+
+    @Test
+    fun `a stack's layer is not offered the placement the stack decides for it`() {
+        val layer = WidgetLayerSpec(WidgetSource.Text("x"))
+        val keys = layerFields(layer, none, inStack = true).map { it.key }
+
+        assertTrue(keys.none { it in setOf("across", "down", "x", "y") })
+        assertTrue("width" in keys && "opacity" in keys)
+    }
 }

@@ -101,4 +101,10 @@ class WidgetCadenceTest {
             assert(tick == null || tick > ClockTick.SECOND) { "${block.id} ticks $tick" }
         }
     }
+
+    @Test
+    fun `text inside a stack is read`() {
+        val recipe = WidgetRecipe(listOf(WidgetLayerSpec(WidgetSource.Stack(listOf(text("\$bi(level)\$"))))))
+        assertEquals(setOf(ProviderId.BATTERY), WidgetCadence.of(recipe).providers)
+    }
 }

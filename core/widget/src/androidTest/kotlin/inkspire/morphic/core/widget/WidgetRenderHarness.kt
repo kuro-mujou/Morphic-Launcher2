@@ -233,6 +233,53 @@ class WidgetRenderHarness {
                 ),
             ),
         ),
+        "stack" to WidgetRecipe(
+            listOf(
+                panel(),
+                WidgetLayerSpec(
+                    // A column: lines of different widths stay one under another, centered across it.
+                    WidgetSource.Stack(
+                        listOf(
+                            WidgetLayerSpec(WidgetSource.Text("\$df(HH:mm)\$", size = 32f, weight = 300)),
+                            WidgetLayerSpec(WidgetSource.Text("\$tc(up, df(EEEE))\$", size = 11f, weight = 700, color = Dim)),
+                            WidgetLayerSpec(
+                                WidgetSource.Progress("\$bi(level)\$", color = Teal),
+                                width = WidgetExtent.Dp(90f),
+                                height = WidgetExtent.Dp(6f),
+                            ),
+                        ),
+                        spacing = 6f,
+                        align = WidgetSource.Stack.Align.CENTER,
+                    ),
+                    anchor = WidgetAnchor.LEFT,
+                    offsetX = 16f,
+                ),
+                WidgetLayerSpec(
+                    // A row, end-aligned: a small ring beside a figure, bottoms lined up.
+                    WidgetSource.Stack(
+                        listOf(
+                            WidgetLayerSpec(
+                                WidgetSource.Progress(
+                                    "\$bi(level)\$",
+                                    WidgetSource.Progress.Kind.ARC,
+                                    thickness = 4f,
+                                    color = Amber,
+                                ),
+                                width = WidgetExtent.Dp(28f),
+                                height = WidgetExtent.Dp(28f),
+                            ),
+                            WidgetLayerSpec(WidgetSource.Text("\$bi(level)\$%", size = 22f)),
+                        ),
+                        axis = WidgetSource.Stack.Axis.HORIZONTAL,
+                        spacing = 8f,
+                        align = WidgetSource.Stack.Align.END,
+                    ),
+                    anchor = WidgetAnchor.BOTTOM_RIGHT,
+                    offsetX = -16f,
+                    offsetY = -16f,
+                ),
+            ),
+        ),
         "problems" to WidgetRecipe(
             listOf(
                 panel(),

@@ -22,3 +22,4 @@ data class WidgetRecipe(
     val span: WidgetSpan = WidgetSpan(),
     val globals: List<WidgetGlobal> = emptyList(),
 )
+

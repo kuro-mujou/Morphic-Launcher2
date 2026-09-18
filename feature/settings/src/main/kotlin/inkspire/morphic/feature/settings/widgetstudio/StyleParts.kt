@@ -87,6 +87,7 @@ private fun WidgetLayerSpec.readNames(): List<String> = listOfNotNull(visibleGlo
     is WidgetSource.Shape -> listOfNotNull(source.colorGlobal, source.cornerRadiusGlobal)
     is WidgetSource.Progress -> listOfNotNull(source.colorGlobal, source.trackColorGlobal)
     is WidgetSource.Overlap -> source.layers.flatMap { it.readNames() }
+    is WidgetSource.Stack -> source.layers.flatMap { it.readNames() }
     is WidgetSource.Image -> emptyList()
 }
 
@@ -95,6 +96,7 @@ private fun WidgetLayerSpec.formulas(): List<String> = when (val source = source
     is WidgetSource.Text -> listOf(source.text)
     is WidgetSource.Progress -> listOf(source.value)
     is WidgetSource.Overlap -> source.layers.flatMap { it.formulas() }
+    is WidgetSource.Stack -> source.layers.flatMap { it.formulas() }
     is WidgetSource.Shape, is WidgetSource.Image -> emptyList()
 }
 

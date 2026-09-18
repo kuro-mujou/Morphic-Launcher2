@@ -70,4 +70,14 @@ class LayerPathsTest {
         val shape = WidgetLayerSpec(WidgetSource.Shape())
         assertEquals(listOf("Text", "Shape", "Text 2", "Clock"), listOf(time, shape, date, recipe.layers[1]).labels())
     }
+
+    @Test
+    fun `a path leads through a stack as through a free group`() {
+        val stacked = WidgetRecipe(listOf(WidgetLayerSpec(WidgetSource.Stack(listOf(time, date)))))
+
+        assertEquals(date, stacked.layerAt(listOf(0, 1)))
+        assertEquals(true, stacked.isContainer(listOf(0)))
+        val moved = stacked.updatedAt(listOf(0, 1)) { it.copy(opacity = 0.5f) }
+        assertEquals(0.5f, moved.layerAt(listOf(0, 1))?.opacity)
+    }
 }

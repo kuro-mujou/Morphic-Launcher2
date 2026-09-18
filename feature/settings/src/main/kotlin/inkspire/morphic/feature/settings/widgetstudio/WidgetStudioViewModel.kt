@@ -8,6 +8,7 @@ import inkspire.morphic.core.common.scope.ApplicationScope
 import inkspire.morphic.core.model.widget.WidgetGlobal
 import inkspire.morphic.core.model.widget.WidgetLayerSpec
 import inkspire.morphic.core.model.widget.WidgetRecipe
+import inkspire.morphic.core.model.widget.WidgetSource
 import inkspire.morphic.core.widget.movedTo
 import inkspire.morphic.core.widget.scaledBy
 import inkspire.morphic.core.widgetscript.ScriptData
@@ -86,7 +87,10 @@ data class WidgetStudioState(
 
     /** The open layer's properties, in the scope its bindings read. */
     internal val fields: List<LayerField>
-        get() = recipe?.let { recipe -> layer?.let { layerFields(it, recipe.globalsAt(focus.path)) } }.orEmpty()
+        get() = recipe?.let { recipe ->
+            val inStack = focus.path.size > 1 && recipe.layerAt(focus.path.dropLast(1))?.source is WidgetSource.Stack
+            layer?.let { layerFields(it, recipe.globalsAt(focus.path), inStack) }
+        }.orEmpty()
 }
 
 /**
@@ -211,7 +215,9 @@ class WidgetStudioViewModel(
     fun removeLayer() {
         val path = focus.value.path
         val current = recipe.value ?: return
-        val name = current.layerAt(path)?.label ?: return
+        if (path.isEmpty()) return
+        // The name its chip showed, numbered like the chips, so the prompt names the layer the person just removed.
+        val name = current.childrenAt(path.dropLast(1)).labels().getOrNull(path.last()) ?: return
         remove(name, path)
     }
 
@@ -308,6 +314,7 @@ class WidgetStudioViewModel(
             layoutRepository.setWidgetRecipe(route.widgetId, next)
         }
     }
+
 
     /** What a removal took out, and everything needed to put it back as it was. */
     private data class Removal(

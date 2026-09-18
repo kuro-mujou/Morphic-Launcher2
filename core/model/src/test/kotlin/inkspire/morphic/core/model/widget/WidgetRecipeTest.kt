@@ -140,4 +140,33 @@ class WidgetRecipeTest {
             json.decodeFromString<WidgetRecipe>("""{"layers":[{"source":{"type":"hologram"}}]}""")
         }
     }
+
+    @Test
+    fun `a stack survives a round trip, under its pinned name`() {
+        val stack = WidgetLayerSpec(
+            WidgetSource.Stack(
+                listOf(WidgetLayerSpec(WidgetSource.Text("a"))),
+                axis = WidgetSource.Stack.Axis.HORIZONTAL,
+                spacing = 6f,
+                align = WidgetSource.Stack.Align.END,
+            ),
+        )
+        val stored = json.encodeToString(stack)
+
+        assertEquals(stack, json.decodeFromString<WidgetLayerSpec>(stored))
+        assertEquals(
+            """{"source":{"type":"stack","layers":[{"source":{"type":"text","text":"a"}}],"axis":"HORIZONTAL",""" +
+                """"spacing":6.0,"align":"END"}}""",
+            stored,
+        )
+    }
+
+    @Test
+    fun `either kind of group reports and replaces its children, and a leaf has none`() {
+        val a = WidgetLayerSpec(WidgetSource.Text("a"))
+        assertEquals(listOf(a), WidgetSource.Stack(listOf(a)).children)
+        assertEquals(listOf(a), WidgetSource.Overlap().withChildren(listOf(a)).children)
+        assertEquals(null, WidgetSource.Text("x").children)
+        assertEquals(WidgetSource.Text("x"), WidgetSource.Text("x").withChildren(listOf(a)))
+    }
 }

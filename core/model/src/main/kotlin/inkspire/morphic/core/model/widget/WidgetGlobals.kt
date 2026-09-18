@@ -58,5 +58,5 @@ val WidgetRecipe.resolvedGlobals: WidgetGlobals get() = WidgetGlobals(globals)
 val WidgetRecipe.isStyleable: Boolean get() = globals.isNotEmpty() || layers.any { it.declaresGlobals() }
 
 private fun WidgetLayerSpec.declaresGlobals(): Boolean =
-    (source as? WidgetSource.Overlap)?.let { group -> group.globals.isNotEmpty() || group.layers.any { it.declaresGlobals() } }
-        ?: false
+    (source as? WidgetSource.Overlap)?.globals?.isNotEmpty() == true ||
+        source.children.orEmpty().any { it.declaresGlobals() }

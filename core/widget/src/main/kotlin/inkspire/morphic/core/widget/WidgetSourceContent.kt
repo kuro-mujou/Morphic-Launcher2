@@ -39,6 +39,7 @@ internal fun WidgetSourceContent(source: WidgetSource, data: ScriptData, globals
         is WidgetSource.Image -> WidgetImage(source)
         is WidgetSource.Progress -> WidgetProgress(source, data, globals)
         is WidgetSource.Overlap -> WidgetGroup(source, data, globals)
+        is WidgetSource.Stack -> WidgetStack(source, data, globals)
     }
 }
 

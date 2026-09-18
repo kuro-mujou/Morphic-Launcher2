@@ -39,6 +39,7 @@ data class WidgetCadence(val providers: Set<ProviderId>, val clockTick: ClockTic
                     is WidgetSource.Text -> sequenceOf(source.text)
                     is WidgetSource.Progress -> sequenceOf(source.value)
                     is WidgetSource.Overlap -> formulas(source.layers, globals.inside(source))
+                    is WidgetSource.Stack -> formulas(source.layers, globals)
                     is WidgetSource.Shape, is WidgetSource.Image -> emptySequence()
                 }
             }

@@ -94,4 +94,17 @@ class WidgetPlacementTest {
     fun `an empty group hugs nothing`() {
         assertEquals(0, WidgetPlacement.hug(IntArray(0), FloatArray(0), FloatArray(0)).first)
     }
+
+    @Test
+    fun `a stack lays its layers end to end with the spacing between`() {
+        val (length, starts) = WidgetPlacement.stackMain(intArrayOf(30, 10, 20), spacingPx = 5)
+        assertEquals(70, length)
+        assertEquals(listOf(0, 35, 50), starts.toList())
+    }
+
+    @Test
+    fun `an empty stack takes no room, and spacing is only between layers`() {
+        assertEquals(0, WidgetPlacement.stackMain(IntArray(0), spacingPx = 5).first)
+        assertEquals(12, WidgetPlacement.stackMain(intArrayOf(12), spacingPx = 5).first)
+    }
 }
