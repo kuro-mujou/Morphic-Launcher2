@@ -2187,4 +2187,7 @@ and every read goes through `ScriptData` under a declared `ProviderId`. `WidgetE
 known before anything runs, and it is what WS4 will derive a widget's cadence from. The grammar's one unusual rule is
 that an operator between non-numbers is the text as written, which is what lets `df(dd-MM-yyyy)` go unquoted. Nothing
 renders a widget yet. WS2 added the stored shape, `WidgetRecipe` in `core:model/widget` — a tree of anchored layers whose
-text is formula source, never a parse tree; WS3 (the renderer) is next.
+text is formula source, never a parse tree. WS3 draws it: `core:widget`'s `WidgetRender(recipe, data)` is the only
+renderer — the studio and HOME will differ only in the `ScriptData` they pass. WS4 (providers and derived cadence) is
+next. **Compose UI tests need espresso ≥ 3.6 on this emulator** (API 36): the 3.5 the Compose test rule brings calls an
+`InputManager` method Android 16 removed, and fails before the first frame. `core:widget` pins 3.7.

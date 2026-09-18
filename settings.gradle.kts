@@ -35,6 +35,7 @@ include(":core:graphics")
 include(":core:icon")
 include(":core:navigation")
 include(":core:widgetscript")
+include(":core:widget")
 
 include(":data:apps")
 include(":data:billing")
