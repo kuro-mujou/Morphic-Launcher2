@@ -63,7 +63,7 @@ object BuiltInWidgetTemplates {
         name = "Clock",
         recipe = WidgetRecipe(
             span = WidgetSpan(cols = 4, rows = 1),
-            globals = listOf(WidgetGlobal.Switch("showDate", "Show date", true)) + panelGlobals(),
+            globals = panelGlobals(),
             layers = listOf(
                 panel(),
                 timeBlock(size = 64f, weight = 200, anchor = WidgetAnchor.LEFT, offsetX = 24f),
@@ -83,7 +83,6 @@ object BuiltInWidgetTemplates {
                     ),
                     anchor = WidgetAnchor.RIGHT,
                     offsetX = -24f,
-                    visibleGlobal = "showDate",
                 ),
             ),
         ),

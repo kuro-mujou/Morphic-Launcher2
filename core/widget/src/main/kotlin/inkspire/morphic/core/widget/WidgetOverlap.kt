@@ -3,6 +3,7 @@ package inkspire.morphic.core.widget
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Constraints
@@ -36,31 +37,46 @@ internal fun WidgetOverlap(
         content = { visible.forEach { WidgetLayer(it, data, globals) } },
         modifier = modifier,
     ) { measurables, constraints ->
+        val scales = FloatArray(visible.size) { WidgetPlacement.scaleOf(visible[it]) }
         val placeables = measurables.mapIndexed { i, measurable ->
-            measurable.measure(layerConstraints(visible[i], constraints, density))
+            measurable.measure(layerConstraints(visible[i], constraints, density, scales[i]))
         }
+        // What each layer takes up once scaled — which is what is anchored, hugged and reported, so a pinched block
+        // grows from its anchor rather than drifting from it.
+        val widths = IntArray(placeables.size) { WidgetPlacement.scaled(placeables[it].width, scales[it]) }
+        val heights = IntArray(placeables.size) { WidgetPlacement.scaled(placeables[it].height, scales[it]) }
         val xs = axis(
             fixed = constraints.hasFixedWidth,
             size = constraints.maxWidth,
-            sizes = IntArray(placeables.size) { placeables[it].width },
+            sizes = widths,
             biases = FloatArray(visible.size) { WidgetPlacement.horizontalBias(visible[it].anchor) },
             offsetsPx = FloatArray(visible.size) { visible[it].offsetX * density },
         )
         val ys = axis(
             fixed = constraints.hasFixedHeight,
             size = constraints.maxHeight,
-            sizes = IntArray(placeables.size) { placeables[it].height },
+            sizes = heights,
             biases = FloatArray(visible.size) { WidgetPlacement.verticalBias(visible[it].anchor) },
             offsetsPx = FloatArray(visible.size) { visible[it].offsetY * density },
         )
         layout(constraints.constrainWidth(xs.first), constraints.constrainHeight(ys.first)) {
-            placeables.forEachIndexed { i, placeable -> placeable.place(xs.second[i], ys.second[i]) }
+            placeables.forEachIndexed { i, placeable ->
+                if (scales[i] == 1f) {
+                    placeable.place(xs.second[i], ys.second[i])
+                } else {
+                    placeable.placeWithLayer(xs.second[i], ys.second[i]) {
+                        scaleX = scales[i]
+                        scaleY = scales[i]
+                        transformOrigin = TransformOrigin(0f, 0f)
+                    }
+                }
+            }
             onLayout?.invoke(
                 // `drawn` filters without copying, so each visible layer is found in the full list by identity — which
                 // two equal layers would defeat if it were by equality.
                 visible.indices.associate { i ->
                     layers.indexOfFirst { it === visible[i] } to
-                        IntRect(IntOffset(xs.second[i], ys.second[i]), IntSize(placeables[i].width, placeables[i].height))
+                        IntRect(IntOffset(xs.second[i], ys.second[i]), IntSize(widths[i], heights[i]))
                 },
             )
         }
@@ -78,15 +94,18 @@ private fun axis(fixed: Boolean, size: Int, sizes: IntArray, biases: FloatArray,
         WidgetPlacement.hug(sizes, biases, offsetsPx)
     }
 
-/** An exact size on each axis the layer's extent fixes; up to the group's own bound on each it leaves to content. */
-private fun layerConstraints(spec: WidgetLayerSpec, group: Constraints, density: Float): Constraints {
+/**
+ * An exact size on each axis the layer's extent fixes; up to the group's own bound on each it leaves to content — that
+ * bound shrunk by the layer's [scale], so content that fills it still fits once scaled up.
+ */
+private fun layerConstraints(spec: WidgetLayerSpec, group: Constraints, density: Float, scale: Float): Constraints {
     val width = WidgetPlacement.extentPx(spec.width, group.maxWidth, density)
     val height = WidgetPlacement.extentPx(spec.height, group.maxHeight, density)
     return Constraints(
         minWidth = width ?: 0,
-        maxWidth = width ?: group.maxWidth,
+        maxWidth = width ?: WidgetPlacement.unscaledBound(group.maxWidth, scale),
         minHeight = height ?: 0,
-        maxHeight = height ?: group.maxHeight,
+        maxHeight = height ?: WidgetPlacement.unscaledBound(group.maxHeight, scale),
     )
 }
 

@@ -19,6 +19,8 @@ import kotlinx.serialization.Serializable
  * @property name what the studio calls this layer. **A named layer at the top of a recipe is a block**: something
  *   the person placing the widget can select and restyle on its own. An unnamed one — a background panel — is part
  *   of the widget itself.
+ * @property scale how much bigger than authored the layer is drawn, everything in it alike — what pinching a block
+ *   sets. Applied in layout, not only in drawing, so a scaled layer still sits where its anchor puts it.
  */
 @Serializable
 data class WidgetLayerSpec(
@@ -33,6 +35,7 @@ data class WidgetLayerSpec(
     val visible: Boolean = true,
     val visibleGlobal: String? = null,
     val name: String? = null,
+    val scale: Float = 1f,
 )
 
 /**

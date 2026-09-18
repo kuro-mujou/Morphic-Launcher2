@@ -1,10 +1,14 @@
 package inkspire.morphic.feature.settings.widgetstudio
 
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.common.scope.ApplicationScope
 import inkspire.morphic.core.model.widget.WidgetGlobal
 import inkspire.morphic.core.model.widget.WidgetRecipe
+import inkspire.morphic.core.widget.movedTo
+import inkspire.morphic.core.widget.scaledBy
 import inkspire.morphic.core.widgetscript.ScriptData
 import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.widgets.WidgetCadence
@@ -36,6 +40,7 @@ import kotlin.time.Duration.Companion.milliseconds
  * @property selected the block being styled, by its layer index, or null for the widget itself.
  * @property initial each part's globals as they were when the screen opened, by part and then name — what a reset
  *   returns to.
+ * @property removed the name of the block just removed, while that removal can still be undone.
  */
 data class WidgetStudioState(
     val recipe: WidgetRecipe? = null,
@@ -43,6 +48,7 @@ data class WidgetStudioState(
     val missing: Boolean = false,
     val selected: Int? = null,
     val initial: Map<Int?, Map<String, WidgetGlobal>> = emptyMap(),
+    val removed: String? = null,
 ) {
     /** The blocks there are to select. */
     val parts: List<StylePart> get() = recipe?.parts().orEmpty()
@@ -69,7 +75,8 @@ class WidgetStudioViewModel(
     private val recipe = MutableStateFlow<WidgetRecipe?>(null)
     private val missing = MutableStateFlow(false)
     private val selected = MutableStateFlow<Int?>(null)
-    private var initial: Map<Int?, Map<String, WidgetGlobal>> = emptyMap()
+    private val initial = MutableStateFlow<Map<Int?, Map<String, WidgetGlobal>>>(emptyMap())
+    private val undo = MutableStateFlow<Removal?>(null)
     private var pendingSave: Job? = null
 
     init {
@@ -79,7 +86,7 @@ class WidgetStudioViewModel(
                 missing.value = true
             } else {
                 val loaded = widget.recipe
-                initial = (listOf(null) + loaded.parts().map { it.index }).associateWith { part ->
+                initial.value = (listOf(null) + loaded.parts().map { it.index }).associateWith { part ->
                     loaded.globalsOf(part).associateBy { it.name }
                 }
                 recipe.value = loaded
@@ -101,12 +108,12 @@ class WidgetStudioViewModel(
         // Started at null, since `combine` waits for every input: a removed widget never reads anything, and its
         // screen still has to learn it is missing.
         combine(
-            recipe,
-            data.map<ScriptData, ScriptData?> { it }.onStart { emit(null) },
-            missing,
+            combine(recipe, data.map<ScriptData, ScriptData?> { it }.onStart { emit(null) }, missing, ::Triple),
             selected,
-        ) { recipe, data, missing, selected ->
-            WidgetStudioState(recipe, data, missing, selected, initial)
+            initial,
+            undo,
+        ) { (recipe, data, missing), selected, initial, undo ->
+            WidgetStudioState(recipe, data, missing, selected, initial, undo?.name)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(StopTimeoutMs), WidgetStudioState())
 
     /** Styles [part] — a block by its layer index, or the widget itself for null. */
@@ -119,15 +126,73 @@ class WidgetStudioViewModel(
      * tab's controls.
      */
     fun set(global: WidgetGlobal) {
+        edit { it.withGlobal(selected.value, global) }
+    }
+
+    /** Moves [part] by a drag's step, in dp. The anchor is kept until [settle] re-pins it where the drag ended. */
+    fun move(part: Int, dx: Float, dy: Float) {
+        edit { recipe -> recipe.withLayer(part) { it.copy(offsetX = it.offsetX + dx, offsetY = it.offsetY + dy) } }
+    }
+
+    /** Scales [part] by a pinch's step. */
+    fun zoom(part: Int, factor: Float) {
+        edit { recipe -> recipe.withLayer(part) { it.scaledBy(factor) } }
+    }
+
+    /**
+     * Re-pins [part], now drawn at [box] inside a widget of [widget] size, to the anchor nearest where it ended up — so
+     * a block dragged into a corner stays in that corner when the widget is resized.
+     */
+    fun settle(part: Int, box: IntRect, widget: IntSize, density: Float) {
+        edit { recipe -> recipe.withLayer(part) { it.movedTo(box, widget, density) } }
+    }
+
+    /** Removes the selected block, undoably until the next edit. The widget itself is not a block and stays. */
+    fun removeSelected() {
+        val part = selected.value ?: return
         val current = recipe.value ?: return
-        val next = current.withGlobal(selected.value, global)
+        val name = current.parts().firstOrNull { it.index == part }?.name ?: return
+        val before = Removal(name, current, initial.value, part)
+        edit { it.without(part) }
+        initial.value = before.initial.afterRemoving(part)
+        selected.value = null
+        undo.value = before
+    }
+
+    /** Puts back the block [removeSelected] took out, selected again. */
+    fun undoRemove() {
+        val removal = undo.value ?: return
+        edit { removal.recipe }
+        initial.value = removal.initial
+        selected.value = removal.part
+    }
+
+    /** The removal can no longer be undone — its prompt has gone. */
+    fun forgetRemoval() {
+        undo.value = null
+    }
+
+    /** Applies [change], shows it at once and saves it shortly after; any edit ends the chance to undo a removal. */
+    private fun edit(change: (WidgetRecipe) -> WidgetRecipe) {
+        val current = recipe.value ?: return
+        val next = change(current)
+        if (next == current) return
         recipe.value = next
+        undo.value = null
         pendingSave?.cancel()
         pendingSave = applicationScope.launch {
             delay(SaveDebounceMs.milliseconds)
             layoutRepository.setWidgetRecipe(route.widgetId, next)
         }
     }
+
+    /** A removed block and everything needed to put it back as it was. */
+    private data class Removal(
+        val name: String,
+        val recipe: WidgetRecipe,
+        val initial: Map<Int?, Map<String, WidgetGlobal>>,
+        val part: Int,
+    )
 
     private companion object {
         const val SaveDebounceMs = 250L

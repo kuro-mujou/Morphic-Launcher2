@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.toRect
 import inkspire.morphic.core.model.widget.WidgetGlobal
+import inkspire.morphic.core.model.widget.WidgetLayerSpec
 import inkspire.morphic.core.model.widget.WidgetRecipe
 import inkspire.morphic.core.model.widget.WidgetSource
 
@@ -38,6 +39,23 @@ internal fun WidgetRecipe.withGlobal(part: Int?, global: WidgetGlobal): WidgetRe
     val edited = layer.copy(source = group.copy(globals = group.globals.replaced()))
     return copy(layers = layers.toMutableList().apply { set(part, edited) })
 }
+
+/** This recipe with [part]'s layer changed by [change] — a move or a pinch. A part that does not exist changes nothing. */
+internal fun WidgetRecipe.withLayer(part: Int, change: (WidgetLayerSpec) -> WidgetLayerSpec): WidgetRecipe {
+    val layer = layers.getOrNull(part) ?: return this
+    return copy(layers = layers.toMutableList().apply { set(part, change(layer)) })
+}
+
+/** This recipe without [part]'s layer. */
+internal fun WidgetRecipe.without(part: Int): WidgetRecipe =
+    if (part in layers.indices) copy(layers = layers.filterIndexed { index, _ -> index != part }) else this
+
+/**
+ * These per-part values after [part]'s layer is removed: its own entry gone, and every later part's moved down one
+ * index with its layer — without which a later block's reset would return it to its neighbor's values.
+ */
+internal fun <T> Map<Int?, T>.afterRemoving(part: Int): Map<Int?, T> =
+    filterKeys { it != part }.mapKeys { (key, _) -> if (key != null && key > part) key - 1 else key }
 
 /**
  * The part a tap at [point] lands on: the topmost of [parts] whose drawn box holds it, or null — the widget itself —

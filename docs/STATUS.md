@@ -2211,6 +2211,9 @@ surface.** "Widget" alone means the launcher's own; hosting *another app's* is `
   (`WidgetGlobals.inside`), so two copies of a block keep separate settings without renaming anything. Content-sized
   groups hug what they draw. The templates are a background plus blocks, and the Style screen shows one part at a
   time, picked by tapping the preview or from a segmented row.
+- WS7b: in that preview a drag moves a block (re-pinned on release to the anchor nearest where it landed, through
+  `movedTo`, the inverse of the placement arithmetic) and a pinch scales it (`WidgetLayerSpec.scale`, applied in
+  layout). A selected block can be removed, undoably while the prompt shows.
 
 `feature:shell` gained a detekt baseline with one entry:
 `LauncherShell` reached 100 lines with the Style route's callback, and wants splitting. **Compose UI tests need espresso ≥ 3.6 on this emulator**

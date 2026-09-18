@@ -2,7 +2,6 @@ package inkspire.morphic.feature.settings.widgetstudio
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -20,6 +19,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -29,9 +32,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
@@ -39,13 +44,17 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toRect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.adaptive.ShrinkToFit
+import inkspire.morphic.core.designsystem.component.button.MorphicButton
+import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
 import inkspire.morphic.core.designsystem.component.button.MorphicSegmentedButtons
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
@@ -54,6 +63,7 @@ import inkspire.morphic.core.model.widget.WidgetGlobal
 import inkspire.morphic.core.model.widget.WidgetRecipe
 import inkspire.morphic.core.widget.WidgetRender
 import inkspire.morphic.core.widgetscript.ScriptData
+import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -71,7 +81,16 @@ fun WidgetStudioScreen(route: WidgetStudioRoute, onBack: () -> Unit, modifier: M
     val viewModel: WidgetStudioViewModel = koinViewModel { parametersOf(route) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val colors = LocalMorphicColors.current
+    val snackbar = remember { SnackbarHostState() }
     BackHandler(onBack = onBack)
+    // A removal is undoable for as long as its prompt shows, and not after — the prompt is the only way back.
+    LaunchedEffect(state.removed) {
+        val name = state.removed ?: return@LaunchedEffect
+        // Long rather than short: this is the only way back from a removal, and four seconds is gone before a
+        // reader has decided whether they meant it.
+        val result = snackbar.showSnackbar("Removed $name", actionLabel = "Undo", duration = SnackbarDuration.Long)
+        if (result == SnackbarResult.ActionPerformed) viewModel.undoRemove() else viewModel.forgetRemoval()
+    }
     // A widget removed from HOME while this was open has nothing left to style.
     LaunchedEffect(state.missing) { if (state.missing) onBack() }
 
@@ -79,6 +98,10 @@ fun WidgetStudioScreen(route: WidgetStudioRoute, onBack: () -> Unit, modifier: M
         modifier = modifier.fillMaxSize(),
         containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        // The scaffold reserves no insets (see above), so the prompt keeps itself off the navigation bar.
+        snackbarHost = {
+            SnackbarHost(snackbar, Modifier.uiInsetsPadding(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
+        },
         topBar = {
             TopAppBar(
                 title = { Text("Style") },
@@ -104,6 +127,9 @@ fun WidgetStudioScreen(route: WidgetStudioRoute, onBack: () -> Unit, modifier: M
                 parts = state.parts,
                 selected = state.selected,
                 onSelect = viewModel::select,
+                onMove = viewModel::move,
+                onZoom = viewModel::zoom,
+                onSettle = viewModel::settle,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
@@ -132,6 +158,8 @@ fun WidgetStudioScreen(route: WidgetStudioRoute, onBack: () -> Unit, modifier: M
                             globals = state.globals,
                             initial = state.initial[state.selected].orEmpty(),
                             onChange = viewModel::set,
+                            // Only a block can be removed; the widget itself is what the blocks sit on.
+                            onRemove = state.selected?.let { { viewModel.removeSelected() } },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f),
@@ -145,9 +173,13 @@ fun WidgetStudioScreen(route: WidgetStudioRoute, onBack: () -> Unit, modifier: M
 
 /**
  * The widget at the size HOME draws it, shrunk — never grown — to fit the space above the controls. A tap on a block
- * selects it and a tap anywhere else selects the widget; the selected block is outlined.
+ * selects it and a tap anywhere else selects the widget; a drag moves a block and a pinch scales it. The selected block
+ * is outlined.
+ *
+ * @param onMove a drag's step, in dp.
+ * @param onSettle a drag or pinch is over: the block, where it now draws and the widget's size, both in pixels.
  */
-@Suppress("LongParameterList") // What is drawn, and the selection drawn over it.
+@Suppress("LongParameterList") // What is drawn, the selection drawn over it, and what a finger does to it.
 @Composable
 private fun WidgetPreview(
     recipe: WidgetRecipe?,
@@ -156,22 +188,44 @@ private fun WidgetPreview(
     parts: List<StylePart>,
     selected: Int?,
     onSelect: (Int?) -> Unit,
+    onMove: (Int, Float, Float) -> Unit,
+    onZoom: (Int, Float) -> Unit,
+    onSettle: (Int, IntRect, IntSize, Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // Where each layer was drawn, as the renderer reports it — in the widget's own pixels, which is also the space the
-    // tap arrives in, since both sit inside the preview's scaling.
+    // fingers arrive in, since both sit inside the preview's scaling.
     var bounds by remember { mutableStateOf<Map<Int, IntRect>>(emptyMap()) }
+    var widget by remember { mutableStateOf(IntSize.Zero) }
+    val scope = rememberCoroutineScope()
+    val density = LocalDensity.current.density
     val currentParts by rememberUpdatedState(parts)
-    val currentOnSelect by rememberUpdatedState(onSelect)
+    val currentSelected by rememberUpdatedState(selected)
     ShrinkToFit(size = size, modifier = modifier) {
         if (recipe != null && data != null) {
             WidgetRender(
                 recipe = recipe,
                 data = data,
                 modifier = Modifier
-                    .pointerInput(Unit) {
-                        detectTapGestures { currentOnSelect(partAt(it, currentParts, bounds)) }
-                    }
+                    .onSizeChanged { widget = it }
+                    .previewGestures(
+                        target = { partAt(it, currentParts, bounds) ?: currentSelected },
+                        onTap = { onSelect(partAt(it, currentParts, bounds)) },
+                        onStart = { onSelect(it) },
+                        onChange = { part, pan, zoom ->
+                            onMove(part, pan.x / density, pan.y / density)
+                            if (zoom != 1f) onZoom(part, zoom)
+                        },
+                        onEnd = { part ->
+                            // The last step has not been laid out yet when the finger lifts, and the box it lands in
+                            // is what the block is re-pinned by — so wait for that layout before reading it.
+                            scope.launch {
+                                withFrameNanos {}
+                                withFrameNanos {}
+                                bounds[part]?.let { onSettle(part, it, widget, density) }
+                            }
+                        },
+                    )
                     .drawWithContent {
                         drawContent()
                         selected?.let(bounds::get)?.let { drawSelection(it.toRect()) }
@@ -201,12 +255,16 @@ private fun PartPicker(parts: List<StylePart>, selected: Int?, onSelect: (Int?) 
     )
 }
 
-/** Every setting of the selected part, one control each — or a plain line when it has none. */
+/**
+ * Every setting of the selected part, one control each — or a plain line when it has none — and, for a block, a way to
+ * remove it.
+ */
 @Composable
 private fun StylePanel(
     globals: List<WidgetGlobal>,
     initial: Map<String, WidgetGlobal>,
     onChange: (WidgetGlobal) -> Unit,
+    onRemove: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalMorphicColors.current
@@ -232,6 +290,15 @@ private fun StylePanel(
                 onExpand = { expanded = if (expanded == global.name) null else global.name },
                 onChange = onChange,
             )
+        }
+        onRemove?.let { remove ->
+            MorphicButton(
+                onClick = remove,
+                style = MorphicButtonStyle.Tonal,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 16.dp),
+            ) { Text("Remove block") }
         }
     }
 }

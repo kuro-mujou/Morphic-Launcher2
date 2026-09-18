@@ -2,6 +2,7 @@ package inkspire.morphic.core.widget
 
 import inkspire.morphic.core.model.widget.WidgetAnchor
 import inkspire.morphic.core.model.widget.WidgetExtent
+import inkspire.morphic.core.model.widget.WidgetLayerSpec
 import kotlin.math.roundToInt
 
 /**
@@ -13,6 +14,19 @@ internal object WidgetPlacement {
 
     /** The bias of an anchor on neither edge. */
     private const val Middle = 0.5f
+
+    /** The smallest and largest a layer may be scaled — past these a block is unreadable or swallows the widget. */
+    const val MinScale = 0.25f
+    const val MaxScale = 4f
+
+    /** [layer]'s scale, held to what the editor can set, so a hand-edited recipe cannot draw at zero or at infinity. */
+    fun scaleOf(layer: WidgetLayerSpec): Float = layer.scale.takeIf { it.isFinite() }?.coerceIn(MinScale, MaxScale) ?: 1f
+
+    /** [size] pixels drawn at [scale]. */
+    fun scaled(size: Int, scale: Float): Int = (size * scale).roundToInt()
+
+    /** The bound a layer at [scale] is measured against, so it fits [bound] once scaled. Unbounded stays unbounded. */
+    fun unscaledBound(bound: Int, scale: Float): Int = if (bound == Int.MAX_VALUE) bound else (bound / scale).roundToInt()
 
     /**
      * The size [extent] asks for along one axis, in pixels, or null when it asks for its content's size.

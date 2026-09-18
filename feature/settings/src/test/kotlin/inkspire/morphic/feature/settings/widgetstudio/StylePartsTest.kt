@@ -67,4 +67,26 @@ class StylePartsTest {
         assertEquals(2, partAt(Offset(75f, 10f), parts, bounds))
         assertNull(partAt(Offset(10f, 80f), parts, bounds))
     }
+
+    @Test
+    fun `a layer change reaches that layer alone`() {
+        val moved = recipe.withLayer(2) { it.copy(offsetX = 12f) }
+
+        assertEquals(12f, moved.layers[2].offsetX)
+        assertEquals(recipe.layers.take(2), moved.layers.take(2))
+        assertEquals(recipe, recipe.withLayer(9) { it.copy(offsetX = 12f) })
+    }
+
+    @Test
+    fun `removing a block takes its layer out and nothing else`() {
+        assertEquals(listOf("Date"), recipe.without(1).parts().map { it.name })
+        assertEquals(recipe, recipe.without(9))
+    }
+
+    @Test
+    fun `after a removal, each later part keeps its own values under its new index`() {
+        val baselines = mapOf(null to "widget", 1 to "time", 2 to "date", 3 to "battery")
+
+        assertEquals(mapOf(null to "widget", 1 to "date", 2 to "battery"), baselines.afterRemoving(1))
+    }
 }
