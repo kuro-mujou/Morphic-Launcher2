@@ -27,6 +27,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -113,6 +114,13 @@ fun WidgetStudioScreen(route: WidgetStudioRoute, onBack: () -> Unit, modifier: M
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
+                // Tier 3 is behind this and nothing else: a plain word, not an icon, since "the layers underneath" is
+                // not a thing anyone recognizes a glyph for.
+                actions = {
+                    TextButton(onClick = viewModel::toggleAdvanced) {
+                        Text(if (state.focus.advanced) "Simple" else "Advanced")
+                    }
+                },
             )
         },
     ) { innerPadding ->
@@ -162,11 +170,19 @@ fun WidgetStudioScreen(route: WidgetStudioRoute, onBack: () -> Unit, modifier: M
     }
 }
 
-/** The panel under the preview: which part is being styled, that part's settings, and what can be done to it. */
+/**
+ * The panel under the preview: which part is being styled, that part's settings, and what can be done to it — or, in
+ * Advanced, the layer tree.
+ */
 @Composable
 private fun StyleSheet(state: WidgetStudioState, viewModel: WidgetStudioViewModel, modifier: Modifier = Modifier) {
     val colors = LocalMorphicColors.current
-    Column(modifier.background(colors.background, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))) {
+    val sheet = modifier.background(colors.background, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+    if (state.focus.advanced) {
+        AdvancedPanel(state, viewModel, sheet)
+        return
+    }
+    Column(sheet) {
         if (state.parts.isNotEmpty()) {
             PartPicker(
                 parts = state.parts,

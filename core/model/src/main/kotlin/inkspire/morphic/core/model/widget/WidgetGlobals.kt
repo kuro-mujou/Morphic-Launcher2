@@ -16,16 +16,17 @@ package inkspire.morphic.core.model.widget
 class WidgetGlobals(globals: List<WidgetGlobal>, private val outer: WidgetGlobals? = null) {
     private val byName = globals.associateBy { it.name }
 
-    private fun find(name: String?): WidgetGlobal? = name?.let { byName[it] ?: outer?.find(it) }
+    /** The nearest global called [name] in scope, of whatever type — what a binding naming it would read. */
+    operator fun get(name: String?): WidgetGlobal? = name?.let { byName[it] ?: outer?.get(it) }
 
-    fun color(name: String?, fallback: Int): Int = (find(name) as? WidgetGlobal.Color)?.value ?: fallback
+    fun color(name: String?, fallback: Int): Int = (get(name) as? WidgetGlobal.Color)?.value ?: fallback
 
-    fun number(name: String?, fallback: Float): Float = (find(name) as? WidgetGlobal.Number)?.value ?: fallback
+    fun number(name: String?, fallback: Float): Float = (get(name) as? WidgetGlobal.Number)?.value ?: fallback
 
-    fun switch(name: String?, fallback: Boolean): Boolean = (find(name) as? WidgetGlobal.Switch)?.value ?: fallback
+    fun switch(name: String?, fallback: Boolean): Boolean = (get(name) as? WidgetGlobal.Switch)?.value ?: fallback
 
     fun font(name: String?, fallback: WidgetSource.Text.Font): WidgetSource.Text.Font =
-        (find(name) as? WidgetGlobal.Font)?.value ?: fallback
+        (get(name) as? WidgetGlobal.Font)?.value ?: fallback
 
     /** The scope inside [group]: its own globals over these, or these unchanged when it declares none. */
     fun inside(group: WidgetSource.Overlap): WidgetGlobals =

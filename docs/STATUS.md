@@ -2217,6 +2217,9 @@ surface.** "Widget" alone means the launcher's own; hosting *another app's* is `
 - WS7c: a library of twelve blocks (`BuiltInBlocks`) added from the Style screen's **Add block** sheet, each previewed
   on the widget's own background with live data; blocks can be sent back or brought forward among themselves, and
   removing one drops widget settings nothing reads any more.
+- WS8a: **Advanced** on the same screen walks the layer tree a level at a time (`LayerPath`); each layer's properties
+  are described as `WidgetGlobal`s (`LayerField`) so the Style controls draw them, formulas are typed raw with their
+  live result, and a property bound to a setting shows as bound with Unbind.
 
 `feature:shell` gained a detekt baseline with one entry:
 `LauncherShell` reached 100 lines with the Style route's callback, and wants splitting. **Compose UI tests need espresso ≥ 3.6 on this emulator**

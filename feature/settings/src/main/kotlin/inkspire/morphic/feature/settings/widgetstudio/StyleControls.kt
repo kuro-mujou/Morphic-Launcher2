@@ -135,7 +135,7 @@ private fun TextControl(global: WidgetGlobal.Text, onChange: (WidgetGlobal) -> U
 }
 
 @Composable
-private fun Labeled(label: String, content: @Composable () -> Unit) {
+internal fun Labeled(label: String, content: @Composable () -> Unit) {
     val colors = LocalMorphicColors.current
     Column(
         modifier = Modifier.padding(vertical = 8.dp),

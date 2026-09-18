@@ -1,0 +1,190 @@
+package inkspire.morphic.feature.settings.widgetstudio
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import inkspire.morphic.core.designsystem.component.button.MorphicButton
+import inkspire.morphic.core.designsystem.component.button.MorphicButtonStyle
+import inkspire.morphic.core.designsystem.component.field.MorphicTextField
+import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
+import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
+import inkspire.morphic.core.model.widget.WidgetExtent
+import inkspire.morphic.core.model.widget.WidgetLayerSpec
+import inkspire.morphic.core.model.widget.WidgetSource
+import inkspire.morphic.core.widgetscript.ScriptData
+import inkspire.morphic.core.widgetscript.WidgetExpression
+import kotlinx.coroutines.flow.drop
+
+/**
+ * Tier 3: the widget as a tree of layers. A row of chips is the path down to the open layer and a second row is what
+ * sits beside it — or inside it, when it is a group — so the tree is walked a level at a time rather than shown whole,
+ * the "breadcrumb rail" the plan asked for in place of a tree panel on a half-height sheet.
+ */
+@Composable
+internal fun AdvancedPanel(state: WidgetStudioState, viewModel: WidgetStudioViewModel, modifier: Modifier = Modifier) {
+    val recipe = state.recipe ?: return
+    val path = state.focus.path
+    val rail = PaddingValues(horizontal = 20.dp)
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ChipRow(
+            labels = listOf("Widget") + path.indices.map { depth ->
+                recipe.childrenAt(path.take(depth)).labels().getOrElse(path[depth]) { "" }
+            },
+            selected = path.size,
+            onSelect = { viewModel.open(path.take(it)) },
+            modifier = Modifier.padding(top = 20.dp),
+            contentPadding = rail,
+        )
+        // A group's children, or a leaf's siblings with the leaf lit: always the level there is to move along.
+        val level = if (recipe.isContainer(path)) path else path.dropLast(1)
+        val layers = recipe.childrenAt(level)
+        if (layers.isNotEmpty()) {
+            ChipRow(
+                labels = layers.labels(),
+                selected = if (level == path) -1 else path.last(),
+                onSelect = { viewModel.open(level + it) },
+                contentPadding = rail,
+            )
+        }
+        // Keyed on the path, so a field's text and an open picker belong to the layer they were opened on.
+        key(path) {
+            LayerEditor(state, viewModel, Modifier.weight(1f))
+        }
+    }
+}
+
+/** The open layer's properties, then what can be added beside or inside it, and its removal. */
+@Composable
+private fun LayerEditor(state: WidgetStudioState, viewModel: WidgetStudioViewModel, modifier: Modifier = Modifier) {
+    var expanded by rememberSaveable { mutableStateOf<String?>(null) }
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .uiInsetsPadding(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+    ) {
+        state.fields.forEach { field ->
+            when (field) {
+                is LayerField.Setting -> StyleControl(
+                    global = field.control,
+                    initial = null,
+                    expanded = expanded == field.key,
+                    onExpand = { expanded = if (expanded == field.key) null else field.key },
+                    onChange = { viewModel.set(field, it) },
+                )
+
+                is LayerField.Formula -> FormulaControl(field.label, field.source, state.data) { viewModel.set(field, it) }
+                is LayerField.Bound -> BoundRow(field.label, field.setting) { viewModel.unbind(field) }
+            }
+        }
+        Labeled("Add layer") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                NewLayers.forEach { (label, layer) ->
+                    MorphicButton(
+                        onClick = { viewModel.addLayer(layer) },
+                        style = MorphicButtonStyle.Tonal,
+                        modifier = Modifier.weight(1f),
+                    ) { Text(label) }
+                }
+            }
+        }
+        if (state.layer != null) {
+            MorphicButton(
+                onClick = viewModel::removeLayer,
+                style = MorphicButtonStyle.Tonal,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+            ) { Text("Remove layer") }
+        }
+    }
+}
+
+/**
+ * A formula typed as text, with what it shows right now under it — or what is wrong with it. The live result is how a
+ * formula gets written without a manual: type, and watch what it says.
+ */
+@Composable
+private fun FormulaControl(label: String, source: String, data: ScriptData?, onChange: (String) -> Unit) {
+    val colors = LocalMorphicColors.current
+    val field = rememberTextFieldState(source)
+    var typed by remember { mutableStateOf(source) }
+    LaunchedEffect(field) {
+        snapshotFlow { field.text.toString() }.drop(1).collect {
+            typed = it
+            onChange(it)
+        }
+    }
+    val result = remember(typed, data) { data?.let { WidgetExpression.parse(typed).evaluate(it) } }
+    Labeled(label) {
+        MorphicTextField(state = field, modifier = Modifier.fillMaxWidth())
+        result?.let {
+            val problem = it.problems.firstOrNull()
+            Text(
+                text = problem?.message ?: "Shows: ${it.text}",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (problem != null) colors.error else colors.contentMuted,
+            )
+        }
+    }
+}
+
+/** A property a setting decides: which one, and the way to take it back. */
+@Composable
+private fun BoundRow(label: String, setting: String, onUnbind: () -> Unit) {
+    val colors = LocalMorphicColors.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(text = label, style = MaterialTheme.typography.bodyLarge, color = colors.content)
+            Text(text = "Set by “$setting”", style = MaterialTheme.typography.bodySmall, color = colors.contentMuted)
+        }
+        TextButton(onClick = onUnbind) { Text("Unbind") }
+    }
+}
+
+/**
+ * The layers Advanced can add, each at a size that is visible the moment it lands — a shape or a bar has no size of
+ * its own, and one added at its content size would draw nothing and look like a failure.
+ */
+private val NewLayers: List<Pair<String, WidgetLayerSpec>> = listOf(
+    "Text" to WidgetLayerSpec(WidgetSource.Text("Text")),
+    "Shape" to WidgetLayerSpec(
+        WidgetSource.Shape(color = 0x40FFFFFF, cornerRadius = 12f),
+        width = WidgetExtent.Dp(value = 80f),
+        height = WidgetExtent.Dp(value = 80f),
+    ),
+    "Bar" to WidgetLayerSpec(
+        WidgetSource.Progress("50"),
+        width = WidgetExtent.Dp(value = 120f),
+        height = WidgetExtent.Dp(value = 8f),
+    ),
+    "Group" to WidgetLayerSpec(WidgetSource.Overlap(), name = "Group"),
+)

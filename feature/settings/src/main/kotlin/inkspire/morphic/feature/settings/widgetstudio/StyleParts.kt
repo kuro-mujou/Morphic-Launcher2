@@ -46,10 +46,6 @@ internal fun WidgetRecipe.withLayer(part: Int, change: (WidgetLayerSpec) -> Widg
     return copy(layers = layers.toMutableList().apply { set(part, change(layer)) })
 }
 
-/** This recipe without [part]'s layer. */
-internal fun WidgetRecipe.without(part: Int): WidgetRecipe =
-    if (part in layers.indices) copy(layers = layers.filterIndexed { index, _ -> index != part }) else this
-
 /**
  * [part] moved one step up (+1) or down (-1) the draw order, trading places with the next **block** that way — never
  * with the background, which would hide the block behind it — or null when no block lies that way.

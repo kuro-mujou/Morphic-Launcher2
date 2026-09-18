@@ -26,6 +26,9 @@ fun WidgetLayerSpec.movedTo(box: IntRect, parent: IntSize, density: Float): Widg
     )
 }
 
+/** The scales a layer is drawn at — anything outside is held to these — for an editor's slider to span exactly. */
+val WidgetScales: ClosedFloatingPointRange<Float> = WidgetPlacement.MinScale..WidgetPlacement.MaxScale
+
 /**
  * This layer [factor] times bigger than it is drawn now — a pinch — held to the scales the renderer will draw, so a
  * pinch past the limit stops rather than storing a value that silently draws as something else.

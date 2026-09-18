@@ -78,12 +78,6 @@ class StylePartsTest {
     }
 
     @Test
-    fun `removing a block takes its layer out and nothing else`() {
-        assertEquals(listOf("Date"), recipe.without(1).parts().map { it.name })
-        assertEquals(recipe, recipe.without(9))
-    }
-
-    @Test
     fun `after a removal, each later part keeps its own values under its new index`() {
         val baselines = mapOf(null to "widget", 1 to "time", 2 to "date", 3 to "battery")
 
