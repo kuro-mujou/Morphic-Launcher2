@@ -2224,6 +2224,9 @@ surface.** "Widget" alone means the launcher's own; hosting *another app's* is `
   into `WidgetImageStore` (widget-sized, aspect kept) and swept when the studio closes if no widget uses them.
 - WS9: **Examples** beside every formula field — `ScriptExamples`, each shown with its live result and inserted at the
   cursor; the editor evaluates formulas with the layer's settings in scope, through the renderer's own `withGlobals`.
+- WS10: a layer's **tap** (`WidgetTap`) runs a launcher action or flips a setting. HOME resolves which layer a tap hit
+  through `WidgetTouch` (the widget watches presses without consuming them; layers register live coordinates), so
+  long press and drag are untouched. The action picker gained a widget-layer target.
 
 `feature:shell` gained a detekt baseline with one entry:
 `LauncherShell` reached 100 lines with the Style route's callback, and wants splitting. **Compose UI tests need espresso ≥ 3.6 on this emulator**

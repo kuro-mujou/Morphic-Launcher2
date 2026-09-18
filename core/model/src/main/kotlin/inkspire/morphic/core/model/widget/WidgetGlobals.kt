@@ -28,6 +28,10 @@ class WidgetGlobals(globals: List<WidgetGlobal>, private val outer: WidgetGlobal
     fun font(name: String?, fallback: WidgetSource.Text.Font): WidgetSource.Text.Font =
         (get(name) as? WidgetGlobal.Font)?.value ?: fallback
 
+    /** Every setting in scope, the nearest of each name — what someone choosing one of them is offered. */
+    val all: List<WidgetGlobal>
+        get() = outer?.all.orEmpty().filter { it.name !in byName } + byName.values
+
     /** The scope inside [group]: its own globals over these, or these unchanged when it declares none. */
     fun inside(group: WidgetSource.Overlap): WidgetGlobals =
         if (group.globals.isEmpty()) this else WidgetGlobals(group.globals, this)

@@ -77,10 +77,18 @@ import org.koin.core.parameter.parametersOf
  *
  * **The preview sits on the real wallpaper.** The window is transparent, so the top half paints nothing and the widget
  * is seen over what it will be seen over on HOME, at the size HOME draws it.
+ *
+ * @param onPickTapAction opens the launcher's action picker for a tap on the layer at the given path — a destination
+ *   of `feature:home`'s, so `app` navigates to it.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun WidgetStudioScreen(route: WidgetStudioRoute, onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun WidgetStudioScreen(
+    route: WidgetStudioRoute,
+    onBack: () -> Unit,
+    onPickTapAction: (path: List<Int>) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val viewModel: WidgetStudioViewModel = koinViewModel { parametersOf(route) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
@@ -148,6 +156,7 @@ fun WidgetStudioScreen(route: WidgetStudioRoute, onBack: () -> Unit, modifier: M
                 StyleSheet(
                     state = state,
                     viewModel = viewModel,
+                    onPickTapAction = { onPickTapAction(state.focus.path) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
@@ -175,11 +184,16 @@ fun WidgetStudioScreen(route: WidgetStudioRoute, onBack: () -> Unit, modifier: M
  * Advanced, the layer tree.
  */
 @Composable
-private fun StyleSheet(state: WidgetStudioState, viewModel: WidgetStudioViewModel, modifier: Modifier = Modifier) {
+private fun StyleSheet(
+    state: WidgetStudioState,
+    viewModel: WidgetStudioViewModel,
+    onPickTapAction: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val colors = LocalMorphicColors.current
     val sheet = modifier.background(colors.background, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
     if (state.focus.advanced) {
-        AdvancedPanel(state, viewModel, sheet)
+        AdvancedPanel(state, viewModel, onPickTapAction, sheet)
         return
     }
     Column(sheet) {

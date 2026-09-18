@@ -5,16 +5,21 @@ import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.model.AppInfo
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.GestureAction
+import inkspire.morphic.core.model.widget.WidgetTap
+import inkspire.morphic.core.model.widget.layerAt
+import inkspire.morphic.core.model.widget.updatedAt
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.apps.AppShortcut
 import inkspire.morphic.data.apps.AppShortcuts
 import inkspire.morphic.data.apps.ScreenLock
+import inkspire.morphic.data.layout.LayoutRepository
 import inkspire.morphic.data.settings.SettingsRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -71,12 +76,15 @@ data class GestureActionState(
 class GestureActionViewModel(
     private val target: GestureTarget,
     private val settingsRepository: SettingsRepository,
+    private val layoutRepository: LayoutRepository,
     private val appShortcuts: AppShortcuts,
     appRepository: AppRepository,
     screenLock: ScreenLock,
 ) : ViewModel() {
 
-    private val offersLockScreen = screenLock.isSupported && target !is GestureTarget.Item
+    // HOME's own gestures only, as `GestureAction.LockScreen` says — not an item's, and not a tap on part of a widget.
+    private val offersLockScreen =
+        screenLock.isSupported && (target is GestureTarget.HomeSwipe || target is GestureTarget.HomeDoubleTap)
 
     private val offersPanelBySide = target is GestureTarget.HomeSwipe && !target.direction.isHorizontal
 
@@ -129,8 +137,16 @@ class GestureActionViewModel(
                 is GestureTarget.Item -> settingsRepository.setItemGesture(target.item, target.gesture, action)
                 is GestureTarget.HomeSwipe -> settingsRepository.setHomeSwipe(target.direction, action)
                 GestureTarget.HomeDoubleTap -> settingsRepository.setHomeDoubleTap(action)
+                is GestureTarget.WidgetLayer -> setWidgetTap(target, action)
             }
         }
+    }
+
+    /** Writes [action] as the tap of the widget part [target] names, into that widget's recipe as it is stored. */
+    private suspend fun setWidgetTap(target: GestureTarget.WidgetLayer, action: GestureAction?) {
+        val widget = layoutRepository.widgets().first().firstOrNull { it.id == target.widgetId } ?: return
+        val tap = action?.let(WidgetTap::Run)
+        layoutRepository.setWidgetRecipe(target.widgetId, widget.recipe.updatedAt(target.path) { it.copy(onTap = tap) })
     }
 
     /** What [target] is set to now, from whichever store holds it. */
@@ -138,6 +154,11 @@ class GestureActionViewModel(
         is GestureTarget.Item -> settingsRepository.homeItemGestures.map { it.actionsOn(target.item)[target.gesture] }
         is GestureTarget.HomeSwipe -> settingsRepository.homeGestures.map { it.swipes[target.direction] }
         GestureTarget.HomeDoubleTap -> settingsRepository.homeGestures.map { it.doubleTap }
+        // A tap that flips a setting is the studio's to show; here it reads as no launcher action chosen.
+        is GestureTarget.WidgetLayer -> layoutRepository.widgets().map { widgets ->
+            val layer = widgets.firstOrNull { it.id == target.widgetId }?.recipe?.layerAt(target.path)
+            (layer?.onTap as? WidgetTap.Run)?.action
+        }
     }
 
     /** Assigns an app by the key the picker row carries. */

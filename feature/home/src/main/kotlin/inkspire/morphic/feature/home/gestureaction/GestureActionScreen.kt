@@ -340,6 +340,7 @@ private val GestureTarget.gestureLabel: String
         is GestureTarget.Item -> gesture.label
         is GestureTarget.HomeSwipe -> direction.asItemGesture().label
         GestureTarget.HomeDoubleTap -> ItemGesture.DOUBLE_TAP.label
+        is GestureTarget.WidgetLayer -> "Tap"
     }
 
 private val ItemGesture.label: String

@@ -6,6 +6,7 @@ import inkspire.morphic.core.model.widget.WidgetGlobal
 import inkspire.morphic.core.model.widget.WidgetGlobals
 import inkspire.morphic.core.model.widget.WidgetLayerSpec
 import inkspire.morphic.core.model.widget.WidgetSource
+import inkspire.morphic.core.model.widget.WidgetTap
 import inkspire.morphic.core.widget.WidgetScales
 import kotlin.math.roundToInt
 
@@ -35,6 +36,14 @@ internal sealed interface LayerField {
     ) : LayerField
 
     /**
+     * What tapping the layer on HOME does — nothing, a launcher action chosen in the action picker, or one of the
+     * [flippable] settings flipped.
+     *
+     * @property flippable the switches and choices a tap on this layer can reach, nearest of each name.
+     */
+    data class Tap(override val key: String, val current: WidgetTap?, val flippable: List<WidgetGlobal>) : LayerField
+
+    /**
      * A property a setting decides. It gets no control — editing it would change nothing while the setting wins — only
      * the setting's name and a way to let go of it.
      */
@@ -51,10 +60,16 @@ internal sealed interface LayerField {
  * then where it sits and how, and its name last.
  *
  * @param scope the settings in scope where the layer sits, which decides whether a binding on it is live.
+ * @param tapScope the settings a tap on the layer can flip — its own group's included, unlike [scope].
  * @param inStack the layer is one of a stack's, which places it — so its anchor and offsets, which would change
  *   nothing there, are not offered.
  */
-internal fun layerFields(layer: WidgetLayerSpec, scope: WidgetGlobals, inStack: Boolean = false): List<LayerField> =
+internal fun layerFields(
+    layer: WidgetLayerSpec,
+    scope: WidgetGlobals,
+    inStack: Boolean = false,
+    tapScope: WidgetGlobals = scope,
+): List<LayerField> =
     when (val source = layer.source) {
         is WidgetSource.Text -> textFields(source, scope)
         is WidgetSource.Shape -> shapeFields(source, scope)
@@ -66,7 +81,11 @@ internal fun layerFields(layer: WidgetLayerSpec, scope: WidgetGlobals, inStack: 
             },
         )
         is WidgetSource.Overlap -> emptyList()
-    } + placementFields(layer).filterNot { inStack && it.key in PlacedByStack } +
+    } + LayerField.Tap(
+        key = "tap",
+        current = layer.onTap,
+        flippable = tapScope.all.filter { it is WidgetGlobal.Switch || it is WidgetGlobal.Choice },
+    ) + placementFields(layer).filterNot { inStack && it.key in PlacedByStack } +
         text("name", "Name", layer.name.orEmpty()) { l, value -> l.copy(name = value.ifBlank { null }) }
 
 /** What a stack decides for each of its layers, and so what is not asked of them. */

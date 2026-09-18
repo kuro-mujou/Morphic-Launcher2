@@ -1,12 +1,18 @@
 package inkspire.morphic.feature.home
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.model.widget.WidgetRecipe
@@ -26,20 +32,45 @@ import org.koin.compose.koinInject
  * The widget fills its cell less [WidgetCellInset], and [itemGestures] go on exactly that — the touch target is what
  * is drawn, so the inset stays free as it is around an icon. It also makes the bounds those gestures report the
  * widget's drawn size, which is what the Style studio is handed to preview at.
+ *
+ * @param id the placed widget this is, when it is one — which is what lets its parts answer a tap (see
+ *   [WidgetTouch]). Null under the finger and in the picker, where nothing is tapped.
  */
 @Composable
-internal fun WidgetCell(recipe: WidgetRecipe, modifier: Modifier = Modifier, itemGestures: Modifier = Modifier) {
+internal fun WidgetCell(
+    recipe: WidgetRecipe,
+    modifier: Modifier = Modifier,
+    itemGestures: Modifier = Modifier,
+    id: Long? = null,
+) {
     val repository = koinInject<WidgetDataRepository>()
     val data by remember(recipe) { repository.data(WidgetCadence.of(recipe)) }.collectAsStateWithLifecycle(null)
+    val touch = LocalWidgetTouch.current
+    val cell = if (id != null && touch != null) remember(touch, id) { touch.cell(id) } else null
+    if (id != null && touch != null) DisposableEffect(touch, id) { onDispose { touch.release(id) } }
     Box(
         modifier
             .fillMaxSize()
             .then(WidgetCellInset)
+            .then(if (cell == null) Modifier else Modifier.pressWatcher(cell))
             .then(itemGestures),
     ) {
-        data?.let { WidgetRender(recipe, it) }
+        data?.let { WidgetRender(recipe, it, taps = cell?.targets) }
     }
 }
+
+/**
+ * Records where each finger comes down on the widget and the widget's own coordinates, for [WidgetTouch] to resolve a
+ * tap against. **Watches on the initial pass and consumes nothing**, so the gesture machine below it sees every event
+ * exactly as it would without this.
+ */
+private fun Modifier.pressWatcher(cell: WidgetTouch.Cell): Modifier = this
+    .onGloballyPositioned { cell.coordinates = it }
+    .pointerInput(cell) {
+        awaitEachGesture {
+            cell.press = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial).position
+        }
+    }
 
 /**
  * The margin a widget keeps inside its cell, so two side by side, or one against the screen edge, do not touch.

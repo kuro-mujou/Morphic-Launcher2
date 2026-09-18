@@ -107,6 +107,13 @@ fun LauncherNavHost(homePresses: Flow<Unit>, modifier: Modifier = Modifier) {
                         onChosen = { navigator.goBack() },
                     )
                 }
+                entry<GestureActionRoute.WidgetTap> { route ->
+                    GestureActionDestination(
+                        route = route,
+                        onBack = { navigator.goBack() },
+                        onChosen = { navigator.goBack() },
+                    )
+                }
                 settingsEntries(navigator)
                 entry<ContainerSettingsRoute.Icon> { route ->
                     ContainerSettingsScreen(
@@ -175,6 +182,7 @@ private fun EntryProviderScope<NavKey>.settingsEntries(navigator: Navigator) {
         WidgetStudioScreen(
             route = route,
             onBack = { navigator.goBack() },
+            onPickTapAction = { path -> navigator.goTo(GestureActionRoute.WidgetTap(route.widgetId, path)) },
         )
     }
     entry<WallpaperStudioRoute> {

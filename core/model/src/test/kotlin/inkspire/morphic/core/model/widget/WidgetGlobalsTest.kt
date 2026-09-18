@@ -128,4 +128,13 @@ class WidgetGlobalsTest {
         assertEquals(true, WidgetRecipe(listOf(block)).isStyleable)
         assertEquals(true, WidgetRecipe(globals = listOf(WidgetGlobal.Switch("a", "A", true))).isStyleable)
     }
+
+    @Test
+    fun `everything in scope is listed once, the nearest of each name`() {
+        val block = WidgetSource.Overlap(globals = listOf(WidgetGlobal.Color("text", "Block text", 5)))
+        val inner = globals.inside(block).all
+
+        assertEquals(globals.all.size, inner.size)
+        assertEquals(5, (inner.single { it.name == "text" } as WidgetGlobal.Color).value)
+    }
 }

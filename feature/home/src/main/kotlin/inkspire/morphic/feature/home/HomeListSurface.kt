@@ -492,6 +492,8 @@ internal fun HomeListSurface(
                     Box(zoneModifier.pointerInput(Unit) { detectTapGestures { letters.clear() } })
                     return@HomeZoneScaffold
                 }
+                // Where each widget here was last pressed and what its parts do, for `onOpen` to ask on a tap.
+                val widgetTouch = remember { WidgetTouch() }
                 CoordinateDragGrid(
                     items = state.inZone(HomeZone.WIDGET_AREA),
                     config = areaConfig,
@@ -538,7 +540,13 @@ internal fun HomeListSurface(
                     onRelease = { coordinator.drop() },
                     modifier = zoneModifier,
                     onGeometryChange = { areaGeometry = it },
-                    onOpen = {},
+                    // The area holds widgets, and only ours answer a tap — with whatever the part tapped was given.
+                    onOpen = { item ->
+                        if (item is HomeItem.Widget) {
+                            val id = item.widget.id
+                            widgetTouch.tapped(id)?.let { (path, tap) -> viewModel.runWidgetTap(id, path, tap) }
+                        }
+                    },
                     onShowMenu = { item, anchor -> showAreaMenu(item, anchor) },
                 ) { item, cellModifier, itemGestures ->
                     // Only a widget can be here — `acceptsItem` refuses everything else, and nothing seeds it — so
@@ -551,11 +559,14 @@ internal fun HomeListSurface(
                             itemGestures = itemGestures,
                         )
 
-                        is HomeItem.Widget -> WidgetCell(
-                            recipe = item.widget.recipe,
-                            modifier = cellModifier,
-                            itemGestures = itemGestures,
-                        )
+                        is HomeItem.Widget -> CompositionLocalProvider(LocalWidgetTouch provides widgetTouch) {
+                            WidgetCell(
+                                recipe = item.widget.recipe,
+                                modifier = cellModifier,
+                                itemGestures = itemGestures,
+                                id = item.widget.id,
+                            )
+                        }
 
                         else -> Unit
                     }

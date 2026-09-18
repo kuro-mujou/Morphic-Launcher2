@@ -31,8 +31,11 @@ import inkspire.morphic.core.model.on
 import inkspire.morphic.core.model.pagerSlot
 import inkspire.morphic.core.model.portraitOfPair
 import inkspire.morphic.core.model.sideSlot
+import inkspire.morphic.core.model.widget.LayerPath
 import inkspire.morphic.core.model.widget.Widget
 import inkspire.morphic.core.model.widget.WidgetRecipe
+import inkspire.morphic.core.model.widget.WidgetTap
+import inkspire.morphic.core.model.widget.withFlipped
 import inkspire.morphic.data.apps.AppLauncher
 import inkspire.morphic.data.apps.AppRepository
 import inkspire.morphic.data.apps.GestureActionRunner
@@ -477,6 +480,24 @@ class HomeViewModel(
             val action = settingsRepository.homeItemGestures.first().actionsOn(item)[gesture] ?: return@launch
             // No side: an icon's gesture starts wherever the icon happens to sit.
             gestureActionRunner.run(action, startX = null)
+        }
+    }
+
+    /**
+     * Does what a tap on the part of widget [widgetId] at [path] does — [tap], as the widget reported it.
+     *
+     * A setting is flipped **against the widget as stored**, not the one the cell was drawn from: a tap that landed
+     * mid-recomposition must not write back a recipe one frame old. An action runs as an item gesture's does.
+     */
+    fun runWidgetTap(widgetId: Long, path: LayerPath, tap: WidgetTap) {
+        viewModelScope.launch {
+            when (tap) {
+                is WidgetTap.Run -> gestureActionRunner.run(tap.action, startX = null)
+                is WidgetTap.Flip -> {
+                    val widget = layoutRepository.widgets().first().firstOrNull { it.id == widgetId } ?: return@launch
+                    layoutRepository.setWidgetRecipe(widgetId, widget.recipe.withFlipped(path, tap.global))
+                }
+            }
         }
     }
 

@@ -4,6 +4,8 @@ import inkspire.morphic.core.model.widget.WidgetGlobal
 import inkspire.morphic.core.model.widget.WidgetLayerSpec
 import inkspire.morphic.core.model.widget.WidgetRecipe
 import inkspire.morphic.core.model.widget.WidgetSource
+import inkspire.morphic.core.model.widget.layerAt
+import inkspire.morphic.core.model.widget.updatedAt
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test

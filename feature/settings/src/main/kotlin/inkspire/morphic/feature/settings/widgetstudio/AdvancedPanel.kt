@@ -37,6 +37,7 @@ import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.widget.WidgetExtent
 import inkspire.morphic.core.model.widget.WidgetLayerSpec
 import inkspire.morphic.core.model.widget.WidgetSource
+import inkspire.morphic.core.model.widget.WidgetTap
 import inkspire.morphic.core.widgetscript.ScriptData
 import inkspire.morphic.core.widgetscript.WidgetExpression
 import kotlinx.coroutines.flow.drop
@@ -47,7 +48,12 @@ import kotlinx.coroutines.flow.drop
  * the "breadcrumb rail" the plan asked for in place of a tree panel on a half-height sheet.
  */
 @Composable
-internal fun AdvancedPanel(state: WidgetStudioState, viewModel: WidgetStudioViewModel, modifier: Modifier = Modifier) {
+internal fun AdvancedPanel(
+    state: WidgetStudioState,
+    viewModel: WidgetStudioViewModel,
+    onPickTapAction: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val recipe = state.recipe ?: return
     val path = state.focus.path
     val rail = PaddingValues(horizontal = 20.dp)
@@ -74,14 +80,19 @@ internal fun AdvancedPanel(state: WidgetStudioState, viewModel: WidgetStudioView
         }
         // Keyed on the path, so a field's text and an open picker belong to the layer they were opened on.
         key(path) {
-            LayerEditor(state, viewModel, Modifier.weight(1f))
+            LayerEditor(state, viewModel, onPickTapAction, Modifier.weight(1f))
         }
     }
 }
 
 /** The open layer's properties, then what can be added beside or inside it, and its removal. */
 @Composable
-private fun LayerEditor(state: WidgetStudioState, viewModel: WidgetStudioViewModel, modifier: Modifier = Modifier) {
+private fun LayerEditor(
+    state: WidgetStudioState,
+    viewModel: WidgetStudioViewModel,
+    onPickTapAction: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     var expanded by rememberSaveable { mutableStateOf<String?>(null) }
     // The system photo picker: no storage permission, and only the picture chosen is ever readable.
     val imageRequest = remember { PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly) }
@@ -113,6 +124,7 @@ private fun LayerEditor(state: WidgetStudioState, viewModel: WidgetStudioViewMod
                     onBrowse = viewModel::showExamples,
                 ) { viewModel.set(field, it) }
                 is LayerField.Bound -> BoundRow(field.label, field.setting) { viewModel.unbind(field) }
+                is LayerField.Tap -> TapControl(field, onSet = viewModel::setTap, onPickAction = onPickTapAction)
             }
         }
         Labeled("Add layer") {
@@ -207,6 +219,50 @@ private fun FormulaControl(
                 onBrowse(false)
             },
         )
+    }
+}
+
+/**
+ * What a tap on the layer does: one chip each for nothing, a launcher action, and every setting it can flip. **Action**
+ * opens the launcher's own action picker, which writes the choice to the widget; the studio picks it up from there.
+ */
+@Composable
+private fun TapControl(field: LayerField.Tap, onSet: (WidgetTap?) -> Unit, onPickAction: () -> Unit) {
+    val colors = LocalMorphicColors.current
+    val current = field.current
+    val selected = when (current) {
+        null -> 0
+        is WidgetTap.Run -> 1
+        is WidgetTap.Flip -> field.flippable.indexOfFirst { it.name == current.global }.let { if (it < 0) -1 else it + 2 }
+    }
+    Labeled("On tap") {
+        ChipRow(
+            labels = listOf("Nothing", "Action") + field.flippable.map { "Flip ${it.label}" },
+            selected = selected,
+            onSelect = { i ->
+                when (i) {
+                    0 -> onSet(null)
+                    1 -> onPickAction()
+                    else -> onSet(WidgetTap.Flip(field.flippable[i - 2].name))
+                }
+            },
+        )
+        when (current) {
+            is WidgetTap.Run -> Text(
+                text = "Runs a launcher action — tap Action to change it",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.contentMuted,
+            )
+            // A flip whose setting has since gone does nothing on HOME, and says so here rather than looking chosen.
+            is WidgetTap.Flip -> if (selected < 0) {
+                Text(
+                    text = "Flips a setting that no longer exists",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.error,
+                )
+            }
+            null -> Unit
+        }
     }
 }
 

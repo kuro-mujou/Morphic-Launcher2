@@ -2,6 +2,7 @@ package inkspire.morphic.core.widget
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -25,6 +26,8 @@ import inkspire.morphic.core.widgetscript.withGlobals
  * @param onLayout for an editor: where each of the recipe's own layers landed, by its index in `recipe.layers`, in
  *   this composable's pixels — reported from the layout that drew them, so what is hit-tested is what is on screen. A
  *   layer that does not draw is absent. Called on every layout pass; nothing is reported when it is null.
+ * @param taps where the layers that answer a tap register themselves, for a surface that runs them; the studio and
+ *   the picker pass none, and nothing registers.
  */
 @Composable
 fun WidgetRender(
@@ -32,9 +35,12 @@ fun WidgetRender(
     data: ScriptData,
     modifier: Modifier = Modifier,
     onLayout: ((Map<Int, IntRect>) -> Unit)? = null,
+    taps: WidgetTapTargets? = null,
 ) {
     val globals = remember(recipe.globals) { recipe.resolvedGlobals }
     val scoped = remember(data, globals) { data.withGlobals(globals.asScriptValues()) }
-    WidgetOverlap(recipe.layers, scoped, globals, modifier.fillMaxSize().clipToBounds(), onLayout)
+    CompositionLocalProvider(LocalTapTargets provides taps) {
+        WidgetOverlap(recipe.layers, scoped, globals, modifier.fillMaxSize().clipToBounds(), onLayout)
+    }
 }
 

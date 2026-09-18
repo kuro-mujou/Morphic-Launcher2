@@ -1,29 +1,15 @@
 package inkspire.morphic.feature.settings.widgetstudio
 
+import inkspire.morphic.core.model.widget.LayerPath
 import inkspire.morphic.core.model.widget.WidgetGlobals
 import inkspire.morphic.core.model.widget.WidgetLayerSpec
 import inkspire.morphic.core.model.widget.WidgetRecipe
 import inkspire.morphic.core.model.widget.WidgetSource
 import inkspire.morphic.core.model.widget.children
+import inkspire.morphic.core.model.widget.layerAt
 import inkspire.morphic.core.model.widget.resolvedGlobals
+import inkspire.morphic.core.model.widget.updatedAt
 import inkspire.morphic.core.model.widget.withChildren
-
-/**
- * Where a layer sits in a recipe's tree: its index among the recipe's own layers, then among its group's, and so on
- * down. Empty is the widget itself. What the Advanced view navigates, where Style needs only the first step.
- */
-internal typealias LayerPath = List<Int>
-
-/** The layer at [path], or null for the widget itself or a path that no longer leads anywhere. */
-internal fun WidgetRecipe.layerAt(path: LayerPath): WidgetLayerSpec? {
-    var layers = layers
-    var layer: WidgetLayerSpec? = null
-    path.forEach { index ->
-        layer = layers.getOrNull(index) ?: return null
-        layers = layer?.source?.children.orEmpty()
-    }
-    return layer
-}
 
 /** What sits directly inside [path] — the recipe's layers for the widget, a group's for a group, nothing otherwise. */
 internal fun WidgetRecipe.childrenAt(path: LayerPath): List<WidgetLayerSpec> =
@@ -32,12 +18,6 @@ internal fun WidgetRecipe.childrenAt(path: LayerPath): List<WidgetLayerSpec> =
 /** Whether [path] can hold layers: the widget, or a group of either kind. */
 internal fun WidgetRecipe.isContainer(path: LayerPath): Boolean =
     path.isEmpty() || layerAt(path)?.source?.children != null
-
-/** The recipe with [path]'s layer changed by [change]. A path that leads nowhere changes nothing. */
-internal fun WidgetRecipe.updatedAt(path: LayerPath, change: (WidgetLayerSpec) -> WidgetLayerSpec): WidgetRecipe {
-    if (path.isEmpty()) return this
-    return copy(layers = layers.updatedAt(path, change) ?: return this)
-}
 
 /** The recipe with [layers] as what sits directly inside [path]. */
 internal fun WidgetRecipe.withChildrenAt(path: LayerPath, layers: List<WidgetLayerSpec>): WidgetRecipe = when {
@@ -90,18 +70,4 @@ internal fun List<WidgetLayerSpec>.labels(): List<String> {
         val count = seen.merge(layer.label, 1, Int::plus)!!
         if (count == 1) layer.label else "${layer.label} $count"
     }
-}
-
-private fun List<WidgetLayerSpec>.updatedAt(
-    path: LayerPath,
-    change: (WidgetLayerSpec) -> WidgetLayerSpec,
-): List<WidgetLayerSpec>? {
-    val layer = getOrNull(path.first()) ?: return null
-    val next = if (path.size == 1) {
-        change(layer)
-    } else {
-        val children = layer.source.children ?: return null
-        layer.copy(source = layer.source.withChildren(children.updatedAt(path.drop(1), change) ?: return null))
-    }
-    return toMutableList().apply { set(path.first(), next) }
 }

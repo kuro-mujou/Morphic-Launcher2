@@ -22,7 +22,11 @@ import kotlin.math.roundToInt
 internal fun WidgetStack(source: WidgetSource.Stack, data: ScriptData, globals: WidgetGlobals) {
     val visible = source.layers.drawn(globals)
     val vertical = source.axis == WidgetSource.Stack.Axis.VERTICAL
-    Layout(content = { visible.forEach { WidgetLayer(it, data, globals) } }) { measurables, constraints ->
+    Layout(
+        content = {
+            visible.forEach { layer -> WidgetLayer(layer, source.layers.indexOfFirst { it === layer }, data, globals) }
+        },
+    ) { measurables, constraints ->
         val scales = FloatArray(visible.size) { WidgetPlacement.scaleOf(visible[it]) }
         val placeables = measurables.mapIndexed { i, measurable ->
             measurable.measure(layerMeasureConstraints(visible[i], constraints, density, scales[i]))

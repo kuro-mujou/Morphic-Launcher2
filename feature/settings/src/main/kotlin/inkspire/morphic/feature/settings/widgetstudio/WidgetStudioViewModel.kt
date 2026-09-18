@@ -6,12 +6,17 @@ import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import inkspire.morphic.core.common.scope.ApplicationScope
+import inkspire.morphic.core.model.widget.LayerPath
 import inkspire.morphic.core.model.widget.WidgetExtent
 import inkspire.morphic.core.model.widget.WidgetGlobal
 import inkspire.morphic.core.model.widget.WidgetLayerSpec
 import inkspire.morphic.core.model.widget.WidgetRecipe
 import inkspire.morphic.core.model.widget.WidgetSource
+import inkspire.morphic.core.model.widget.WidgetTap
 import inkspire.morphic.core.model.widget.imagePaths
+import inkspire.morphic.core.model.widget.layerAt
+import inkspire.morphic.core.model.widget.tapScope
+import inkspire.morphic.core.model.widget.updatedAt
 import inkspire.morphic.core.widget.movedTo
 import inkspire.morphic.core.widget.scaledBy
 import inkspire.morphic.core.widgetscript.ScriptData
@@ -104,7 +109,7 @@ data class WidgetStudioState(
     internal val fields: List<LayerField>
         get() = recipe?.let { recipe ->
             val inStack = focus.path.size > 1 && recipe.layerAt(focus.path.dropLast(1))?.source is WidgetSource.Stack
-            layer?.let { layerFields(it, recipe.globalsAt(focus.path), inStack) }
+            layer?.let { layerFields(it, recipe.globalsAt(focus.path), inStack, recipe.tapScope(focus.path)) }
         }.orEmpty()
 }
 
@@ -134,19 +139,36 @@ class WidgetStudioViewModel(
     private val browsing = MutableStateFlow(false)
     private var pendingSave: Job? = null
 
+    /**
+     * The recipe as this screen last read or wrote it — what a stored recipe is compared against to tell a write made
+     * elsewhere (the action picker, a flip on HOME) from the echo of this screen's own.
+     */
+    private var lastStored: WidgetRecipe? = null
+
     init {
         viewModelScope.launch {
-            val widget = layoutRepository.widgets().first().firstOrNull { it.id == route.widgetId }
-            if (widget == null) {
-                missing.value = true
-            } else {
-                val loaded = widget.recipe
-                initial.value = (listOf(null) + loaded.parts().map { it.index }).associateWith { part ->
-                    loaded.globalsOf(part).associateBy { it.name }
+            // **Watched, not read once.** The action picker is another screen, and it writes the tap it chooses to the
+            // widget directly; a studio holding the recipe it opened with would overwrite that choice on its next edit.
+            layoutRepository.widgets().collect { widgets ->
+                val stored = widgets.firstOrNull { it.id == route.widgetId }?.recipe
+                when {
+                    stored == null -> missing.value = true
+                    lastStored == null -> {
+                        initial.value = (listOf(null) + stored.parts().map { it.index }).associateWith { part ->
+                            stored.globalsOf(part).associateBy { it.name }
+                        }
+                        adopt(stored)
+                    }
+                    // Someone else's write, and none of ours is waiting to land over it: take it.
+                    stored != lastStored && pendingSave?.isActive != true -> adopt(stored)
                 }
-                recipe.value = loaded
             }
         }
+    }
+
+    private fun adopt(stored: WidgetRecipe) {
+        lastStored = stored
+        recipe.value = stored
     }
 
     /**
@@ -220,6 +242,11 @@ class WidgetStudioViewModel(
     /** New source for one of the open layer's formulas. */
     internal fun set(field: LayerField.Formula, source: String) {
         edit { recipe -> recipe.updatedAt(focus.value.path) { field.apply(it, source) } }
+    }
+
+    /** Sets what tapping the open layer does; null for nothing. */
+    fun setTap(tap: WidgetTap?) {
+        edit { recipe -> recipe.updatedAt(focus.value.path) { it.copy(onTap = tap) } }
     }
 
     /** Lets go of the setting deciding one of the open layer's properties, which it then decides itself. */
@@ -353,6 +380,7 @@ class WidgetStudioViewModel(
         val next = change(current)
         if (next == current) return
         recipe.value = next
+        lastStored = next
         undo.value = null
         pendingSave?.cancel()
         pendingSave = applicationScope.launch {

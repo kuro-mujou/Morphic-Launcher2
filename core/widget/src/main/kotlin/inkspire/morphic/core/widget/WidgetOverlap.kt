@@ -2,11 +2,14 @@ package inkspire.morphic.core.widget
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.Placeable
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -35,7 +38,8 @@ internal fun WidgetOverlap(
 ) {
     val visible = layers.drawn(globals)
     Layout(
-        content = { visible.forEach { WidgetLayer(it, data, globals) } },
+        // Each layer by its index among all of them, hidden ones included, which is what a path counts.
+        content = { visible.forEach { layer -> WidgetLayer(layer, layers.indexOfFirst { it === layer }, data, globals) } },
         modifier = modifier,
     ) { measurables, constraints ->
         val scales = FloatArray(visible.size) { WidgetPlacement.scaleOf(visible[it]) }
@@ -122,14 +126,29 @@ internal fun layerMeasureConstraints(spec: WidgetLayerSpec, group: Constraints, 
  * group's measurables stay in step with its layer list.
  */
 @Composable
-internal fun WidgetLayer(spec: WidgetLayerSpec, data: ScriptData, globals: WidgetGlobals) {
+internal fun WidgetLayer(spec: WidgetLayerSpec, index: Int, data: ScriptData, globals: WidgetGlobals) {
+    val path = LocalLayerPath.current + index
+    val targets = LocalTapTargets.current
+    val tap = spec.onTap
+    if (targets != null && tap != null) DisposableEffect(targets, path) { onDispose { targets.remove(path) } }
     Box(
-        modifier = Modifier.graphicsLayer {
-            rotationZ = spec.rotation
-            alpha = spec.opacity.coerceIn(0f, 1f)
-        },
+        modifier = Modifier
+            .graphicsLayer {
+                rotationZ = spec.rotation
+                alpha = spec.opacity.coerceIn(0f, 1f)
+            }
+            // After the transform, so the coordinates a tap is resolved through are the ones the layer is drawn at.
+            .then(
+                if (targets != null && tap != null) {
+                    Modifier.onGloballyPositioned { targets.set(path, tap, it) }
+                } else {
+                    Modifier
+                },
+            ),
         propagateMinConstraints = true,
     ) {
-        WidgetSourceContent(spec.source, data, globals)
+        CompositionLocalProvider(LocalLayerPath provides path) {
+            WidgetSourceContent(spec.source, data, globals)
+        }
     }
 }
