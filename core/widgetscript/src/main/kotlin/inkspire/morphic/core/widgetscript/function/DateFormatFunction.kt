@@ -1,5 +1,6 @@
 package inkspire.morphic.core.widgetscript.function
 
+import inkspire.morphic.core.widgetscript.ClockTick
 import inkspire.morphic.core.widgetscript.ProviderId
 import inkspire.morphic.core.widgetscript.ScriptData
 import inkspire.morphic.core.widgetscript.ScriptValue
@@ -30,5 +31,30 @@ internal object DateFormatFunction : ScriptFunction {
         } catch (e: DateTimeException) {
             throw ScriptException("Not a date pattern: ${e.message}", e)
         }
+    }
+
+    /**
+     * The finest field the pattern prints, read off its letters with quoted text skipped — `'at' HH:mm` ticks on the
+     * minute, not on the `a` inside the quotes. A pattern not fixed when the script is written ticks every second.
+     */
+    override fun clockTick(constantArgs: List<String?>): ClockTick {
+        val pattern = constantArgs.firstOrNull() ?: return ClockTick.SECOND
+        var quoted = false
+        var finest = ClockTick.DAY
+        pattern.forEach { c ->
+            when {
+                c == '\'' -> quoted = !quoted
+                !quoted -> finest = minOf(finest, tickOf(c))
+            }
+        }
+        return finest
+    }
+
+    /** Every letter that is not a time of day is a date, a zone or an era, and changes at most daily. */
+    private fun tickOf(letter: Char): ClockTick = when (letter) {
+        's', 'S', 'n', 'N', 'A' -> ClockTick.SECOND
+        'm' -> ClockTick.MINUTE
+        'H', 'h', 'k', 'K', 'a', 'B' -> ClockTick.HOUR
+        else -> ClockTick.DAY
     }
 }

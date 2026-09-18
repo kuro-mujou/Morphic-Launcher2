@@ -39,13 +39,13 @@ internal sealed interface Node {
     data class Juxtaposed(val parts: List<Node>, override val range: IntRange) : Node
 }
 
-/** Every function this node or anything under it calls, in any branch. */
-internal fun Node.functions(): Sequence<ScriptFunction> = when (this) {
+/** Every call in this node or anything under it, in any branch. */
+internal fun Node.calls(): Sequence<Node.Call> = when (this) {
     is Node.Literal -> emptySequence()
-    is Node.Call -> sequenceOf(function) + args.asSequence().flatMap { it.functions() }
-    is Node.If -> args.asSequence().flatMap { it.functions() }
-    is Node.Group -> inner.functions()
-    is Node.Negate -> operand.functions()
-    is Node.Binary -> left.functions() + right.functions()
-    is Node.Juxtaposed -> parts.asSequence().flatMap { it.functions() }
+    is Node.Call -> sequenceOf(this) + args.asSequence().flatMap { it.calls() }
+    is Node.If -> args.asSequence().flatMap { it.calls() }
+    is Node.Group -> inner.calls()
+    is Node.Negate -> operand.calls()
+    is Node.Binary -> left.calls() + right.calls()
+    is Node.Juxtaposed -> parts.asSequence().flatMap { it.calls() }
 }

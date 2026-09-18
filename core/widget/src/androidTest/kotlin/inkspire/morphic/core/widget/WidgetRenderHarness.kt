@@ -27,7 +27,9 @@ import inkspire.morphic.core.model.widget.WidgetExtent
 import inkspire.morphic.core.model.widget.WidgetLayerSpec
 import inkspire.morphic.core.model.widget.WidgetRecipe
 import inkspire.morphic.core.model.widget.WidgetSource
+import inkspire.morphic.core.widgetscript.BatteryReading
 import inkspire.morphic.core.widgetscript.ScriptData
+import inkspire.morphic.core.widgetscript.SystemReading
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -63,6 +65,8 @@ class WidgetRenderHarness {
     /** Friday 18 September 2026, 19:14:05 UTC, read in English. */
     private val data = object : ScriptData {
         override val now: Instant = Instant.parse("2026-09-18T19:14:05Z")
+        override val battery = BatteryReading.Unknown
+        override val system = SystemReading.Unknown
         override val zone: ZoneId = ZoneId.of("UTC")
         override val locale: Locale = Locale.US
     }

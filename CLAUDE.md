@@ -94,7 +94,8 @@ root Gradle project name `Launcher2`.
   (Room), `icon`, `designsystem` (Compose), `navigation`, `widgetscript` (the widget formula language — pure Kotlin,
   so every read goes through a declared provider), `widget` (the one widget renderer, `WidgetRender(recipe, data)`).
 - **`data:*`** — `apps`, `billing` (the Play subscription), `icons`, `layout` (the highest-logic module — placement
-  engine), `settings`, `appwidgets` (hosting *other apps'* widgets — "widget" unqualified means the launcher's own).
+  engine), `settings`, `appwidgets` (hosting *other apps'* widgets — "widget" unqualified means the launcher's own),
+  `widgets` (the live data a widget reads, subscribed to only as its recipe declares).
   Each exposes repositories the UI consumes.
 - **`feature:*`** — `home`, `apps`, `settings`, `shell`, `paywall` (the subscription's purchase screen). One module **per surface**, not per look: `apps` is the
   whole APPS surface and picks its arrangement from `AppsLayout` internally, which is why L1's separate

@@ -1,5 +1,6 @@
 package inkspire.morphic.core.widgetscript.function
 
+import inkspire.morphic.core.widgetscript.ClockTick
 import inkspire.morphic.core.widgetscript.ProviderId
 import inkspire.morphic.core.widgetscript.ScriptData
 import inkspire.morphic.core.widgetscript.ScriptValue
@@ -21,6 +22,14 @@ internal interface ScriptFunction {
 
     /** @throws ScriptException for anything the user should see — a bad mode, a number that is not one. */
     fun call(args: List<ScriptValue>, data: ScriptData): ScriptValue
+
+    /**
+     * How often a call can show a new value, asked only of a function that [reads] the clock. The default is every
+     * second, the one answer that is never stale.
+     *
+     * @param constantArgs each argument's text where it is fixed when the script is written, null where it is not.
+     */
+    fun clockTick(constantArgs: List<String?>): ClockTick = ClockTick.SECOND
 }
 
 /** A failure the user caused and can fix, carrying the message they are shown. */

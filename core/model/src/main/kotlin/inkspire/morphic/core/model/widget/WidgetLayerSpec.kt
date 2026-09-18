@@ -27,3 +27,9 @@ data class WidgetLayerSpec(
     val opacity: Float = 1f,
     val visible: Boolean = true,
 )
+
+/**
+ * The layers that draw. The renderer lays out exactly these and the update cadence reads exactly these — a hidden
+ * seconds clock counted by one and not the other would wake a widget every second to show nothing.
+ */
+fun List<WidgetLayerSpec>.drawn(): List<WidgetLayerSpec> = filter { it.visible }

@@ -1,5 +1,9 @@
 package inkspire.morphic.core.widgetscript
 
+import java.time.Instant
+import java.time.ZoneId
+import java.util.Locale
+
 /**
  * A bound value as a widget stores it — literal text with `$…$` formulas in it, `$df(hh:mm)$ · $tc(up, df(EEE))$` —
  * parsed once and evaluated as often as its data changes.
@@ -21,11 +25,17 @@ class WidgetExpression private constructor(
     private val parts: List<ScriptPart>,
     val problems: List<ScriptProblem>,
 ) {
-    val providers: Set<ProviderId> = parts.asSequence()
-        .filterIsInstance<ScriptPart.Formula>()
-        .flatMap { it.node.functions() }
-        .flatMap { it.reads }
-        .toSet()
+    private val calls: List<Node.Call> = parts.filterIsInstance<ScriptPart.Formula>().flatMap { it.node.calls() }
+
+    val providers: Set<ProviderId> = calls.flatMap { it.function.reads }.toSet()
+
+    /**
+     * How often this can show a new time, or null when it does not read the clock — the finest of its clock calls'.
+     * A pattern built by another formula is not known until it runs, and counts as every second.
+     */
+    val clockTick: ClockTick? = calls
+        .filter { ProviderId.CLOCK in it.function.reads }
+        .minOfOrNull { call -> call.function.clockTick(call.args.map(::constantText)) }
 
     fun evaluate(data: ScriptData): ScriptResult {
         val evaluator = Evaluator(source, data)
@@ -52,4 +62,26 @@ class WidgetExpression private constructor(
             return WidgetExpression(source, scanner.parts, scanner.problems)
         }
     }
+
+    /**
+     * What [node] evaluates to whatever the data, or null when it calls something — `dd-MM-yyyy` is three words and
+     * two operators, and still a fixed pattern.
+     */
+    private fun constantText(node: Node): String? {
+        if (node.calls().any()) return null
+        return try {
+            Evaluator(source, NoData).evaluate(node).text
+        } catch (_: EvaluationException) {
+            null
+        }
+    }
+}
+
+/** Handed to an evaluation that calls nothing, and so reads nothing; touching it is a bug in [WidgetExpression]. */
+private object NoData : ScriptData {
+    override val now: Instant get() = error("A constant read the clock")
+    override val battery: BatteryReading get() = error("A constant read the battery")
+    override val system: SystemReading get() = error("A constant read the system")
+    override val zone: ZoneId get() = error("A constant read the zone")
+    override val locale: Locale get() = error("A constant read the locale")
 }

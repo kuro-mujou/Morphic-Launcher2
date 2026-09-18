@@ -17,6 +17,12 @@ interface ScriptData {
     /** The [ProviderId.CLOCK] reading. Read only by a script that declares the clock. */
     val now: Instant
 
+    /** The [ProviderId.BATTERY] reading. */
+    val battery: BatteryReading
+
+    /** The [ProviderId.SYSTEM] reading. */
+    val system: SystemReading
+
     /** The zone [now] is shown in. The widget's, not necessarily the device's: a second clock is one field changed. */
     val zone: ZoneId
 

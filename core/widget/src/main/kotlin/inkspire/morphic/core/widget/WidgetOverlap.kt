@@ -9,6 +9,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.constrainWidth
 import inkspire.morphic.core.model.widget.WidgetLayerSpec
+import inkspire.morphic.core.model.widget.drawn
 import inkspire.morphic.core.widgetscript.ScriptData
 
 /**
@@ -20,7 +21,7 @@ import inkspire.morphic.core.widgetscript.ScriptData
  */
 @Composable
 internal fun WidgetOverlap(layers: List<WidgetLayerSpec>, data: ScriptData, modifier: Modifier = Modifier) {
-    val visible = layers.filter { it.visible }
+    val visible = layers.drawn()
     Layout(
         content = { visible.forEach { WidgetLayer(it, data) } },
         modifier = modifier,

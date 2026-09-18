@@ -2180,14 +2180,17 @@ the frame decides the *shape* while the target screen decides the *resolution*. 
 colors**, which L1's did not — see the design-system note above; it is what lets the rotating pair answer the
 brightness question through the same system API as every other wallpaper.
 
-**The widget studio has started: WS0 and WS1 of [WIDGET_STUDIO_PLAN.md](WIDGET_STUDIO_PLAN.md).** WS0 took the word:
-everything that hosts *another app's* widget is `AppWidget*` and lives in `data:appwidgets`, so "widget" alone means the
-launcher's own. WS1 is `core:widgetscript`, the formula language — pure Kotlin, so a function cannot reach the platform
-and every read goes through `ScriptData` under a declared `ProviderId`. `WidgetExpression.parse(text).providers` is
-known before anything runs, and it is what WS4 will derive a widget's cadence from. The grammar's one unusual rule is
-that an operator between non-numbers is the text as written, which is what lets `df(dd-MM-yyyy)` go unquoted. Nothing
-renders a widget yet. WS2 added the stored shape, `WidgetRecipe` in `core:model/widget` — a tree of anchored layers whose
-text is formula source, never a parse tree. WS3 draws it: `core:widget`'s `WidgetRender(recipe, data)` is the only
-renderer — the studio and HOME will differ only in the `ScriptData` they pass. WS4 (providers and derived cadence) is
-next. **Compose UI tests need espresso ≥ 3.6 on this emulator** (API 36): the 3.5 the Compose test rule brings calls an
-`InputManager` method Android 16 removed, and fails before the first frame. `core:widget` pins 3.7.
+**The widget studio is under way: WS0–WS4 of [WIDGET_STUDIO_PLAN.md](WIDGET_STUDIO_PLAN.md), the engine without a
+surface.** "Widget" alone means the launcher's own; hosting *another app's* is `AppWidget*` in `data:appwidgets`.
+- `core:widgetscript` — the formula language, pure Kotlin, so every read goes through `ScriptData` under a declared
+  `ProviderId`. `WidgetExpression.providers` and `.clockTick` are known before anything runs. One unusual rule: an
+  operator between non-numbers is the text as written, which lets `df(dd-MM-yyyy)` go unquoted.
+- `core:model/widget` — `WidgetRecipe`, a tree of anchored layers whose text is formula source, never a parse tree.
+- `core:widget` — `WidgetRender(recipe, data)`, the only renderer: the studio and HOME differ only in the data.
+- `data:widgets` — `WidgetDataRepository.data(WidgetCadence.of(recipe))`, a cold flow that listens only to what the
+  recipe reads and wakes the clock at the coarsest tick its patterns allow; verified on the emulator, where a date
+  widget emits once in four seconds.
+
+Nothing is placeable yet — WS5 (placement on HOME) is next. **Compose UI tests need espresso ≥ 3.6 on this emulator**
+(API 36): the 3.5 the Compose test rule brings calls an `InputManager` method Android 16 removed, and fails before the
+first frame. `core:widget` pins 3.7.

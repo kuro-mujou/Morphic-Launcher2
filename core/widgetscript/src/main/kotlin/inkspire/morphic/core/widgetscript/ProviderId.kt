@@ -8,6 +8,12 @@ package inkspire.morphic.core.widgetscript
  * it here draws stale, silently, and only on the device.
  */
 enum class ProviderId {
-    /** The current instant, [ScriptData.now]. */
+    /** The current instant, [ScriptData.now] — and how often it matters is a [ClockTick], not a fixed rate. */
     CLOCK,
+
+    /** [ScriptData.battery]. */
+    BATTERY,
+
+    /** [ScriptData.system]. */
+    SYSTEM,
 }
