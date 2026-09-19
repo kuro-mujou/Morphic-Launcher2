@@ -81,6 +81,8 @@ fun <T> CoordinateDragPager(
     innerItemAt: ((item: T, localPosition: Offset, size: IntSize) -> InnerCellItem?)? = null,
     onOpenInner: (GridItem) -> Unit = {},
     onShowInnerMenu: (GridItem, anchorInRoot: Rect) -> Unit = { _, _ -> },
+    onEdgeActionInner: (GridItem, SwipeDirection) -> Unit = { _, _ -> },
+    onDoubleTapInner: (GridItem) -> Unit = {},
     itemContent: @Composable (item: T, cellModifier: Modifier, itemGestures: Modifier) -> Unit,
 ) {
     val session = coordinator.session
@@ -176,6 +178,8 @@ fun <T> CoordinateDragPager(
                     innerItemAt = innerItemAt?.let { at -> { local, size -> at(item, local, size) } },
                     onOpenInner = onOpenInner,
                     onShowInnerMenu = onShowInnerMenu,
+                    onEdgeActionInner = onEdgeActionInner,
+                    onDoubleTapInner = onDoubleTapInner,
                 ) { itemGestures ->
                     itemContent(item, Modifier.fillMaxSize(), itemGestures)
                 }

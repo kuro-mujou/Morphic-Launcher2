@@ -585,8 +585,9 @@ internal fun HomePagerSurface(
     }
 
     // The item whose Gestures sheet is open, or null. Held here rather than in the menu because the menu is a
-    // transient host and the sheet outlives it — the menu closes as the row is chosen.
-    var gesturesFor by remember { mutableStateOf<HomeItem?>(null) }
+    // transient host and the sheet outlives it — the menu closes as the row is chosen. An item and its name rather
+    // than a [HomeItem], because an icon inside a container is assigned gestures too and has no cell of its own.
+    var gesturesFor by remember { mutableStateOf<GestureTarget?>(null) }
 
     // **What each item has taken, and what happens when it fires.** Both zones read the one resolver, so the dock
     // and the pager cannot disagree about an item's claims — and the claims are what the surface pan asks about
@@ -626,7 +627,14 @@ internal fun HomePagerSurface(
                     containerIconSize(slot, metrics, container.container.iconScalePercent, density).toPx()
                 }
                 slot.iconBounds(iconPx).takeIf { it.contains(local) }?.let { bounds ->
-                    InnerCellItem(item = container.icons[i].asIconItem().asGridItem(), bounds = bounds)
+                    val inner = container.icons[i].asIconItem().asGridItem()
+                    // Its own assignments, which is what makes a swipe or a double tap on it the icon's.
+                    InnerCellItem(
+                        item = inner,
+                        bounds = bounds,
+                        edgeActions = state.itemGestures.swipesOn(inner),
+                        doubleTap = state.itemGestures.hasDoubleTapOn(inner),
+                    )
                 }
             }
         }
@@ -655,18 +663,20 @@ internal fun HomePagerSurface(
         val remove = held?.let { (containerId, icon) ->
             MenuAction("Remove from container") { viewModel.removeIconFromContainer(containerId, icon.asIconItem()) }
         }
+        // The same verb an app or a folder offers on the grid: it is the same single icon a finger can pull.
+        fun gestures(label: String) = MenuAction("Gestures") { gesturesFor = GestureTarget(inner, label) }
         when (val held2 = held?.second) {
             is ContainerIcon.App -> menuHost?.showApp(
                 component = held2.info.componentKey,
                 label = held2.info.label,
                 anchor = anchor,
-                surfaceActions = listOfNotNull(remove),
+                surfaceActions = listOfNotNull(gestures(held2.info.label), remove),
             )
 
             is ContainerIcon.Folder -> menuHost?.show(
                 title = held2.folder.label,
                 anchor = anchor,
-                actions = listOfNotNull(remove),
+                actions = listOfNotNull(gestures(held2.folder.label.ifBlank { UnnamedFolder }), remove),
             )
 
             null -> Unit
@@ -683,7 +693,7 @@ internal fun HomePagerSurface(
             onResize = { resizing = it },
             onOpenIconContainerSettings = onOpenIconContainerSettings,
             onOpenWidgetContainerSettings = onOpenWidgetContainerSettings,
-            onOpenGestures = { gesturesFor = it },
+            onOpenGestures = { gesturesFor = GestureTarget(it.gridItem, it.menuLabel) },
             onStyleWidget = { id, anchor -> onStyleWidget(id, with(density) { anchor.size.toDpSize() }) },
         )
     }
@@ -795,6 +805,8 @@ internal fun HomePagerSurface(
                         innerItemAt = liftedInCell(layout.dockMetrics),
                         onOpenInner = openInner,
                         onShowInnerMenu = showInnerMenu,
+                        onEdgeActionInner = { inner, direction -> viewModel.runGesture(inner, direction.asItemGesture()) },
+                        onDoubleTapInner = { inner -> viewModel.runGesture(inner, ItemGesture.DOUBLE_TAP) },
                     ) { item, cellModifier, itemGestures ->
                         HomeItemCell(
                             item = item,
@@ -834,6 +846,8 @@ internal fun HomePagerSurface(
                         innerItemAt = liftedInCell(layout.mainMetrics),
                         onOpenInner = openInner,
                         onShowInnerMenu = showInnerMenu,
+                        onEdgeActionInner = { inner, direction -> viewModel.runGesture(inner, direction.asItemGesture()) },
+                        onDoubleTapInner = { inner -> viewModel.runGesture(inner, ItemGesture.DOUBLE_TAP) },
                     ) { item, cellModifier, itemGestures ->
                         HomeItemCell(
                             item = item,
@@ -1150,12 +1164,12 @@ internal fun HomePagerSurface(
             // reason.
             gesturesFor?.let { target ->
                 HomeItemGestureSheet(
-                    label = target.menuLabel,
-                    assigned = state.itemGestures.actionsOn(target.gridItem),
+                    label = target.label,
+                    assigned = state.itemGestures.actionsOn(target.item),
                     describe = { describeGestureAction(it, state.catalog) },
                     onPick = { gesture ->
                         gesturesFor = null
-                        onAssignGesture(target.gridItem, gesture)
+                        onAssignGesture(target.item, gesture)
                     },
                     onDismiss = { gesturesFor = null },
                 )
@@ -1327,3 +1341,6 @@ private fun containerFolder(items: List<HomeItem>, folderId: Long): ContainerIco
         .flatMap { it.icons }
         .filterIsInstance<ContainerIcon.Folder>()
         .firstOrNull { it.folder.id == folderId }
+
+/** What the Gestures sheet assigns to — an item on the grid or an icon inside a container — and the name it shows. */
+private data class GestureTarget(val item: GridItem, val label: String)

@@ -4,7 +4,9 @@ import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -23,6 +25,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
+import inkspire.morphic.core.designsystem.drag.ItemGestureClaims
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.launcherItemGestures
 import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
@@ -90,6 +93,10 @@ import kotlinx.coroutines.launch
  *   for every other cell.
  * @param onOpenInner a tap landed on an inner item (see [innerItemAt]).
  * @param onShowInnerMenu a long-press landed on an inner item; the rectangle is that item's, in root coordinates.
+ * @param onEdgeActionInner a press-and-swipe on an inner item, in one of *its* claimed directions
+ *   ([InnerCellItem.edgeActions]) — never the cell's, which is what a press on the cell's own slack claims.
+ * @param onDoubleTapInner a double tap on an inner item that has one assigned. Both presses must land on the same
+ *   inner item; a second press on another settles the first as a single tap.
  * @param onRelease the finger came up on this cell, ending the drag. It is **not** where the drop is committed —
  *   that belongs to the zone the drag landed in ([inkspire.morphic.core.designsystem.drag.DropZone.onDrop]), which
  *   may be on a different surface entirely from this cell. What the surface does here is its own bookkeeping about
@@ -112,10 +119,14 @@ fun LauncherDragCell(
     innerItemAt: ((localPosition: Offset, size: IntSize) -> InnerCellItem?)? = null,
     onOpenInner: (GridItem) -> Unit = {},
     onShowInnerMenu: (GridItem, anchorInRoot: Rect) -> Unit = { _, _ -> },
+    onEdgeActionInner: (GridItem, SwipeDirection) -> Unit = { _, _ -> },
+    onDoubleTapInner: (GridItem) -> Unit = {},
     content: @Composable (itemGestures: Modifier) -> Unit,
 ) {
     val isDragged = coordinator.session?.item == item
     val pull = rememberSwipePull(gestureConfig)
+    // Where the pull is drawn: on the cell, or on the one inner item a swipe was claimed on. See [InnerCellPull].
+    val innerPull = remember(pull) { InnerCellPull(pull::x, pull::y) }
     // **The drop lands, it does not teleport.** Only a cell on the surface being looked at takes the landing: the APPS
     // drawer stays composed behind home after an eject, holding a cell for the very app just dropped on home.
     val landing = rememberLandingGlide()
@@ -138,6 +149,7 @@ fun LauncherDragCell(
     fun innerAt(root: Offset): InnerCellItem? = innerItemAt?.let { at ->
         coordinates?.let { at(it.localPositionOf(it.findRootCoordinates(), root), it.size) }
     }
+    val verbs = PressedVerbs(onOpen, onEdgeAction, onDoubleTap, onOpenInner, onEdgeActionInner, onDoubleTapInner)
     Box(
         modifier
             .then(if (innerItemAt == null) Modifier else Modifier.onGloballyPositioned { coordinates = it })
@@ -152,41 +164,107 @@ fun LauncherDragCell(
             .graphicsLayer {
                 alpha = landing.alpha(isDragged)
                 val landed = landing.translation()
-                translationX = pull.x() + landed.x
-                translationY = pull.y() + landed.y
+                val pulled = innerPull.cellOffset()
+                translationX = pulled.x + landed.x
+                translationY = pulled.y + landed.y
             },
     ) {
-        content(
-            Modifier.launcherItemGestures(
-                config = gestureConfig,
-                edgeActions = edgeActions,
-                doubleTap = doubleTap,
-                onPress = { root ->
-                    pressRoot = root
-                    pressed = innerAt(root)
-                },
-                onOpen = { pressed?.let { onOpenInner(it.item) } ?: onOpen() },
-                onEdgeAction = onEdgeAction,
-                onDoubleTap = onDoubleTap,
-                onSwipePull = pull::onPull,
-                onShowMenu = { anchor ->
-                    val inner = pressed
-                    if (inner == null) {
-                        onShowMenu(anchor)
-                    } else {
-                        val topLeft = coordinates?.localToRoot(inner.bounds.topLeft) ?: inner.bounds.topLeft
-                        onShowInnerMenu(inner.item, Rect(topLeft, inner.bounds.size))
-                    }
-                },
-                onBeginDrag = { root, grab, rest ->
-                    coordinator.lift(item, root, grab, rest, innerGrab(pressed, coordinates, pressRoot), pressRoot)
-                },
-                onDragTo = { root -> coordinator.moveTo(root) },
-                onDrop = { onRelease() },
-                onCancelDrag = { coordinator.cancel() },
-            ),
-        )
+        CompositionLocalProvider(LocalInnerCellPull provides innerPull) {
+            content(
+                Modifier.launcherItemGestures(
+                    config = gestureConfig,
+                    // What the press may do is what it landed on may do — an inner item's own assignments, or the cell's.
+                    claimsAt = { root -> innerAt(root)?.claims() ?: ItemGestureClaims(edgeActions, doubleTap, item) },
+                    onPress = { root ->
+                        pressRoot = root
+                        pressed = innerAt(root)
+                    },
+                    onOpen = { verbs.open(pressed) },
+                    onEdgeAction = { direction -> verbs.edgeAction(pressed, direction) },
+                    onDoubleTap = { verbs.doubleTap(pressed) },
+                    // An inner item's swipe pulls that item alone; the whole cell would drag its siblings along with it.
+                    onSwipePull = { direction, offset ->
+                        innerPull.item = pressed?.item
+                        pull.onPull(direction, offset)
+                    },
+                    onShowMenu = { anchor -> showMenuFor(pressed, anchor, coordinates, onShowMenu, onShowInnerMenu) },
+                    onBeginDrag = { root, grab, rest ->
+                        coordinator.lift(item, root, grab, rest, innerGrab(pressed, coordinates, pressRoot), pressRoot)
+                    },
+                    onDragTo = { root -> coordinator.moveTo(root) },
+                    onDrop = { onRelease() },
+                    onCancelDrag = { coordinator.cancel() },
+                ),
+            )
+        }
     }
+}
+
+/**
+ * **The pull of a claimed swipe, and which thing it is drawn on** — the cell, or one item the cell draws inside
+ * itself ([InnerCellItem]).
+ *
+ * A swipe on an icon inside a container is that icon's, so the pull that says "held, and it will fire when you let
+ * go" has to move that icon and not the container around it, which would drag its siblings along. The cell cannot
+ * draw its inner items, so it publishes this through [LocalInnerCellPull] and the content that draws them applies
+ * [translationOf] to each. A local rather than a parameter because one content type in the launcher reads it, and a
+ * parameter would widen the content signature every surface's cells go through.
+ */
+@Stable
+class InnerCellPull internal constructor(private val x: () -> Float, private val y: () -> Float) {
+
+    /** The inner item being pulled, or null when the pull is the cell's own. */
+    internal var item by mutableStateOf<GridItem?>(null)
+
+    /** How far to draw [item] from where it is laid out, in px — zero for anything but the item being pulled. */
+    fun translationOf(item: GridItem): Offset = if (item == this.item) Offset(x(), y()) else Offset.Zero
+
+    /** How far to draw the cell itself: the pull, unless an inner item is taking it. */
+    internal fun cellOffset(): Offset = if (item == null) Offset(x(), y()) else Offset.Zero
+}
+
+/** The [InnerCellPull] of the cell being drawn, for content that draws items of its own; null outside a cell. */
+val LocalInnerCellPull = compositionLocalOf<InnerCellPull?> { null }
+
+/**
+ * Sends each verb to what the press landed on — the inner item it names, or the cell itself when it names none. One
+ * place for the choice, so a tap, a swipe and a double tap cannot disagree about what was pressed.
+ */
+private class PressedVerbs(
+    private val onOpen: () -> Unit,
+    private val onEdgeAction: (SwipeDirection) -> Unit,
+    private val onDoubleTap: () -> Unit,
+    private val onOpenInner: (GridItem) -> Unit,
+    private val onEdgeActionInner: (GridItem, SwipeDirection) -> Unit,
+    private val onDoubleTapInner: (GridItem) -> Unit,
+) {
+    fun open(pressed: InnerCellItem?) {
+        if (pressed == null) onOpen() else onOpenInner(pressed.item)
+    }
+
+    fun edgeAction(pressed: InnerCellItem?, direction: SwipeDirection) {
+        if (pressed == null) onEdgeAction(direction) else onEdgeActionInner(pressed.item, direction)
+    }
+
+    fun doubleTap(pressed: InnerCellItem?) {
+        if (pressed == null) onDoubleTap() else onDoubleTapInner(pressed.item)
+    }
+}
+
+/** Raises the menu for what was pressed, anchored to the inner item's own rectangle when the press named one. */
+private fun showMenuFor(
+    pressed: InnerCellItem?,
+    anchor: Rect,
+    cell: LayoutCoordinates?,
+    onShowMenu: (Rect) -> Unit,
+    onShowInnerMenu: (GridItem, Rect) -> Unit,
+) {
+    if (pressed == null) {
+        onShowMenu(anchor)
+        return
+    }
+    val topLeft = cell?.localToRoot(pressed.bounds.topLeft) ?: pressed.bounds.topLeft
+    onShowInnerMenu(pressed.item, Rect(topLeft, pressed.bounds.size))
 }
 
 /**
@@ -325,6 +403,18 @@ private const val PullResistance = 0.5f
  *
  * The bounds travel with the item because a menu raised on it must point at **it** rather than at the cell around
  * it: a container is several icons wide, so an anchor of the whole cell would put the menu next to a group when
- * the user pressed one member of it.
+ * the user pressed one member of it. Its gesture assignments travel with it for the same reason — a swipe or a
+ * double tap on one icon in a container is that icon's, not the container's.
+ *
+ * @property edgeActions the swipe directions this item handles itself.
+ * @property doubleTap this item has a double tap assigned.
  */
-data class InnerCellItem(val item: GridItem, val bounds: Rect)
+data class InnerCellItem(
+    val item: GridItem,
+    val bounds: Rect,
+    val edgeActions: Set<SwipeDirection> = emptySet(),
+    val doubleTap: Boolean = false,
+) {
+    /** What a press on this item may do. */
+    fun claims(): ItemGestureClaims = ItemGestureClaims(edgeActions, doubleTap, target = item)
+}

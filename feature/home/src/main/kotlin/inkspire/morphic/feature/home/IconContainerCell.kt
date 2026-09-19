@@ -14,8 +14,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -30,6 +32,7 @@ import inkspire.morphic.core.designsystem.cell.IconPreviewPlate
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.resolveIconSizeUnfloored
 import inkspire.morphic.core.designsystem.container.ArrangementSlot
+import inkspire.morphic.core.designsystem.grid.LocalInnerCellPull
 import inkspire.morphic.core.designsystem.grid.animatePlacement
 import inkspire.morphic.core.model.IconArrangement
 import kotlin.math.roundToInt
@@ -124,6 +127,8 @@ internal fun IconContainerCell(
                     )
                     return@Box
                 }
+                // A swipe claimed on one of these icons pulls that icon, not the container. See `InnerCellPull`.
+                val innerPull = LocalInnerCellPull.current
                 preview.shown.forEachIndexed { index, icon ->
                     // The gap a newcomer is about to fill: a slot with nothing to draw in it yet.
                     if (icon == null) return@forEachIndexed
@@ -146,6 +151,12 @@ internal fun IconContainerCell(
                                 .offset { IntOffset(slot.x.roundToInt(), slot.y.roundToInt()) }
                                 // After the offset, so a new slot reads as a move and the icon glides to it.
                                 .animatePlacement()
+                                // At draw, so the pull moves the icon without re-laying the arrangement out.
+                                .graphicsLayer {
+                                    val pulled = innerPull?.translationOf(icon.asIconItem().asGridItem()) ?: Offset.Zero
+                                    translationX = pulled.x
+                                    translationY = pulled.y
+                                }
                                 .size(
                                     width = with(density) { slot.width.toDp() },
                                     height = with(density) { slot.height.toDp() },

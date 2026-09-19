@@ -165,6 +165,23 @@ internal val ItemGesturePhase.ownsFinger: Boolean
         this == ItemGesturePhase.MenuOpen
 
 /**
+ * What one press may do besides the tap, long-press and drag every item has: the swipe directions it handles itself,
+ * and whether a double tap is assigned to it.
+ *
+ * **Resolved per press, because one cell can hold several things that answer differently.** An icon container is one
+ * cell and one gesture recognizer, but each icon in it has its own assignments — so the claims are asked for where the
+ * finger comes down, never fixed for the cell.
+ *
+ * @property target what the press landed on, compared between the two presses of a double tap: a second press on
+ *   something else is not a double tap of the first. Null when there is only ever one thing to press.
+ */
+data class ItemGestureClaims(
+    val edgeActions: Set<SwipeDirection> = emptySet(),
+    val doubleTap: Boolean = false,
+    val target: Any? = null,
+)
+
+/**
  * The one item-gesture state machine, shared by every draggable item on every surface. It turns a stream of
  * [ItemGestureEvent]s into [ItemGestureEffect]s, encoding exactly the launcher's gesture contract
  * (docs/DRAG_AND_DROP_DESIGN.md §5):
@@ -197,19 +214,32 @@ internal val ItemGesturePhase.ownsFinger: Boolean
  * docs/DRAG_AND_DROP_DESIGN.md §5.
  *
  * @param config the shared slop threshold.
- * @param edgeActions the swipe directions this item handles itself; the rest are released to the parent.
+ * @param edgeActions the swipe directions this item handles itself; the rest are released to the parent. The
+ *   starting [claims], replaced by [claim] for a press that resolves its own.
  * @param doubleTap this item has a double tap assigned, so a release holds the launch back until the window
  *   closes. **False everywhere it is not assigned, and that is the whole mitigation**: waiting on every tap
  *   would slow the one action a user performs most, to serve a gesture almost no icon has.
  */
 class ItemGestureMachine(
     private val config: ItemGestureConfig,
-    private val edgeActions: Set<SwipeDirection> = emptySet(),
-    private val doubleTap: Boolean = false,
+    edgeActions: Set<SwipeDirection> = emptySet(),
+    doubleTap: Boolean = false,
 ) {
 
     var phase: ItemGesturePhase = ItemGesturePhase.Idle
         private set
+
+    /** What the press in progress may do; see [ItemGestureClaims]. */
+    var claims: ItemGestureClaims = ItemGestureClaims(edgeActions, doubleTap)
+        private set
+
+    /**
+     * Sets what the next press may do. Call it **before** that press's [ItemGestureEvent.Down], and only between
+     * gestures — a press already in flight keeps the claims it started with.
+     */
+    fun claim(claims: ItemGestureClaims) {
+        this.claims = claims
+    }
 
     /** Feeds one [event], updates [phase], and returns the effects to perform (in order). */
     fun onEvent(event: ItemGestureEvent): List<ItemGestureEffect> = when (val current = phase) {
@@ -291,7 +321,7 @@ class ItemGestureMachine(
                 noEffect()
             } else {
                 val direction = event.offsetFromDown.dominantDirection()
-                phase = if (direction in edgeActions) {
+                phase = if (direction in claims.edgeActions) {
                     // The item handles this direction — claim the swipe (fires on release).
                     ItemGesturePhase.Swiped(direction)
                 } else {
@@ -310,7 +340,7 @@ class ItemGestureMachine(
         ItemGestureEvent.Up -> {
             // A quick, still press is a tap — **unless a second one could still be coming**, which is only
             // true on an item whose owner assigned a double tap. Everywhere else this fires at once, as ever.
-            if (doubleTap) {
+            if (claims.doubleTap) {
                 phase = ItemGesturePhase.AwaitingSecondTap
                 noEffect()
             } else {

@@ -49,11 +49,11 @@ import kotlin.time.Duration.Companion.milliseconds
  * (docs/DRAG_AND_DROP_DESIGN.md §5).
  *
  * @param config shared slop + long-press timing.
- * @param edgeActions the swipe directions this item handles as an edge action; swipes in other directions are
- *   released to the parent (pager / surface navigation) instead of being consumed. Empty (default) → the item
- *   claims no swipes, so every swipe flows to the parent.
- * @param doubleTap this item has a double tap assigned, which is what arms the window a release waits out
- *   before [onOpen] fires. False (default) keeps the immediate launch every other item has always had.
+ * @param claimsAt what a press at the given root position may do besides tap, long-press and drag — the swipe
+ *   directions it handles itself (the rest are released to the parent pager or surface) and whether a double tap
+ *   is assigned, which is what arms the window a release waits out before [onOpen] fires. **Asked at every down**,
+ *   because one cell can hold several things with different assignments (an icon container's icons). The default
+ *   claims nothing: every swipe flows to the parent and a tap opens at once.
  * @param onPress the finger came down, at the given root position — **the one place a press is located**, for
  *   content that holds items of its own and has to know which of them the gesture is about. Reported here rather
  *   than with each verb because the answer must not change while the press is in flight: a drag out of the menu
@@ -83,8 +83,7 @@ import kotlin.time.Duration.Companion.milliseconds
 @SuppressLint("ReturnFromAwaitPointerEventScope", "MultipleAwaitPointerEventScopes")
 fun Modifier.launcherItemGestures(
     config: ItemGestureConfig,
-    edgeActions: Set<SwipeDirection> = emptySet(),
-    doubleTap: Boolean = false,
+    claimsAt: (rootPosition: Offset) -> ItemGestureClaims = { ItemGestureClaims() },
     onPress: (rootPosition: Offset) -> Unit = {},
     onOpen: () -> Unit,
     onEdgeAction: (SwipeDirection) -> Unit,
@@ -108,7 +107,7 @@ fun Modifier.launcherItemGestures(
 
     // **What this item would take for itself, published at the down so the pan can ask.** The item cannot win a
     // race for a swipe — the pan claims at the platform slop and this contract at 20dp — so it does not race:
-    // `edgeActions` is known at composition, and the pan checks it against its own direction before claiming.
+    // the press's claimed directions are known at the down, and the pan checks them against its own direction.
     // See `ItemSwipeClaim`.
     val swipeClaim = LocalItemSwipeClaim.current
 
@@ -121,7 +120,7 @@ fun Modifier.launcherItemGestures(
 
     // **Every callback is read through `rememberUpdatedState`, and that is a correctness fix rather than a habit.**
     //
-    // `pointerInput(config, edgeActions)` restarts its block only when those two change — which is almost never —
+    // `pointerInput(config)` restarts its block only when that changes — which is almost never —
     // so the block captures whatever lambdas the *first* composition passed and keeps calling them forever. A
     // caller whose callback closes over state that arrives later is then silently frozen at the value it had
     // before that state existed. That is not hypothetical: home builds its item menu inside `onShowMenu`, and the
@@ -130,6 +129,7 @@ fun Modifier.launcherItemGestures(
     //
     // Keying the `pointerInput` on the callbacks instead would restart the gesture whenever one was re-created,
     // which for lambdas rebuilt every recomposition means tearing down an in-flight drag.
+    val currentClaimsAt by rememberUpdatedState(claimsAt)
     val currentOnPress by rememberUpdatedState(onPress)
     val currentOnOpen by rememberUpdatedState(onOpen)
     val currentOnEdgeAction by rememberUpdatedState(onEdgeAction)
@@ -142,8 +142,8 @@ fun Modifier.launcherItemGestures(
     val currentOnCancelDrag by rememberUpdatedState(onCancelDrag)
 
     onGloballyPositioned { coordinates = it }
-        .pointerInput(config, edgeActions, doubleTap) {
-            val machine = ItemGestureMachine(config, edgeActions, doubleTap)
+        .pointerInput(config) {
+            val machine = ItemGestureMachine(config)
 
             fun rootOf(local: Offset): Offset = coordinates?.localToRoot(local) ?: local
 
@@ -259,7 +259,15 @@ fun Modifier.launcherItemGestures(
                         // Every item publishes, even one that takes no swipe: the claim also says an item is pressed
                         // at all, which is what a double tap on the surface's empty space asks. Last down wins, as the
                         // claim's own KDoc says.
-                        swipeClaim?.claim(edgeActions)
+                        val claims = currentClaimsAt(rootOf(local))
+                        // **A second press on something else is not a double tap of the first.** That first tap is
+                        // settled as the single tap it was, on what *it* pressed — before [onPress] re-points the
+                        // caller at the new target, or the late launch would open the wrong icon.
+                        if (machine.phase == ItemGesturePhase.AwaitingSecondTap && claims.target != machine.claims.target) {
+                            perform(machine.onEvent(ItemGestureEvent.DoubleTapTimeout), local)
+                        }
+                        machine.claim(claims)
+                        swipeClaim?.claim(claims.edgeActions)
                         // **Where the press is, reported before it can become anything else.** Every verb below
                         // acts on what the finger came down on rather than on wherever it has since travelled.
                         currentOnPress(rootOf(local))

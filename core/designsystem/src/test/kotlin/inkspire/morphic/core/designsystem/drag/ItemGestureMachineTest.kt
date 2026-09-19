@@ -398,4 +398,32 @@ class ItemGestureMachineTest {
         assertEquals(ItemGesturePhase.MenuOpen, m.phase)
     }
 
+
+    @Test
+    fun `claims set for a press decide what that press may do`() {
+        // One recognizer for a cell holding several things: the first press is on something with no assignments,
+        // the second on something with a double tap and a claimed swipe.
+        val m = machine(edgeActions = emptySet())
+        m.onEvent(ItemGestureEvent.Down)
+        assertEquals(listOf(ItemGestureEffect.OpenItem), m.onEvent(ItemGestureEvent.Up))
+
+        m.claim(ItemGestureClaims(edgeActions = setOf(SwipeDirection.RIGHT), doubleTap = true))
+        m.onEvent(ItemGestureEvent.Down)
+        assertEquals(emptyList<ItemGestureEffect>(), m.onEvent(ItemGestureEvent.Up))
+        assertEquals(ItemGesturePhase.AwaitingSecondTap, m.phase)
+        assertEquals(listOf(ItemGestureEffect.OpenItem), m.onEvent(ItemGestureEvent.DoubleTapTimeout))
+
+        m.onEvent(ItemGestureEvent.Down)
+        m.onEvent(ItemGestureEvent.Move(far(20f, 0f)))
+        assertEquals(ItemGesturePhase.Swiped(SwipeDirection.RIGHT), m.phase)
+    }
+
+    @Test
+    fun `claims replaced between presses stop claiming what they no longer name`() {
+        val m = machine(edgeActions = setOf(SwipeDirection.RIGHT))
+        m.claim(ItemGestureClaims())
+        m.onEvent(ItemGestureEvent.Down)
+        m.onEvent(ItemGestureEvent.Move(far(20f, 0f)))
+        assertEquals(ItemGesturePhase.ReleasedToParent, m.phase)
+    }
 }
