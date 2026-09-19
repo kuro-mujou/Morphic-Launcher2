@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -431,9 +432,12 @@ fun AppCollectionOverlay(
                                 // structurally stable across the drag flip — the same rule the backdrop above follows,
                                 // and the cells inside here own live pointer streams. Note `border(0.dp, …)` would not be
                                 // the off switch it looks like: 0.dp *is* Dp.Hairline, which still draws a 1px line.
+                                // Rounded as the resize frame's outline is, the launcher's other edge drawn over a live
+                                // edit, so the two read as one family rather than a box and a card.
                                 .border(
-                                    1.dp,
-                                    if (session != null) LocalMorphicColors.current.content else Color.Transparent,
+                                    width = 1.dp,
+                                    color = if (session != null) LocalMorphicColors.current.content else Color.Transparent,
+                                    shape = RoundedCornerShape(20.dp),
                                 )
                                 // Consumes a tap on the card's background so it doesn't reach the scrim and dismiss —
                                 // and **gated on `presenting` for the same reason the scrim's is**. A pointer holder is
