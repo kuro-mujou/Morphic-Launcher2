@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.Dp
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.PlacementPlan
@@ -116,6 +117,12 @@ class DragCoordinator {
         private set
 
     /**
+     * How large the proxy is drawing the carried icon, as it last reported ([LocalCarriedIconSize]) — handed on with
+     * the [landing]. Plain rather than snapshot state: nothing composes on it; it is read once, at the drop.
+     */
+    internal var carriedIconSize: Dp? = null
+
+    /**
      * Adds or replaces the zone registered under [zone]`.id`, recording [owner] as the id's current holder.
      *
      * [RegisterDropZone] calls this as a surface measures, moves, or comes on screen — and again on every
@@ -165,6 +172,7 @@ class DragCoordinator {
         restCenterInRoot: Offset? = null,
     ) {
         landing = null
+        carriedIconSize = null
         val lift = restCenterInRoot?.let { DragHandoff(item, it) }
         session = DragSession(item, fingerInRoot, grabFromCenter, activeZone = null, plan = null, lift = lift)
         moveTo(fingerInRoot)
@@ -221,7 +229,13 @@ class DragCoordinator {
      * snapshot, so the frame the proxy disappears is the frame a cell can already read where to start from.
      */
     private fun land(current: DragSession, leftSource: Boolean) {
-        landing = DragHandoff(current.item, current.itemCenterInRoot, leftSource, current.sourceZone)
+        landing = DragHandoff(
+            current.item,
+            current.itemCenterInRoot,
+            leftSource,
+            current.sourceZone,
+            iconSize = carriedIconSize,
+        )
         session = null
     }
 

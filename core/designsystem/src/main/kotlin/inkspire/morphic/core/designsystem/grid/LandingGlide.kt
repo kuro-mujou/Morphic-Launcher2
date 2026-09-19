@@ -1,6 +1,7 @@
 package inkspire.morphic.core.designsystem.grid
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.AnimationVector2D
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
@@ -14,6 +15,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.drag.DragHandoff
 import inkspire.morphic.core.designsystem.drag.HandoffFreshMs
 import kotlinx.coroutines.CoroutineScope
@@ -58,6 +61,12 @@ class LandingGlide internal constructor(private val scope: CoroutineScope) {
 
     val isRunning: Boolean get() = glide != null
 
+    /** The size the landed item is drawn at relative to its own, springing to 1; null when it lands at its size. */
+    private var shrink by mutableStateOf<Animatable<Float, AnimationVector1D>?>(null)
+
+    /** The scale to draw the item at — the carried icon's size relative to this holder's, settling to 1. */
+    fun scale(): Float = shrink?.value ?: 1f
+
     /** The cell's alpha: none while its item is being carried or has just been carried away, full otherwise. */
     fun alpha(isDragged: Boolean): Float = if (isDragged || vacated) 0f else 1f
 
@@ -66,7 +75,7 @@ class LandingGlide internal constructor(private val scope: CoroutineScope) {
      * frame the proxy disappears: the glide (or the hiding) has to exist before that frame draws, or the cell flashes
      * at its slot for one frame.
      */
-    fun update(isDragged: Boolean, landing: DragHandoff?) {
+    fun update(isDragged: Boolean, landing: DragHandoff?, drawnIconSize: Dp? = null) {
         if (isDragged) lifted = true
         if (landing == null || landing === taken || !landing.isFresh) return
         taken = landing
@@ -82,9 +91,25 @@ class LandingGlide internal constructor(private val scope: CoroutineScope) {
             return
         }
         glide = Animatable(landing.centerInRoot, Offset.VectorConverter)
+        startShrink(landing.iconSize, drawnIconSize)
         // A cell that is not re-placed by the drop (released back onto its own slot) never reaches [onPlaced] again,
         // so the target it already has is the one to head for.
         placedCenter?.let(::retarget)
+    }
+
+    /**
+     * Starts the item at the carried icon's size when that differs from the one this holder draws — given
+     * [drawnIconSize], by a holder whose icons are not the proxy's size (an icon container's). Same spring as the
+     * glide, so the two arrive together.
+     */
+    private fun startShrink(carried: Dp?, drawnIconSize: Dp?) {
+        if (carried == null || drawnIconSize == null || drawnIconSize <= 0.dp) return
+        val s = Animatable(carried / drawnIconSize)
+        shrink = s
+        scope.launch {
+            s.animateTo(1f, spring(stiffness = Spring.StiffnessMediumLow))
+            if (shrink === s) shrink = null
+        }
     }
 
     fun onPlaced(coordinates: LayoutCoordinates) {

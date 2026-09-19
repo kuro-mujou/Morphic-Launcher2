@@ -152,7 +152,8 @@ internal fun IconContainerCell(
                         // the proxy vanishes — the same landing a grid cell takes, for the same reason.
                         val gridItem = icon.asIconItem().asGridItem()
                         val landing = rememberLandingGlide()
-                        landing.update(false, coordinator?.landing?.takeIf { presented && it.item == gridItem })
+                        // With this slot's icon size, so an icon carried in at a home cell's size shrinks into it.
+                        landing.update(false, coordinator?.landing?.takeIf { presented && it.item == gridItem }, iconSize)
                         Box(
                             modifier = Modifier
                                 // The one being carried keeps its slot but is not drawn: the floating proxy under the
@@ -173,6 +174,8 @@ internal fun IconContainerCell(
                                     val landed = landing.translation()
                                     translationX = pulled.x + landed.x
                                     translationY = pulled.y + landed.y
+                                    scaleX = landing.scale()
+                                    scaleY = landing.scale()
                                 }
                                 .size(
                                     width = with(density) { slot.width.toDp() },

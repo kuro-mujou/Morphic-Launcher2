@@ -8,11 +8,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
@@ -62,6 +65,9 @@ fun FloatingDragIcon(
     LaunchedEffect(settle) {
         settle?.animateTo(Offset.Zero, spring(stiffness = Spring.StiffnessMedium))
     }
+    // Whatever the content draws its icon at is what a holder the item lands in shrinks it from. See `iconSize`.
+    val coordinator = LocalDragCoordinator.current
+    val report = remember(coordinator) { { size: Dp -> coordinator?.carriedIconSize = size } }
     Box(
         modifier
             .offset {
@@ -74,6 +80,17 @@ fun FloatingDragIcon(
             .size(size),
         contentAlignment = Alignment.Center,
     ) {
-        content()
+        CompositionLocalProvider(LocalCarriedIconSize provides report) {
+            content()
+        }
     }
 }
+
+/**
+ * Where a proxy's content reports **the size it drew the carried icon at** — null outside a proxy.
+ *
+ * The holder an item lands in may draw it at another size (an icon container's slots are smaller than a home cell),
+ * and only the content knows what it resolved, so the content says. `IconLabelCell` does, which covers every app and
+ * folder cell; content that reports nothing lands at its holder's size at once.
+ */
+val LocalCarriedIconSize = staticCompositionLocalOf<((Dp) -> Unit)?> { null }

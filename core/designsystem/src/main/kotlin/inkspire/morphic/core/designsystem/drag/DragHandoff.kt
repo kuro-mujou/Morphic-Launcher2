@@ -1,6 +1,7 @@
 package inkspire.morphic.core.designsystem.drag
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.Dp
 import inkspire.morphic.core.model.GridItem
 
 /**
@@ -21,6 +22,9 @@ import inkspire.morphic.core.model.GridItem
  * @property leftSource for a landing: the drop took the item away from where it was lifted — merged into a folder,
  *   removed, or carried into another zone. The cell it was lifted out of is about to be disposed, so it must stay
  *   hidden rather than glide back toward a slot the item no longer has; only a cell that newly holds it glides in.
+ * @property iconSize for a landing: how large the carried icon was drawn under the finger, when the proxy reported
+ *   it ([LocalCarriedIconSize]). A holder that draws the item at another size starts it at this one and shrinks or
+ *   grows it into place, rather than changing size the instant it takes over. Null when nothing reported one.
  * @property fromZone for a landing: the zone the item was lifted in. What tells a holder that draws its own members
  *   (an icon container) "this left *me*" from "this arrived *here* from somewhere else" — both have [leftSource].
  */
@@ -29,6 +33,7 @@ data class DragHandoff(
     val centerInRoot: Offset,
     val leftSource: Boolean = false,
     val fromZone: ZoneId? = null,
+    val iconSize: Dp? = null,
     val atNanos: Long = System.nanoTime(),
 ) {
     val isFresh: Boolean get() = System.nanoTime() - atNanos < HandoffFreshMs * 1_000_000L

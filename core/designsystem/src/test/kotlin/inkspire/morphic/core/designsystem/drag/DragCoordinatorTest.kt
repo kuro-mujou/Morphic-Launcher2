@@ -2,6 +2,7 @@ package inkspire.morphic.core.designsystem.drag
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.model.ComponentKey
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridItem
@@ -340,5 +341,20 @@ class DragCoordinatorTest {
         coordinator.moveTo(Offset(50f, 150f))
         coordinator.cancel()
         assertFalse(coordinator.landing!!.leftSource)
+    }
+
+    @Test
+    fun `the icon size a proxy reported travels with the landing, and a new lift forgets it`() {
+        val coordinator = DragCoordinator()
+        coordinator.register(zone("home", Rect(0f, 0f, 100f, 100f)))
+
+        coordinator.start(app("a"), Offset(50f, 50f))
+        coordinator.carriedIconSize = 56.dp
+        coordinator.drop()
+        assertEquals(56.dp, coordinator.landing?.iconSize)
+
+        coordinator.start(app("b"), Offset(50f, 50f))
+        coordinator.drop()
+        assertNull(coordinator.landing?.iconSize)
     }
 }

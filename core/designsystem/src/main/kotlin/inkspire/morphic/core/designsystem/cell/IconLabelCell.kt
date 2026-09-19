@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 import inkspire.morphic.core.designsystem.backdrop.InkLabel
 import inkspire.morphic.core.designsystem.backdrop.SpotTheme
+import inkspire.morphic.core.designsystem.drag.LocalCarriedIconSize
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 
 /**
@@ -87,6 +88,8 @@ fun IconLabelCell(
     itemGestures: Modifier = Modifier,
     icon: @Composable (iconSize: Dp) -> Unit,
 ) {
+    // Null everywhere but inside a drag proxy, which hands the size on to wherever the item lands.
+    val reportIconSize = LocalCarriedIconSize.current
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val availW = maxWidth - 4.dp * 2
         val padding = Modifier
@@ -95,6 +98,7 @@ fun IconLabelCell(
 
         if (!metrics.showLabel) {
             val iconDp = metrics.resolveIconSize(availW, maxHeight - 4.dp * 2)
+            reportIconSize?.invoke(iconDp)
             Box(
                 modifier = padding,
                 contentAlignment = Alignment.Center
@@ -109,6 +113,7 @@ fun IconLabelCell(
         val labelHeight = cellLabelHeight(metrics)
         val iconArea = (maxHeight - 4.dp * 2 - 4.dp - labelHeight).coerceAtLeast(0.dp)
         val iconDp = metrics.resolveIconSize(availW, iconArea).coerceAtMost(iconArea)
+        reportIconSize?.invoke(iconDp)
         // Outer box centers the group in the cell; the group itself wraps content and carries the gestures.
         Box(
             modifier = padding,
