@@ -6,8 +6,6 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -44,6 +42,7 @@ import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.backdrop.PunchThroughLayer
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.insets.uiInsetsPadding
+import inkspire.morphic.core.designsystem.pane.PushPanes
 import inkspire.morphic.core.designsystem.theme.LauncherTheme
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.AppsLayout
@@ -205,19 +204,15 @@ private fun SettingsSinglePane(
             )
         },
     ) { innerPadding ->
-        AnimatedContent(
-            targetState = selected,
+        // Each pane keeps its scroll position while a deeper one is pushed over it. See [PushPanes].
+        PushPanes(
+            target = selected,
+            depth = { it.paneDepth },
+            key = { it?.name ?: "list" },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .consumeWindowInsets(innerPadding),
-            transitionSpec = {
-                if (targetState.paneDepth > initialState.paneDepth) {
-                    slideInHorizontally { it } togetherWith slideOutHorizontally { -it }
-                } else {
-                    slideInHorizontally { -it } togetherWith slideOutHorizontally { it }
-                }
-            },
             label = "settings-pane",
         ) { target ->
             if (target == null) {

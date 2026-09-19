@@ -1,11 +1,5 @@
 package inkspire.morphic.feature.home.widgetpicker
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -62,6 +56,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import inkspire.morphic.core.designsystem.cell.CardAlpha
 import inkspire.morphic.core.designsystem.component.button.MorphicButton
 import inkspire.morphic.core.designsystem.component.field.MorphicTextField
+import inkspire.morphic.core.designsystem.pane.PushPanes
 import inkspire.morphic.core.designsystem.theme.LocalMorphicColors
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.IconArrangement
@@ -158,19 +153,13 @@ internal fun WidgetPickerSheet(
         onBack = { if (opened != null) opened = null else onDismiss() },
         modifier = modifier,
     ) {
-        AnimatedContent(
-            targetState = opened,
-            transitionSpec = {
-                // Opening pushes the list out to the left and brings the detail in from the right; going back
-                // reverses it, on expressive motion from the theme rather than the animation defaults.
-                if (targetState != null) {
-                    (slideInHorizontally { it } + fadeIn()) togetherWith
-                        (slideOutHorizontally { -it } + fadeOut())
-                } else {
-                    (slideInHorizontally { -it } + fadeIn()) togetherWith
-                        (slideOutHorizontally { it } + fadeOut())
-                }
-            },
+        // Opening pushes the list out to the left and brings the detail in from the right; going back reverses it,
+        // and the list comes back scrolled where it was left. See [PushPanes].
+        PushPanes(
+            target = opened,
+            depth = { if (it == null) 0 else 1 },
+            key = { it.paneKey() },
+            fade = true,
             label = "widgetPicker",
         ) { target ->
             when (target) {
@@ -354,6 +343,14 @@ private sealed interface PickerEntry {
     data class Widgets(val group: AppWidgetProviderGroup) : PickerEntry
     data class Component(val kind: ComponentKind) : PickerEntry
     data class Template(val template: WidgetTemplate) : PickerEntry
+}
+
+/** A name for this pane's saved state — the list, or which detail. */
+private fun PickerEntry?.paneKey(): String = when (this) {
+    null -> "list"
+    is PickerEntry.Widgets -> "widgets:${group.packageName}"
+    is PickerEntry.Component -> "component:${kind.name}"
+    is PickerEntry.Template -> "template:${template.id}"
 }
 
 /** A group label above a run of rows. Only drawn when there is more than one group to tell apart. */
