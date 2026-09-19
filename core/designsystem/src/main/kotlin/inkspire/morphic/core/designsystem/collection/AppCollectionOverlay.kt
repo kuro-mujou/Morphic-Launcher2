@@ -81,7 +81,9 @@ import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.core.model.toGridConfig
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 
 /** This overlay's inner-grid drop zone, registered above the surface's zone (`z = 1`) on the shared coordinator. */
@@ -146,6 +148,12 @@ private const val LeaveDwellMs = 1000L
  *
  * @param additions what the trailing [AddAppsCell] offers and where its choices go. **Null offers no cell at all**
  *   — absent, not disabled — which is what a collection with nothing to add passes.
+ * @param origin the tile this collection opened from, in root px ([AppCollectionHostState.openedFrom]); the card grows
+ *   out of it on the way in and shrinks back into it on the way out. Null just fades.
+ * @param exiting a third role beside the two [presenting] selects: closing back into [origin]. Not presented, and —
+ *   unlike a pointer holder, which owns a live drag — **not interactive at all**: its cells are drawn without
+ *   gestures, so a tap on the surface beneath during the shrink reaches the surface rather than an app in a closing
+ *   folder. [onExited] reports when it has finished, and the host stops composing it.
  */
 @Composable
 fun AppCollectionOverlay(
@@ -164,6 +172,9 @@ fun AppCollectionOverlay(
     presenting: Boolean = true,
     onShowMenu: (AppInfo, Rect) -> Unit = { _, _ -> },
     additions: AppAdditions? = null,
+    origin: Rect? = null,
+    exiting: Boolean = false,
+    onExited: () -> Unit = {},
 ) {
     // Whether the Add picker has replaced the card.
     //
@@ -354,7 +365,32 @@ fun AppCollectionOverlay(
 
     @OptIn(ExperimentalMaterial3ExpressiveApi::class)
     val presenceSpec = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
-    LaunchedEffect(presenting) { presence.animateTo(if (presenting) 1f else 0f, presenceSpec) }
+
+    // **How far the card has grown out of [origin], `0f..1f`** — on the spatial spring, so it settles with the same
+    // give as everything else that moves, where [presence] is an effect and must not overshoot. Only drawn when there
+    // is an origin to grow from.
+    val reveal = remember { Animatable(0f) }
+
+    // **Slow when it grows out of a tile**, and only then: the card travels from an icon to most of the screen, and on
+    // the default springs that distance reads as a jump rather than as the folder opening. A fade with nothing to
+    // travel — mid-drag, or a pointer holder handing a drag back — stays quick, because it follows a finger.
+    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+    val revealSpec = MaterialTheme.motionScheme.slowSpatialSpec<Float>()
+
+    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+    val slowPresenceSpec = MaterialTheme.motionScheme.slowEffectsSpec<Float>()
+    val liveExiting = rememberUpdatedState(exiting)
+    val liveOnExited = rememberUpdatedState(onExited)
+    val liveOrigin = rememberUpdatedState(origin)
+    LaunchedEffect(presenting) {
+        val target = if (presenting) 1f else 0f
+        coroutineScope {
+            launch { reveal.animateTo(target, revealSpec) }
+            presence.animateTo(target, if (liveOrigin.value != null) slowPresenceSpec else presenceSpec)
+        }
+        if (!presenting && liveExiting.value) liveOnExited.value()
+    }
+    var cardBounds by remember { mutableStateOf<Rect?>(null) }
 
     // **An open collection claims the surface swipe.** A swipe inside a collection is its pager's or nothing; panning to
     // another surface out from under an overlay leaves the user somewhere they did not ask to be, with the collection
@@ -414,7 +450,27 @@ fun AppCollectionOverlay(
                     contentAlignment = Alignment.Center,
                 ) {
                     val innerSize: DpSize = appCollectionInnerSize(DpSize(maxWidth, maxHeight), device, grid, metrics)
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(
+                        modifier = Modifier
+                            // Measured outside the layer below, so the bounds are where the card *rests* — the one
+                            // fixed end of the transform — rather than wherever the transform has it this frame.
+                            .onGloballyPositioned { cardBounds = it.boundsInRoot() }
+                            .graphicsLayer {
+                                val from = origin ?: return@graphicsLayer
+                                val card = cardBounds ?: return@graphicsLayer
+                                if (card.width <= 0f) return@graphicsLayer
+                                // The card starts at the tile's width, on the tile's centre, and grows to itself.
+                                val g = reveal.value
+                                val start = from.width / card.width
+                                val scale = start + (1f - start) * g
+                                scaleX = scale
+                                scaleY = scale
+                                val offset = (from.center - card.center) * (1f - g)
+                                translationX = offset.x
+                                translationY = offset.y
+                            },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
                         SpotTheme(Modifier.padding(bottom = 12.dp)) {
                             Text(
                                 text = label,
@@ -457,7 +513,10 @@ fun AppCollectionOverlay(
                                 state = pagerState,
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .launcherPagerSwipe(pagerState, enabled = { !coordinator.isDragging })
+                                    .launcherPagerSwipe(
+                                        pagerState,
+                                        enabled = { !coordinator.isDragging && !liveExiting.value },
+                                    )
                                     .onGloballyPositioned {
                                         val b = it.boundsInRoot()
                                         geometry = GridGeometry(
@@ -514,6 +573,12 @@ fun AppCollectionOverlay(
                                         items = pages.getOrNull(pageIndex).orEmpty(),
                                         itemKey = { it.componentKey.flatten() },
                                     ) { app, cellModifier ->
+                                        // Closing: drawn, never touched — see [exiting]. No drag can be in flight
+                                        // from here, since the host never closes a drag's source into its tile.
+                                        if (exiting) {
+                                            AppCell(app = app, modifier = cellModifier, metrics = metrics)
+                                            return@flowItems
+                                        }
                                         LauncherDragCell(
                                             coordinator = coordinator,
                                             item = GridItem.App(app.componentKey),

@@ -442,10 +442,10 @@ fun AppsPager(
                             gestureConfig = gestureConfig,
                             onRelease = ::handleRelease,
                             modifier = cellModifier,
-                            onOpen = {
+                            onOpen = { anchor ->
                                 when (item) {
                                     is AppsItem.App -> onLaunch(item.info.componentKey)
-                                    is AppsItem.Folder -> folderHost.open(item.folder.id)
+                                    is AppsItem.Folder -> folderHost.open(item.folder.id, from = anchor)
                                 }
                             },
                             // A folder shows none: the verbs it would offer (rename, dissolve) have no ops on the
@@ -488,19 +488,17 @@ fun AppsPager(
             // its grid and a pointer stream cannot move to another node. That one is the **pointer holder**
             // (`presenting = false`): invisible, zone-less, no proxy.
             val openFolder = folderHost.openCollectionId?.let { id -> folderAt(pages, id) }
-            val holderFolder = folderHost.dragSourceCollectionId
-                ?.takeIf { it != folderHost.openCollectionId }
-                ?.let { id -> folderAt(pages, id) }
 
             // Report the presented folder's persisted membership back, so the host knows a just-injected app landed.
             val openMembers = openFolder?.folder?.apps
             LaunchedEffect(openMembers) { folderHost.onMembersChanged(openMembers.orEmpty()) }
 
-            // Holder first so it sits *below* the presented folder, and both from this **one** keyed call site: a
-            // folder moving between the two roles must keep its composition, and a second call site is a different
-            // composition position, which disposes it and kills the drag it exists to preserve.
-            val overlays = listOfNotNull(holderFolder?.let { it to false }, openFolder?.let { it to true })
-            overlays.forEach { (folder, presenting) ->
+            // Every role — closing, holder, presented, bottom to top — from this **one** keyed call site: a folder
+            // moving between roles must keep its composition, and a second call site is a different composition
+            // position, which disposes it and kills the drag (or the shrink) it exists to preserve.
+            val overlays = folderHost.overlays { id -> folderAt(pages, id) }
+            overlays.forEach { role ->
+                val (folder, presenting) = role
                 key(folder.folder.id) {
                     AppCollectionOverlay(
                         label = folder.folder.label,
@@ -530,6 +528,9 @@ fun AppsPager(
                         // Only the presented folder offers it; a pointer holder is invisible, and an Add cell it
                         // drew would be a target nobody can see.
                         additions = if (presenting) folderAdditions?.invoke(folder.folder.id) else null,
+                        origin = role.origin,
+                        exiting = role.exiting,
+                        onExited = { folderHost.exited(folder.folder.id) },
                     )
                 }
             }

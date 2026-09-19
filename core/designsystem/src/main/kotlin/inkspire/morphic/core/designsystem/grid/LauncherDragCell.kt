@@ -112,7 +112,7 @@ fun LauncherDragCell(
     edgeActions: Set<SwipeDirection> = emptySet(),
     doubleTap: Boolean = false,
     tracksFinger: Boolean = false,
-    onOpen: () -> Unit = {},
+    onOpen: (anchorInRoot: Rect) -> Unit = {},
     onShowMenu: (anchorInRoot: Rect) -> Unit = {},
     onEdgeAction: (SwipeDirection) -> Unit = {},
     onDoubleTap: () -> Unit = {},
@@ -179,7 +179,7 @@ fun LauncherDragCell(
                         pressRoot = root
                         pressed = innerAt(root)
                     },
-                    onOpen = { verbs.open(pressed) },
+                    onOpen = { anchor -> verbs.open(pressed, anchor) },
                     onEdgeAction = { direction -> verbs.edgeAction(pressed, direction) },
                     onDoubleTap = { verbs.doubleTap(pressed) },
                     // An inner item's swipe pulls that item alone; the whole cell would drag its siblings along with it.
@@ -234,15 +234,15 @@ val LocalInnerCellPull = compositionLocalOf<InnerCellPull?> { null }
  * place for the choice, so a tap, a swipe and a double tap cannot disagree about what was pressed.
  */
 private class PressedVerbs(
-    private val onOpen: () -> Unit,
+    private val onOpen: (Rect) -> Unit,
     private val onEdgeAction: (SwipeDirection) -> Unit,
     private val onDoubleTap: () -> Unit,
     private val onOpenInner: (GridItem) -> Unit,
     private val onEdgeActionInner: (GridItem, SwipeDirection) -> Unit,
     private val onDoubleTapInner: (GridItem) -> Unit,
 ) {
-    fun open(pressed: InnerCellItem?) {
-        if (pressed == null) onOpen() else onOpenInner(pressed.item)
+    fun open(pressed: InnerCellItem?, anchor: Rect) {
+        if (pressed == null) onOpen(anchor) else onOpenInner(pressed.item)
     }
 
     fun edgeAction(pressed: InnerCellItem?, direction: SwipeDirection) {

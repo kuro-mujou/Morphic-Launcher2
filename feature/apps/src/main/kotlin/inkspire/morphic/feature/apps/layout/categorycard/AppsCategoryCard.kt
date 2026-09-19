@@ -368,7 +368,12 @@ fun AppsCategoryCard(
                                     metrics = slotMetrics,
                                     onLaunch = onLaunch,
                                     showItemMenu = showItemMenu,
-                                    onExpand = { categoryHost.open(id) },
+                                    // Grows out of the **whole card**, not the header or cluster that was tapped:
+                                    // the card is what the category looks like closed. Read through `boundsAt` for
+                                    // `cardAt`'s reason — a card's measured position goes stale as the grid scrolls.
+                                    onExpand = {
+                                        categoryHost.open(id, from = cardBounds[id]?.boundsAt(scrollState.value))
+                                    },
                                     onRelease = ::handleRelease,
                                     onBounds = { bounds ->
                                         if (bounds == null) {
@@ -409,11 +414,9 @@ fun AppsCategoryCard(
             // Holder first so it sits below the presented one, and both from this **one** keyed call site: an
             // expansion moving between the two roles has to keep its composition, and a second call site is a
             // different composition position, which disposes it and kills the drag it exists to preserve.
-            val holder = categoryHost.dragSourceCollectionId
-                ?.takeIf { it != openCategoryId }
-                ?.let { id -> categories.firstOrNull { it.category.id == id } }
-            val overlays = listOfNotNull(holder?.let { it to false }, expanded?.let { it to true })
-            overlays.forEach { (entry, presenting) ->
+            val overlays = categoryHost.overlays { id -> categories.firstOrNull { it.category.id == id } }
+            overlays.forEach { role ->
+                val (entry, presenting) = role
                 key(entry.category.id) {
                     AppCollectionOverlay(
                         label = entry.category.name,
@@ -442,6 +445,9 @@ fun AppsCategoryCard(
                         // **Filing rather than adding**, which is what a category is: an app belongs to exactly one,
                         // so ticking it here takes it out of wherever it was. Only the presented expansion offers it.
                         additions = if (presenting) categoryAdditions?.invoke(entry.category.id) else null,
+                        origin = role.origin,
+                        exiting = role.exiting,
+                        onExited = { categoryHost.exited(entry.category.id) },
                     )
                 }
             }

@@ -1,5 +1,6 @@
 package inkspire.morphic.core.designsystem.collection
 
+import androidx.compose.ui.geometry.Rect
 import inkspire.morphic.core.model.ComponentKey
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -228,6 +229,74 @@ class AppCollectionHostStateTest {
         host.open(folderId)
         host.onDragEnd()
         assertEquals(folderId, host.openCollectionId)
+    }
+
+    // ── Growing out of the tile it opened from, and shrinking back into it ──
+
+    private val tile = Rect(10f, 20f, 60f, 70f)
+
+    @Test
+    fun `a folder opened from a tile closes back into it`() {
+        val host = host()
+        host.open(folderId, from = tile)
+        assertEquals(tile, host.openedFrom)
+        host.close()
+        assertEquals(folderId to tile, host.exiting)
+        assertNull(host.openedFrom)
+        host.exited(folderId)
+        assertNull(host.exiting)
+    }
+
+    @Test
+    fun `a folder opened with no tile just closes`() {
+        val host = host()
+        host.open(folderId)
+        host.close()
+        assertNull(host.exiting)
+    }
+
+    @Test
+    fun `a drag's source folder is never closed into its tile`() {
+        // It is the pointer holder: shrinking it would be a second role for the one overlay the drag needs untouched.
+        val host = host()
+        host.open(folderId, from = tile)
+        host.onDragStart()
+        host.close()
+        assertNull(host.exiting)
+        assertEquals(listOf(AppCollectionRole(folderId, presenting = false)), host.overlays { it })
+    }
+
+    @Test
+    fun `reopening a closing folder turns it around`() {
+        val host = host()
+        host.open(folderId, from = tile)
+        host.close()
+        host.open(folderId, from = tile)
+        assertNull(host.exiting)
+        assertEquals(listOf(AppCollectionRole(folderId, presenting = true, origin = tile)), host.overlays { it })
+    }
+
+    @Test
+    fun `a closing folder sits below the one opened over it`() {
+        val host = host()
+        host.open(folderId, from = tile)
+        host.close()
+        host.open(otherFolderId)
+        assertEquals(
+            listOf(
+                AppCollectionRole(folderId, presenting = false, origin = tile, exiting = true),
+                AppCollectionRole(otherFolderId, presenting = true),
+            ),
+            host.overlays { it },
+        )
+    }
+
+    @Test
+    fun `a collection that is gone is not composed in any role`() {
+        val host = host()
+        host.open(folderId, from = tile)
+        host.close()
+        assertEquals(emptyList<AppCollectionRole<Long>>(), host.overlays { null })
     }
 
     // ── The same lifecycle, on a collection that isn't a folder ──

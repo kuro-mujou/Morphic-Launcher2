@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Rect
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
 import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.model.ComponentKey
@@ -168,16 +169,74 @@ class AppCollectionHostState<Id : Any> {
     var dragSourceCollectionId: Id? by mutableStateOf(null)
         private set
 
-    /** Open [collectionId]'s overlay (a tap — so no drag can be in flight, and nothing is discarded). */
-    fun open(collectionId: Id) {
+    /**
+     * Where the on-screen collection was opened from — the tapped tile's rectangle in root px, which its card grows out
+     * of. Null when it opened mid-drag or from something that reported no rectangle; the card then just fades in.
+     */
+    var openedFrom: Rect? by mutableStateOf(null)
+        private set
+
+    /**
+     * A collection **closing back into the tile it opened from**, and that tile's rectangle: kept composed by the host,
+     * non-interactive, until its overlay reports the shrink finished ([exited]). Null when nothing is closing.
+     *
+     * Separate from [phase] because it is not where the interaction *is* — the surface beneath is already live again,
+     * and a tap on it must reach it while this plays.
+     */
+    var exiting: Pair<Id, Rect>? by mutableStateOf(null)
+        private set
+
+    /**
+     * Open [collectionId]'s overlay (a tap — so no drag can be in flight, and nothing is discarded), growing out of
+     * [from] when the tap reported where it landed.
+     */
+    fun open(collectionId: Id, from: Rect? = null) {
         phase = AppCollectionPhase.Open(collectionId)
+        openedFrom = from
+        // Reopened while still closing: the same overlay turns around rather than a second one starting.
+        if (exiting?.first == collectionId) exiting = null
     }
 
     /**
      * Close the overlay: back, a tap on the scrim, launching an app from inside, or a drop resolving outside it.
+     *
+     * A collection opened from a tile closes back into it — unless an in-flight drag started in it, in which case it
+     * is that drag's pointer holder and must stay exactly as it is.
      */
     fun close() {
+        val closing = openCollectionId
+        val from = openedFrom
         phase = AppCollectionPhase.Closed
+        openedFrom = null
+        if (closing != null && from != null && closing != dragSourceCollectionId) exiting = closing to from
+    }
+
+    /** [collectionId]'s closing shrink has finished; the host can stop composing it. */
+    fun exited(collectionId: Id) {
+        if (exiting?.first == collectionId) exiting = null
+    }
+
+    /**
+     * Every overlay the host composes right now, bottom to top, each in its role: one closing into its tile, the
+     * in-flight drag's pointer holder, and the presented one — at most one of each, and one collection in one role.
+     *
+     * **A host must emit all of them from one keyed call site**, which is why this is a list rather than three
+     * properties: a collection moves between roles (presented → closing, presented → holder) and a second call site is
+     * a different composition position, which disposes it — killing a drag, or cutting a shrink short.
+     *
+     * @param resolve the collection for an id, or null when it is gone (a dissolved folder has nothing to draw).
+     */
+    fun <T> overlays(resolve: (Id) -> T?): List<AppCollectionRole<T>> {
+        val open = openCollectionId
+        val holder = dragSourceCollectionId?.takeIf { it != open }
+        val closing = exiting?.takeIf { (id, _) -> id != open && id != holder }
+        return listOfNotNull(
+            closing?.let { (id, from) ->
+                resolve(id)?.let { AppCollectionRole(it, presenting = false, origin = from, exiting = true) }
+            },
+            holder?.let { id -> resolve(id)?.let { AppCollectionRole(it, presenting = false) } },
+            open?.let { id -> resolve(id)?.let { AppCollectionRole(it, presenting = true, origin = openedFrom) } },
+        )
     }
 
     /**
@@ -189,11 +248,14 @@ class AppCollectionHostState<Id : Any> {
      */
     fun leaveCollection() {
         phase = AppCollectionPhase.Closed
+        openedFrom = null
     }
 
     /** The drag dwelled on [collectionId]'s merge target: open it and carry [app] in as the incoming item. */
     fun beginInject(collectionId: Id, app: ComponentKey) {
         phase = AppCollectionPhase.Injecting(collectionId, app)
+        openedFrom = null
+        if (exiting?.first == collectionId) exiting = null
     }
 
     /**
@@ -244,6 +306,17 @@ class AppCollectionHostState<Id : Any> {
         }
     }
 }
+
+/**
+ * One overlay a host composes, and the role it is composed in — [AppCollectionOverlay]'s `presenting`, `origin` and
+ * `exiting`, from [AppCollectionHostState.overlays].
+ */
+data class AppCollectionRole<T>(
+    val collection: T,
+    val presenting: Boolean,
+    val origin: Rect? = null,
+    val exiting: Boolean = false,
+)
 
 /**
  * Remembers an [AppCollectionHostState] and hosts the two effects that drive it from the drag itself:

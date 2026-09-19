@@ -552,7 +552,7 @@ internal fun HomeListSurface(
                     modifier = zoneModifier,
                     onGeometryChange = { areaGeometry = it },
                     // The area holds widgets, and only ours answer a tap — with whatever the part tapped was given.
-                    onOpen = { item ->
+                    onOpen = { item, _ ->
                         if (item is HomeItem.Widget) {
                             val id = item.widget.id
                             widgetTouch.tapped(id)?.let { (path, tap) -> viewModel.runWidgetTap(id, path, tap) }

@@ -60,7 +60,8 @@ import kotlin.time.Duration.Companion.milliseconds
  *   fires only once the finger has travelled [ItemGestureConfig.touchSlopPx], so a verb that located itself would
  *   be asking about a point 20dp from what the user pressed. Fires on every down, a double tap's second press
  *   included.
- * @param onOpen a completed tap.
+ * @param onOpen a completed tap, with the same rectangle [onShowMenu] is given — what opens from the item (a folder)
+ *   grows out of it.
  * @param onEdgeAction a press-and-swipe in a registered direction (custom action; a toast for now).
  * @param onDoubleTap a second press inside the window on an item that has one assigned.
  * @param onSwipePull the finger has moved while a claimed swipe is in flight — the raw offset from the down, and
@@ -85,7 +86,7 @@ fun Modifier.launcherItemGestures(
     config: ItemGestureConfig,
     claimsAt: (rootPosition: Offset) -> ItemGestureClaims = { ItemGestureClaims() },
     onPress: (rootPosition: Offset) -> Unit = {},
-    onOpen: () -> Unit,
+    onOpen: (anchorInRoot: Rect) -> Unit,
     onEdgeAction: (SwipeDirection) -> Unit,
     onDoubleTap: () -> Unit = {},
     onSwipePull: (direction: SwipeDirection, offsetFromDown: Offset?) -> Unit = { _, _ -> },
@@ -195,7 +196,7 @@ fun Modifier.launcherItemGestures(
 
             fun perform(effects: List<ItemGestureEffect>, local: Offset) {
                 for (effect in effects) when (effect) {
-                    ItemGestureEffect.OpenItem -> currentOnOpen()
+                    ItemGestureEffect.OpenItem -> currentOnOpen(anchorInRoot())
                     is ItemGestureEffect.EdgeAction -> currentOnEdgeAction(effect.direction)
                     is ItemGestureEffect.SwipeProgress -> {
                         lastPull = effect.direction

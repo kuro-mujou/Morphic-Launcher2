@@ -542,10 +542,10 @@ internal fun HomePagerSurface(
     val widgetTouch = remember { WidgetTouch() }
 
     // Opening an item is the same wherever it sits, so both zones share one handler.
-    val openItem: (HomeItem) -> Unit = { item ->
+    val openItem: (HomeItem, Rect) -> Unit = { item, anchor ->
         when (item) {
             is HomeItem.App -> viewModel.launch(item.info.componentKey)
-            is HomeItem.Folder -> folderHost.open(item.folder.id)
+            is HomeItem.Folder -> folderHost.open(item.folder.id, from = anchor)
             // A widget handles its own taps — its content is another app's views, and every button in it is
             // theirs. The launcher's job here is to *not* intercept.
             is HomeItem.AppWidget -> Unit
@@ -1071,18 +1071,14 @@ internal fun HomePagerSurface(
             // Usually one overlay. But a drag that started inside a folder keeps that folder composed for its whole
             // life, even while a different one — or none — is on screen: the cell driving the drag is in its grid, and
             // a pointer stream can't move to another node. It is rendered as a pointer holder (`presenting = false`):
-            // invisible, zone-less, no proxy. See `AppCollectionHostState.dragSourceCollectionId`.
-            val holderFolder = folderHost.dragSourceCollectionId
-                ?.takeIf { it != folderHost.openCollectionId }
-                ?.let { id -> folders.firstOrNull { it.folder.id == id } }
-            // Holder first so it sits *below* the presented folder. Both come from this **one** call site on purpose:
-            // when a folder stops being the presented one and becomes the holder, a second call site would be a
-            // different composition position and Compose would dispose it — killing the very drag this preserves.
-            // Keyed by folder id so each folder still gets its own instance and none inherits another's remembered
-            // state (reorder gap, optimistic order, measured geometry, and — most visibly — pager position, which
-            // would otherwise render a 1-page folder scrolled past its end).
-            val overlays = listOfNotNull(holderFolder?.let { it to false }, openFolder?.let { it to true })
-            overlays.forEach { (folder, presenting) ->
+            // invisible, zone-less, no proxy. And a folder closing back into its tile stays composed until it has
+            // shrunk. Every role comes from this **one** call site, keyed by folder id — see
+            // `AppCollectionHostState.overlays` — so each folder keeps its own instance and none inherits another's
+            // remembered state (reorder gap, optimistic order, measured geometry, and — most visibly — pager position,
+            // which would otherwise render a 1-page folder scrolled past its end).
+            val overlays = folderHost.overlays { id -> folders.firstOrNull { it.folder.id == id } }
+            overlays.forEach { role ->
+                val (folder, presenting) = role
                 key(folder.folder.id) {
                     AppCollectionOverlay(
                         label = folder.folder.label,
@@ -1124,6 +1120,9 @@ internal fun HomePagerSurface(
                         // one place. Only the presented folder offers it: a pointer holder is invisible, and an Add cell
                         // it drew would be a target nobody can see.
                         additions = if (presenting) folderAdditions(folder.folder.id) else null,
+                        origin = role.origin,
+                        exiting = role.exiting,
+                        onExited = { folderHost.exited(folder.folder.id) },
                     )
                 }
             }
