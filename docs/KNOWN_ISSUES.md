@@ -40,6 +40,24 @@ Wanted: a better-looking menu. No direction given yet. Get one (a reference, or 
 redesign absorbs that rather than fixing it first. Placement is `MenuAnchoring.kt`, and it must not move into a `Popup`:
 a drag has to continue on the same pointer stream.
 
+### APPS surface
+
+#### R12. Audit the APPS layouts for missing motion, then tune the category open
+
+Reported by the author on 2026-09-20, on the category card layout. Not yet itemized. Two parts, in this order:
+
+1. **Audit all five APPS layouts** (vertical list, grid, pager, pager with categories, category card) against what
+   HOME and the APPS pager now animate, and add what is missing. Those two have: an item dropped into a collection
+   gliding into its preview (`IconPreviewPlate`, `receivesDrops`), a drop landing from the proxy (`LandingGlide`), and
+   a collection growing out of the tile it opened from and shrinking back into it (`AppCollectionOverlay`, `origin`).
+   The category card is known to lack several. Only `FolderCell` receives drops, so a card's preview slots and its
+   overflow cluster do not play a landing. List what each layout is missing before building any of it, since some of
+   it will be shared.
+2. **Tune the category card's open.** It grows from the whole card (scroll-corrected `cardBounds`) and works, but reads
+   less well than a folder's. No specifics given yet. A card is far larger than a folder tile and nearly square, so the
+   folder's transform (width ratio, centre to centre) may be the wrong shape for it. Get a direction before changing
+   it, because `AppCollectionOverlay` is shared with both folder hosts.
+
 ### Wallpaper studio
 
 #### R11. Credit gart in the wallpaper studio
