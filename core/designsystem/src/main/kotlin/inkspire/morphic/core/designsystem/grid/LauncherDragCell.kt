@@ -18,12 +18,14 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.drag.DragCoordinator
 import inkspire.morphic.core.designsystem.drag.ItemGestureConfig
 import inkspire.morphic.core.designsystem.drag.launcherItemGestures
+import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.model.GridItem
 import inkspire.morphic.core.model.SwipeDirection
 import kotlinx.coroutines.CoroutineScope
@@ -114,6 +116,10 @@ fun LauncherDragCell(
 ) {
     val isDragged = coordinator.session?.item == item
     val pull = rememberSwipePull(gestureConfig)
+    // **The drop lands, it does not teleport.** Only a cell on the surface being looked at takes the landing: the APPS
+    // drawer stays composed behind home after an eject, holding a cell for the very app just dropped on home.
+    val landing = rememberLandingGlide()
+    if (LocalSurfacePresented.current) landing.offer(coordinator.landing?.takeIf { it.item == item })
     // Only for content that lifts something other than itself, and only then: this is a layout callback on every
     // cell on the surface otherwise, for a conversion nothing would ask for.
     var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
@@ -134,7 +140,8 @@ fun LauncherDragCell(
     Box(
         modifier
             .then(if (innerItemAt == null) Modifier else Modifier.onGloballyPositioned { coordinates = it })
-            .then(if (isDragged || tracksFinger) Modifier else Modifier.animatePlacement())
+            .onPlaced(landing::onPlaced)
+            .then(if (isDragged || tracksFinger || landing.isRunning) Modifier else Modifier.animatePlacement())
             // **A draw-time translation, not a layout offset, and `animatePlacement` above is the reason.** That
             // modifier reads `positionInParent()` in `onPlaced` and renders the difference from where it is
             // animating to — so a pull expressed as layout is seen as the cell having *moved*, compensated with an
@@ -143,8 +150,9 @@ fun LauncherDragCell(
             // costs a draw rather than a re-layout.
             .graphicsLayer {
                 alpha = if (isDragged) 0f else 1f
-                translationX = pull.x()
-                translationY = pull.y()
+                val landed = landing.translation()
+                translationX = pull.x() + landed.x
+                translationY = pull.y() + landed.y
             },
     ) {
         content(
@@ -169,8 +177,8 @@ fun LauncherDragCell(
                         onShowInnerMenu(inner.item, Rect(topLeft, inner.bounds.size))
                     }
                 },
-                onBeginDrag = { root, grab ->
-                    coordinator.start(pressed?.item ?: item, root, innerGrab(pressed, coordinates, pressRoot) ?: grab)
+                onBeginDrag = { root, grab, rest ->
+                    coordinator.lift(item, root, grab, rest, innerGrab(pressed, coordinates, pressRoot), pressRoot)
                 },
                 onDragTo = { root -> coordinator.moveTo(root) },
                 onDrop = { onRelease() },
@@ -181,15 +189,32 @@ fun LauncherDragCell(
 }
 
 /**
- * The grab for a drag lifting [inner] rather than the whole cell, or null when the press was on the cell itself.
+ * Starts the drag of [item], or of the inner item the press landed on when [inner] names one — carried from that
+ * item's own centre, which rests at the press minus its grab.
+ */
+private fun DragCoordinator.lift(
+    item: GridItem,
+    finger: Offset,
+    grab: Offset,
+    rest: Offset?,
+    inner: Pair<GridItem, Offset>?,
+    pressRoot: Offset,
+) {
+    if (inner == null) start(item, finger, grab, rest)
+    else start(inner.first, finger, inner.second, pressRoot - inner.second)
+}
+
+/**
+ * The item and grab for a drag lifting [inner] rather than the whole cell, or null when the press was on the cell
+ * itself. Its resting centre is the press minus the grab.
  *
  * **An inner item is carried from its own centre, not the cell's.** The gesture contract measures the grab against
  * the node it is hung on, which here is the whole container; the icon the user pressed is one slot of it, so the
  * container's centre would put the carried icon up to half a container away from the finger.
  */
-private fun innerGrab(inner: InnerCellItem?, cell: LayoutCoordinates?, pressRoot: Offset): Offset? {
+private fun innerGrab(inner: InnerCellItem?, cell: LayoutCoordinates?, pressRoot: Offset): Pair<GridItem, Offset>? {
     if (inner == null || cell == null) return null
-    return pressRoot - cell.localToRoot(inner.bounds.center)
+    return inner.item to pressRoot - cell.localToRoot(inner.bounds.center)
 }
 
 /**

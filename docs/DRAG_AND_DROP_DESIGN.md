@@ -367,6 +367,12 @@ the `PlacementPlan`** — so it can never lie about the outcome (L1's 3×-Spread
 **The shadow glides between cells** on the same `animatePlacement` spring the displaced occupants use; it snaps
 only when it first appears.
 
+**The item itself never teleports between its two drawings** (`DragHandoff`). On lift the proxy starts at the cell's
+resting centre and springs onto the grab, closing the slop's travel. On drop, cancel or refusal the coordinator
+leaves a `landing` at the carried centre, and the cell that ends up holding the item glides in from there
+(`LandingGlide`), retargeting as the committed placement arrives through the view model a frame or more later. Both
+are honoured only for 300ms, so a drawing composed later (a folder opened afterwards) does not replay them.
+
 **Positioning — half-cell hysteresis.** The target cell is the **dragged item's own snapped position**, not the
 cell under the finger: take the item's top-left (the item's centre, which the proxy is drawn around) and **round** to the nearest cell.
 Rounding gives free hysteresis — the footprint holds still until the item has traveled half a cell, then steps

@@ -440,6 +440,7 @@ fun AppsPager(
             ) {
                 FloatingDragIcon(
                     centerInRoot = session.itemCenterInRoot,
+                    lift = session.lift,
                     size = DpSize(with(density) { geo.cellW.toDp() }, with(density) { geo.cellH.toDp() }),
                 ) {
                     // No `itemGestures`: the proxy follows the finger, it is not a touch target.

@@ -554,6 +554,7 @@ fun AppCollectionOverlay(
             if (presenting && session != null && geo != null && dragApp != null) {
                 FloatingDragIcon(
                     centerInRoot = session.itemCenterInRoot,
+                    lift = session.lift,
                     size = DpSize(
                         with(LocalDensity.current) { geo.cellW.toDp() },
                         with(LocalDensity.current) { geo.cellH.toDp() }),

@@ -276,4 +276,29 @@ class DragCoordinatorTest {
         coordinator.moveTo(Offset(110f, 60f))
         assertNull(coordinator.session?.activeZone)
     }
+
+    @Test
+    fun `a lift remembers where the item rested`() {
+        val coordinator = DragCoordinator()
+        coordinator.start(app("a"), Offset(80f, 50f), grabFromCenter = Offset(10f, 0f), restCenterInRoot = Offset(50f, 50f))
+
+        assertEquals(Offset(50f, 50f), coordinator.session?.lift?.centerInRoot)
+    }
+
+    @Test
+    fun `every ending leaves a landing where the item was carried, and the next lift clears it`() {
+        val coordinator = DragCoordinator()
+        coordinator.register(zone("home", Rect(0f, 0f, 100f, 100f)))
+
+        coordinator.start(app("a"), Offset(50f, 50f), grabFromCenter = Offset(5f, 5f))
+        coordinator.moveTo(Offset(60f, 70f))
+        coordinator.drop()
+        assertEquals(app("a"), coordinator.landing?.item)
+        assertEquals(Offset(55f, 65f), coordinator.landing?.centerInRoot)
+
+        coordinator.start(app("b"), Offset(50f, 50f))
+        assertNull(coordinator.landing)
+        coordinator.cancel()
+        assertEquals(app("b"), coordinator.landing?.item)
+    }
 }

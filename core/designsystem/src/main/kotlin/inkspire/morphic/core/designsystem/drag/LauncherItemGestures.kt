@@ -74,7 +74,8 @@ import kotlin.time.Duration.Companion.milliseconds
  *   finger **pressed**, relative to the centre of this modifier's rectangle, in root px. See
  *   [DragSession.grabFromCenter]. The press rather than the lift, because a lift happens only after the finger has
  *   travelled [ItemGestureConfig.touchSlopPx]: measured there, the offset would carry that travel for the whole drag
- *   and the item would trail the finger by it.
+ *   and the item would trail the finger by it. `restCenterInRoot` is this rectangle's centre as it sits, which the
+ *   proxy starts from so the lift does not jump by that same travel; see [DragHandoff].
  * @param onDragTo the drag moved to the given root position.
  * @param onDrop release the drag.
  * @param onCancelDrag the gesture was canceled mid-drag.
@@ -90,7 +91,7 @@ fun Modifier.launcherItemGestures(
     onDoubleTap: () -> Unit = {},
     onSwipePull: (direction: SwipeDirection, offsetFromDown: Offset?) -> Unit = { _, _ -> },
     onShowMenu: (anchorInRoot: Rect) -> Unit,
-    onBeginDrag: (rootPosition: Offset, grabFromCenter: Offset) -> Unit,
+    onBeginDrag: (rootPosition: Offset, grabFromCenter: Offset, restCenterInRoot: Offset?) -> Unit,
     onDragTo: (rootPosition: Offset) -> Unit,
     onDrop: () -> Unit,
     onCancelDrag: () -> Unit,
@@ -162,12 +163,15 @@ fun Modifier.launcherItemGestures(
             // Where the gesture's down landed, in this node's coordinates — what the grab is measured from.
             var pressLocal = Offset.Zero
 
+            // This node's centre in root; null before measurement.
+            fun centerInRoot(): Offset? =
+                coordinates?.let { it.localToRoot(Offset(it.size.width / 2f, it.size.height / 2f)) }
+
             // The press relative to this node's centre, both mapped through the same coordinates so a transformed
             // ancestor cannot skew one and not the other. Zero before measurement, which centres the item.
             fun grabFromCenter(): Offset {
-                val c = coordinates ?: return Offset.Zero
-                val center = Offset(c.size.width / 2f, c.size.height / 2f)
-                return c.localToRoot(pressLocal) - c.localToRoot(center)
+                val center = centerInRoot() ?: return Offset.Zero
+                return rootOf(pressLocal) - center
             }
 
             // Whether *this* gesture currently holds the surface-swipe claim, so the release below is idempotent
@@ -218,7 +222,7 @@ fun Modifier.launcherItemGestures(
                     }
 
                     ItemGestureEffect.BeginDrag -> {
-                        claimSurface(); currentOnBeginDrag(rootOf(local), grabFromCenter())
+                        claimSurface(); currentOnBeginDrag(rootOf(local), grabFromCenter(), centerInRoot())
                     }
 
                     is ItemGestureEffect.DragTo -> currentOnDragTo(rootOf(local))

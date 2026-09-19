@@ -706,6 +706,8 @@ internal fun HomeListSurface(
             // *along* is the one axis it has.
             FloatingDragIcon(
                 centerInRoot = Offset(viewport.center.x, itemCenter.y),
+                // Pinned in x like the row itself, so the lift settles only along the list.
+                lift = session?.lift?.let { it.copy(centerInRoot = Offset(viewport.center.x, it.centerInRoot.y)) },
                 size = DpSize(with(density) { viewport.width.toDp() }, rowHeight),
             ) {
                 CompositionLocalProvider(LocalIconMetrics provides listMetrics) {

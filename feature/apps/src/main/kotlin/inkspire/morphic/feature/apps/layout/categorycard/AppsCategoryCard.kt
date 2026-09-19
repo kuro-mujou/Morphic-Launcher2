@@ -393,6 +393,7 @@ fun AppsCategoryCard(
             if (presented && session != null && draggedApp != null && openCategoryId == null) {
                 FloatingDragIcon(
                     centerInRoot = session.itemCenterInRoot,
+                    lift = session.lift,
                     size = DpSize(72.dp, 72.dp),
                 ) {
                     // No `itemGestures`: the proxy follows the finger, it is not a touch target.

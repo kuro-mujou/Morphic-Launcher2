@@ -926,6 +926,7 @@ internal fun HomePagerSurface(
                     // user pressed stays under the finger, whatever kind of item it is.
                     FloatingDragIcon(
                         centerInRoot = session.itemCenterInRoot,
+                        lift = session.lift,
                         size = DpSize(with(density) { footprintW.toDp() }, with(density) { footprintH.toDp() }),
                     ) {
                         // **The pager's metrics, on the same terms as the footprint above**: what is under the finger

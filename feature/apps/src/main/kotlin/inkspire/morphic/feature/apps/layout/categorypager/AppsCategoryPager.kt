@@ -542,6 +542,7 @@ fun AppsCategoryPager(
             if (presented && session != null && cellWidth != null && draggedApp != null) {
                 FloatingDragIcon(
                     centerInRoot = session.itemCenterInRoot,
+                    lift = session.lift,
                     size = DpSize(cellWidth, cellHeight),
                 ) {
                     AppCell(app = draggedApp, metrics = cell.metrics, modifier = Modifier.fillMaxSize())

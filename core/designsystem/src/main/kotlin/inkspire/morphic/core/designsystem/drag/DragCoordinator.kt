@@ -33,6 +33,8 @@ import inkspire.morphic.core.model.PlacementPlan
  *   lift that reported none, and centres the item on the finger.
  * @property activeZone the zone currently under the finger that accepts [item], or null (over a gap/edge).
  * @property plan what dropping now would do in [activeZone]; null when there is no zone or no droppable target.
+ * @property lift where the item rested when it was lifted, for the proxy to start from; see [DragHandoff]. Null for
+ *   a lift that reported no resting place, which the proxy then draws at the grab from the first frame.
  */
 data class DragSession(
     val item: GridItem,
@@ -40,6 +42,7 @@ data class DragSession(
     val grabFromCenter: Offset = Offset.Zero,
     val activeZone: ZoneId?,
     val plan: PlacementPlan?,
+    val lift: DragHandoff? = null,
 ) {
     /** Where the carried item's centre is now, in root px — the point every cell-level question is asked of. */
     val itemCenterInRoot: Offset get() = fingerInRoot - grabFromCenter
@@ -103,6 +106,14 @@ class DragCoordinator {
     val isDragging: Boolean get() = session != null
 
     /**
+     * Where the carried item was drawn when the last drag ended — dropped, refused or canceled alike, since in every
+     * case some cell takes the item back. The cell that ends up holding it glides in from here; see [DragHandoff].
+     * Cleared by the next [start].
+     */
+    var landing: DragHandoff? by mutableStateOf(null)
+        private set
+
+    /**
      * Adds or replaces the zone registered under [zone]`.id`, recording [owner] as the id's current holder.
      *
      * [RegisterDropZone] calls this as a surface measures, moves, or comes on screen — and again on every
@@ -143,9 +154,17 @@ class DragCoordinator {
      * Begins dragging [item] with the finger at [fingerInRoot] (root coordinates), resolving the first plan.
      *
      * [grabFromCenter] is the finger's offset from the item's centre at the press; see [DragSession.grabFromCenter].
+     * [restCenterInRoot] is the item's centre where it sat before the lift, which the proxy starts from.
      */
-    fun start(item: GridItem, fingerInRoot: Offset, grabFromCenter: Offset = Offset.Zero) {
-        session = DragSession(item, fingerInRoot, grabFromCenter, activeZone = null, plan = null)
+    fun start(
+        item: GridItem,
+        fingerInRoot: Offset,
+        grabFromCenter: Offset = Offset.Zero,
+        restCenterInRoot: Offset? = null,
+    ) {
+        landing = null
+        val lift = restCenterInRoot?.let { DragHandoff(item, it) }
+        session = DragSession(item, fingerInRoot, grabFromCenter, activeZone = null, plan = null, lift = lift)
         moveTo(fingerInRoot)
     }
 
@@ -175,7 +194,7 @@ class DragCoordinator {
      */
     fun drop(): DropOutcome? {
         val current = session ?: return null
-        session = null
+        land(current)
         val zoneId = current.activeZone ?: return null
         val zone = zones[zoneId] ?: return null
         val plan = current.plan ?: return null
@@ -187,6 +206,15 @@ class DragCoordinator {
 
     /** Abandons the drag with no drop (e.g. the gesture was canceled). */
     fun cancel() {
+        session?.let(::land)
+    }
+
+    /**
+     * Ends [current], leaving its [landing] behind. The landing is written **before** the session clears, in one
+     * snapshot, so the frame the proxy disappears is the frame a cell can already read where to start from.
+     */
+    private fun land(current: DragSession) {
+        landing = DragHandoff(current.item, current.itemCenterInRoot)
         session = null
     }
 
