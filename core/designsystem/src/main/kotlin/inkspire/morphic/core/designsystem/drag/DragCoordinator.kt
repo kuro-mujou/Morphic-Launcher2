@@ -35,6 +35,7 @@ import inkspire.morphic.core.model.PlacementPlan
  * @property plan what dropping now would do in [activeZone]; null when there is no zone or no droppable target.
  * @property lift where the item rested when it was lifted, for the proxy to start from; see [DragHandoff]. Null for
  *   a lift that reported no resting place, which the proxy then draws at the grab from the first frame.
+ * @property sourceZone the zone the item was lifted in, which a landing compares its own zone against.
  */
 data class DragSession(
     val item: GridItem,
@@ -43,6 +44,7 @@ data class DragSession(
     val activeZone: ZoneId?,
     val plan: PlacementPlan?,
     val lift: DragHandoff? = null,
+    val sourceZone: ZoneId? = null,
 ) {
     /** Where the carried item's centre is now, in root px — the point every cell-level question is asked of. */
     val itemCenterInRoot: Offset get() = fingerInRoot - grabFromCenter
@@ -166,6 +168,8 @@ class DragCoordinator {
         val lift = restCenterInRoot?.let { DragHandoff(item, it) }
         session = DragSession(item, fingerInRoot, grabFromCenter, activeZone = null, plan = null, lift = lift)
         moveTo(fingerInRoot)
+        // The zone under the finger at the lift is the one the item was lifted out of.
+        session = session?.let { it.copy(sourceZone = it.activeZone) }
     }
 
     /**
@@ -194,27 +198,30 @@ class DragCoordinator {
      */
     fun drop(): DropOutcome? {
         val current = session ?: return null
-        land(current)
-        val zoneId = current.activeZone ?: return null
-        val zone = zones[zoneId] ?: return null
-        val plan = current.plan ?: return null
-        if (plan.intent == DropIntent.INVALID) return null
-        val outcome = DropOutcome(zoneId, current.item, plan)
-        zone.onDrop(outcome)
+        val outcome = outcomeOf(current)
+        land(current, leftSource = outcome != null && outcome.takesItemFrom(current.sourceZone))
+        outcome?.let { zones[it.zone]?.onDrop(it) }
         return outcome
+    }
+
+    /** What releasing [current] commits, or null for a no-op: over no zone, no plan, or an invalid one. */
+    private fun outcomeOf(current: DragSession): DropOutcome? {
+        val zoneId = current.activeZone?.takeIf { it in zones } ?: return null
+        val plan = current.plan?.takeIf { it.intent != DropIntent.INVALID } ?: return null
+        return DropOutcome(zoneId, current.item, plan)
     }
 
     /** Abandons the drag with no drop (e.g. the gesture was canceled). */
     fun cancel() {
-        session?.let(::land)
+        session?.let { land(it, leftSource = false) }
     }
 
     /**
      * Ends [current], leaving its [landing] behind. The landing is written **before** the session clears, in one
      * snapshot, so the frame the proxy disappears is the frame a cell can already read where to start from.
      */
-    private fun land(current: DragSession) {
-        landing = DragHandoff(current.item, current.itemCenterInRoot)
+    private fun land(current: DragSession, leftSource: Boolean) {
+        landing = DragHandoff(current.item, current.itemCenterInRoot, leftSource)
         session = null
     }
 
@@ -248,3 +255,10 @@ fun requireDragCoordinator(): DragCoordinator = checkNotNull(LocalDragCoordinato
 /** Remembers a [DragCoordinator]. Host once at the drag root (`feature:shell`) and expose via the local above. */
 @Composable
 fun rememberDragCoordinator(): DragCoordinator = remember { DragCoordinator() }
+
+/**
+ * Whether landing this outcome takes the item out of [sourceZone]: merged into something, removed from the launcher,
+ * or carried into a different zone. A drop anywhere else in the zone it came from keeps it there.
+ */
+private fun DropOutcome.takesItemFrom(sourceZone: ZoneId?): Boolean =
+    plan.intent == DropIntent.MERGE || plan.intent == DropIntent.REMOVE || zone != sourceZone

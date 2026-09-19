@@ -10,6 +10,7 @@ import inkspire.morphic.core.model.PlacementPlan
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -300,5 +301,42 @@ class DragCoordinatorTest {
         assertNull(coordinator.landing)
         coordinator.cancel()
         assertEquals(app("b"), coordinator.landing?.item)
+    }
+
+    @Test
+    fun `a landing leaves its source only when the drop takes the item elsewhere`() {
+        val mergePlan = PlacementPlan(GridPlacement(0, 0, 0), DropIntent.MERGE)
+        val coordinator = DragCoordinator()
+        coordinator.register(zone("home", Rect(0f, 0f, 100f, 100f)))
+        coordinator.register(zone("dock", Rect(0f, 100f, 100f, 200f)))
+        coordinator.register(zone("folder", Rect(100f, 0f, 200f, 100f), plan = mergePlan))
+
+        // Within the zone it was lifted in: it keeps a place there.
+        coordinator.start(app("a"), Offset(50f, 50f))
+        coordinator.moveTo(Offset(60f, 60f))
+        coordinator.drop()
+        assertFalse(coordinator.landing!!.leftSource)
+
+        // Into another zone.
+        coordinator.start(app("a"), Offset(50f, 50f))
+        coordinator.moveTo(Offset(50f, 150f))
+        coordinator.drop()
+        assertTrue(coordinator.landing!!.leftSource)
+
+        // Merged into something.
+        coordinator.start(app("a"), Offset(50f, 50f))
+        coordinator.moveTo(Offset(150f, 50f))
+        coordinator.drop()
+        assertTrue(coordinator.landing!!.leftSource)
+
+        // Released over nothing, or canceled: it goes back where it came from.
+        coordinator.start(app("a"), Offset(50f, 50f))
+        coordinator.moveTo(Offset(500f, 500f))
+        coordinator.drop()
+        assertFalse(coordinator.landing!!.leftSource)
+        coordinator.start(app("a"), Offset(50f, 50f))
+        coordinator.moveTo(Offset(50f, 150f))
+        coordinator.cancel()
+        assertFalse(coordinator.landing!!.leftSource)
     }
 }

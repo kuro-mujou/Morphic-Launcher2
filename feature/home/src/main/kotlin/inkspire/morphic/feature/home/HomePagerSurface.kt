@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asImageBitmap
@@ -975,10 +976,13 @@ internal fun HomePagerSurface(
                             } else if (draggedOwnWidget != null) {
                                 WidgetCell(recipe = draggedOwnWidget.widget.recipe)
                             } else if (widgetShot != null) {
+                                // Clipped as the cell is — the bitmap is the bare view, square-cornered.
                                 Image(
                                     bitmap = widgetShot.asImageBitmap(),
                                     contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(AppWidgetShape),
                                 )
                             }
                         }

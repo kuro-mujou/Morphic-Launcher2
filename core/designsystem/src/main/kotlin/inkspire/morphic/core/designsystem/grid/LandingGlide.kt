@@ -15,8 +15,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.LayoutCoordinates
 import inkspire.morphic.core.designsystem.drag.DragHandoff
+import inkspire.morphic.core.designsystem.drag.HandoffFreshMs
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Carries a dropped item from where the proxy let go of it into the cell that now holds it.
@@ -29,6 +32,11 @@ import kotlinx.coroutines.launch
  *
  * It owns the cell's motion while it runs, which is why the caller drops `animatePlacement` for that span: the late
  * placement change would otherwise be animated twice, once by each.
+ *
+ * **The cell the item was lifted out of does not glide when the drop took the item away** ([DragHandoff.leftSource]
+ * — a merge, a removal, another zone). That cell is disposed once the commit arrives, a frame or more later; gliding
+ * it meanwhile would carry the item back toward its old slot and then drop it out of existence, which is the flash
+ * a merge used to show. It stays hidden instead, and a cell that newly holds the item is the one that glides in.
  */
 @Stable
 internal class LandingGlide(private val scope: CoroutineScope) {
@@ -37,18 +45,40 @@ internal class LandingGlide(private val scope: CoroutineScope) {
     private var taken: DragHandoff? = null
     private var glide by mutableStateOf<Animatable<Offset, AnimationVector2D>?>(null)
 
+    /** This cell has been the lifted one since its last landing — the one a drop that took the item away leaves. */
+    private var lifted = false
+
+    /** Held invisible after a drop took its item away, until the cell is disposed or the handoff goes stale. */
+    private var vacated by mutableStateOf(false)
+
     /** The cell's centre in root px as last placed. State, because the draw-time translation is measured from it. */
     private var placedCenter by mutableStateOf<Offset?>(null)
 
     val isRunning: Boolean get() = glide != null
 
+    /** The cell's alpha: none while its item is being carried or has just been carried away, full otherwise. */
+    fun alpha(isDragged: Boolean): Float = if (isDragged || vacated) 0f else 1f
+
     /**
-     * Takes [landing] if it is fresh and not yet taken. Called from composition, which is the frame the proxy
-     * disappears: the glide has to exist before that frame draws, or the cell flashes at its slot for one frame.
+     * Follows the drag and takes [landing] if it is fresh and not yet taken. Called from composition, which is the
+     * frame the proxy disappears: the glide (or the hiding) has to exist before that frame draws, or the cell flashes
+     * at its slot for one frame.
      */
-    fun offer(landing: DragHandoff?) {
+    fun update(isDragged: Boolean, landing: DragHandoff?) {
+        if (isDragged) lifted = true
         if (landing == null || landing === taken || !landing.isFresh) return
         taken = landing
+        val wasLifted = lifted
+        lifted = false
+        if (landing.leftSource && wasLifted) {
+            vacated = true
+            // A commit that never arrives (refused downstream) must not leave the item invisible for good.
+            scope.launch {
+                delay(HandoffFreshMs.milliseconds)
+                vacated = false
+            }
+            return
+        }
         glide = Animatable(landing.centerInRoot, Offset.VectorConverter)
         // A cell that is not re-placed by the drop (released back onto its own slot) never reaches [onPlaced] again,
         // so the target it already has is the one to head for.

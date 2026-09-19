@@ -44,7 +44,11 @@ internal fun WidgetCell(
     id: Long? = null,
 ) {
     val repository = koinInject<WidgetDataRepository>()
-    val data by remember(recipe) { repository.data(WidgetCadence.of(recipe)) }.collectAsStateWithLifecycle(null)
+    val cadence = remember(recipe) { WidgetCadence.of(recipe) }
+    // Seeded from the reading a widget already on screen holds, so a newly composed one — a lifted copy, a cell
+    // recreated by a drop — does not draw empty until its own subscription emits. See `WidgetDataRepository.latest`.
+    val data by remember(cadence) { repository.data(cadence) }
+        .collectAsStateWithLifecycle(remember(cadence) { repository.latest(cadence) })
     val touch = LocalWidgetTouch.current
     val cell = if (id != null && touch != null) remember(touch, id) { touch.cell(id) } else null
     if (id != null && touch != null) DisposableEffect(touch, id) { onDispose { touch.release(id) } }

@@ -13,9 +13,11 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.onEach
 import java.time.Instant
 import java.time.ZoneId
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * [WidgetDataRepository] over the platform's own signals. A provider the cadence does not name is not subscribed to
@@ -26,6 +28,11 @@ import java.util.Locale
  * @param context the application context — it registers receivers that outlive any one screen's.
  */
 internal class DefaultWidgetDataRepository(private val context: Context) : WidgetDataRepository {
+
+    /** Written by every collector; a handful of entries, one per distinct cadence on screen. */
+    private val latest = ConcurrentHashMap<WidgetCadence, ScriptData>()
+
+    override fun latest(cadence: WidgetCadence): ScriptData? = latest[cadence]
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun data(cadence: WidgetCadence): Flow<ScriptData> =
@@ -38,6 +45,7 @@ internal class DefaultWidgetDataRepository(private val context: Context) : Widge
                 LiveScriptData(now, battery, system, environment.zone, environment.locale)
             }
         }.distinctUntilChanged()
+            .onEach { latest[cadence] = it }
 }
 
 /** One moment's readings, compared by value so an unchanged moment is not redrawn. */

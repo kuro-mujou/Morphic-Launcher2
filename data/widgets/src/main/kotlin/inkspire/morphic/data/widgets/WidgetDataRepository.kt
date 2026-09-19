@@ -15,4 +15,15 @@ import kotlinx.coroutines.flow.Flow
  */
 interface WidgetDataRepository {
     fun data(cadence: WidgetCadence): Flow<ScriptData>
+
+    /**
+     * The last reading any collector of [cadence] received, or null if none has run yet — **what a newly composed
+     * widget draws on its first frame**, before its own subscription has emitted.
+     *
+     * [data] is cold and its first value arrives a frame or more after collection starts, so a widget composed
+     * beside one already on screen — the floating copy lifted out of it, or its cell recreated on another page by a
+     * drop — would otherwise draw empty in between and flash. A reading taken moments ago for the same cadence is
+     * exactly what the widget already on screen is showing.
+     */
+    fun latest(cadence: WidgetCadence): ScriptData?
 }

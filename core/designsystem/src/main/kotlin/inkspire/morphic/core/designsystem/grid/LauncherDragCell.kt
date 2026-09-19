@@ -119,7 +119,8 @@ fun LauncherDragCell(
     // **The drop lands, it does not teleport.** Only a cell on the surface being looked at takes the landing: the APPS
     // drawer stays composed behind home after an eject, holding a cell for the very app just dropped on home.
     val landing = rememberLandingGlide()
-    if (LocalSurfacePresented.current) landing.offer(coordinator.landing?.takeIf { it.item == item })
+    val presented = LocalSurfacePresented.current
+    landing.update(isDragged, coordinator.landing?.takeIf { presented && it.item == item })
     // Only for content that lifts something other than itself, and only then: this is a layout callback on every
     // cell on the surface otherwise, for a conversion nothing would ask for.
     var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
@@ -149,7 +150,7 @@ fun LauncherDragCell(
             // budge. A `graphicsLayer` translation never touches placement, so nothing upstream can see it, and it
             // costs a draw rather than a re-layout.
             .graphicsLayer {
-                alpha = if (isDragged) 0f else 1f
+                alpha = landing.alpha(isDragged)
                 val landed = landing.translation()
                 translationX = pull.x() + landed.x
                 translationY = pull.y() + landed.y

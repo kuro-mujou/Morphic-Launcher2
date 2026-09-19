@@ -35,6 +35,13 @@ import inkspire.morphic.data.appwidgets.AppWidgetHostController
 import org.koin.compose.koinInject
 
 /**
+ * The shape another app's widget is clipped to, on the grid and as the floating copy a drag lifts out of it. The copy
+ * is a bitmap of the widget's own view, which has no corners of its own, so an unshared shape would lift square and
+ * land rounded.
+ */
+internal val AppWidgetShape = RoundedCornerShape(12.dp)
+
+/**
  * One placed widget — **another app's views, hosted inside a cell of ours**.
  *
  * An `AndroidView` around an [AppWidgetHostView], which is the only way to draw a widget: its content is
@@ -104,7 +111,7 @@ internal fun AppWidgetCell(
         Box(
             modifier = modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(AppWidgetShape)
                 .then(itemGestures),
             contentAlignment = Alignment.Center,
         ) {
@@ -151,7 +158,7 @@ internal fun AppWidgetCell(
         },
         modifier = modifier
             .fillMaxSize()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(AppWidgetShape)
             .onSizeChanged { size = it }
             .then(itemGestures),
     )
