@@ -6,6 +6,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.FolderCell
+import inkspire.morphic.core.designsystem.cell.FolderDissolveCell
+import inkspire.morphic.core.designsystem.cell.FolderDissolves
 import inkspire.morphic.core.designsystem.drag.DragSession
 import inkspire.morphic.core.designsystem.drag.DropFootprint
 import inkspire.morphic.core.designsystem.grid.LauncherGridScope
@@ -23,11 +25,35 @@ import inkspire.morphic.feature.apps.AppsItem
  * the drop resolution stay together over there, where they are genuinely one machine.
  */
 
-/** One entry on a page — an app or a folder, drawn as home draws them. */
+/**
+ * One entry on a page — an app or a folder, drawn as home draws them.
+ *
+ * @param dissolves this pager's folders that have just turned into their last app; an app among them shows the change
+ *   instead of simply appearing. Null for a drawing that is not the pager's own cell (the drag proxy).
+ */
 @Composable
-internal fun AppsPagerCell(item: AppsItem, modifier: Modifier, itemGestures: Modifier) {
+internal fun AppsPagerCell(
+    item: AppsItem,
+    modifier: Modifier,
+    itemGestures: Modifier,
+    dissolves: FolderDissolves<PagerSpot>? = null,
+) {
     when (item) {
-        is AppsItem.App -> AppCell(app = item.info, modifier = modifier, itemGestures = itemGestures)
+        is AppsItem.App -> {
+            val component = item.info.componentKey
+            val from = dissolves?.from(component)
+            if (from == null) {
+                AppCell(app = item.info, modifier = modifier, itemGestures = itemGestures)
+            } else {
+                FolderDissolveCell(
+                    folderLabel = from,
+                    app = item.info,
+                    onFinished = { dissolves.finished(component) },
+                    modifier = modifier,
+                    itemGestures = itemGestures,
+                )
+            }
+        }
         is AppsItem.Folder -> FolderCell(
             label = item.folder.label,
             apps = item.apps,
@@ -83,3 +109,6 @@ internal fun LauncherGridScope.dropFootprintCell(
         )
     }
 }
+
+/** Where an entry stands in the APPS pager, for spotting a dissolve: its page, and its slot on that page. */
+internal data class PagerSpot(val page: Int, val slot: Int)

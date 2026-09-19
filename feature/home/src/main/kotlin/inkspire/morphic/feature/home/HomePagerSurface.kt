@@ -29,8 +29,12 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.FolderCell
+import inkspire.morphic.core.designsystem.cell.FolderDissolveCell
+import inkspire.morphic.core.designsystem.cell.FolderDissolves
+import inkspire.morphic.core.designsystem.cell.FolderSpot
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
+import inkspire.morphic.core.designsystem.cell.rememberFolderDissolves
 import inkspire.morphic.core.designsystem.collection.AppAdditions
 import inkspire.morphic.core.designsystem.collection.AppCollectionOverlay
 import inkspire.morphic.core.designsystem.collection.AppCollectionPhase
@@ -377,8 +381,24 @@ internal fun HomePagerSurface(
     val containerPages = remember { WidgetContainerPages() }
 
     // Folders that have just dissolved into their last app, so that app's cell shows the change. See [FolderDissolves].
-    val dissolves = remember { FolderDissolves() }
-    dissolves.observe(state.items)
+    // Home's "same place" is the zone and the placement: the last app inherits exactly the folder's cell.
+    val dissolves = rememberFolderDissolves<HomeSpot>()
+    dissolves.observe(
+        source = state.items,
+        folders = {
+            state.items.filterIsInstance<HomeItem.Folder>().map { folder ->
+                FolderSpot(
+                    id = folder.folder.id,
+                    label = folder.folder.label,
+                    position = HomeSpot(folder.zone, folder.placement),
+                    members = folder.apps.mapTo(HashSet()) { it.componentKey },
+                )
+            }
+        },
+        apps = {
+            state.items.filterIsInstance<HomeItem.App>().map { it.info.componentKey to HomeSpot(it.zone, it.placement) }
+        },
+    )
 
     // The dragged item + hovered plan drive the root overlay below; the dwelled push preview + edge page-flip
     // live inside CoordinateDragPager.
@@ -1220,24 +1240,24 @@ private fun HomeItemCell(
     itemGestures: Modifier,
     metrics: IconMetrics,
     containerPages: WidgetContainerPages,
-    dissolves: FolderDissolves,
+    dissolves: FolderDissolves<HomeSpot>,
     resolveIcon: (IconItem) -> ContainerIcon?,
     onReorderContainer: (Long, List<IconItem>) -> Unit = { _, _ -> },
     onInsertIntoContainer: (Long, IconItem, Int) -> Unit = { _, _, _ -> },
 ) {
     when (item) {
         is HomeItem.App -> {
-            val from = dissolves.from(item.gridItem)
+            val from = dissolves.from(item.info.componentKey)
             if (from == null) {
                 AppCell(app = item.info, modifier = cellModifier, metrics = metrics, itemGestures = itemGestures)
             } else {
                 FolderDissolveCell(
-                    folder = from,
-                    app = item,
-                    metrics = metrics,
+                    folderLabel = from,
+                    app = item.info,
+                    onFinished = { dissolves.finished(item.info.componentKey) },
                     modifier = cellModifier,
+                    metrics = metrics,
                     itemGestures = itemGestures,
-                    onFinished = { dissolves.finished(item.gridItem) },
                 )
             }
         }
@@ -1378,3 +1398,6 @@ private fun containerFolder(items: List<HomeItem>, folderId: Long): ContainerIco
 
 /** What the Gestures sheet assigns to — an item on the grid or an icon inside a container — and the name it shows. */
 private data class GestureTarget(val item: GridItem, val label: String)
+
+/** Where a folder or an app stands on home, for spotting a dissolve: its zone and its cell there. */
+private data class HomeSpot(val zone: HomeZone, val placement: GridPlacement)

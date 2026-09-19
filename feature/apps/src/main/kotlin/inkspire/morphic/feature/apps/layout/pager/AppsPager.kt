@@ -22,8 +22,10 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
+import inkspire.morphic.core.designsystem.cell.FolderSpot
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
+import inkspire.morphic.core.designsystem.cell.rememberFolderDissolves
 import inkspire.morphic.core.designsystem.collection.AppAdditions
 import inkspire.morphic.core.designsystem.collection.AppCollectionOverlay
 import inkspire.morphic.core.designsystem.collection.AppCollectionPhase
@@ -171,6 +173,34 @@ fun AppsPager(
     // lambda once, so capturing the parameter directly would freeze the pager at however many pages existed on the
     // first composition — which is none, since the store isn't paged until the surface reports its device.
     val livePages = rememberUpdatedState(pages)
+
+    // Folders that have just dissolved into their last app, so that app's cell shows the change rather than swapping
+    // in (see `FolderDissolves`). Read from the *stored* pages: the last app takes exactly the folder's page and slot.
+    val dissolves = rememberFolderDissolves<PagerSpot>()
+    dissolves.observe(
+        source = pages,
+        folders = {
+            pages.flatMapIndexed { page, entries ->
+                entries.mapIndexedNotNull { slot, entry ->
+                    (entry as? AppsItem.Folder)?.let { folder ->
+                        FolderSpot(
+                            id = folder.folder.id,
+                            label = folder.folder.label,
+                            position = PagerSpot(page, slot),
+                            members = folder.apps.mapTo(HashSet()) { it.componentKey },
+                        )
+                    }
+                }
+            }
+        },
+        apps = {
+            pages.flatMapIndexed { page, entries ->
+                entries.mapIndexedNotNull { slot, entry ->
+                    (entry as? AppsItem.App)?.let { it.info.componentKey to PagerSpot(page, slot) }
+                }
+            }
+        },
+    )
     // Held live for the reason `livePages` is, stated above: the factory remembers its lambdas once, so reading the
     // parameter directly would freeze the pager at the blueprint default the store had not yet replaced.
     val liveWraps = rememberUpdatedState(wraps)
@@ -424,7 +454,12 @@ fun AppsPager(
                                 (item as? AppsItem.App)?.let { showItemMenu(it.info, anchor) }
                             },
                         ) { itemGestures ->
-                            AppsPagerCell(item = item, modifier = Modifier.fillMaxSize(), itemGestures = itemGestures)
+                            AppsPagerCell(
+                                item = item,
+                                modifier = Modifier.fillMaxSize(),
+                                itemGestures = itemGestures,
+                                dissolves = dissolves,
+                            )
                         }
                     }
                 }
