@@ -50,8 +50,20 @@ class LandingGlide internal constructor(private val scope: CoroutineScope) {
     private var taken: DragHandoff? = null
     private var glide by mutableStateOf<Animatable<Offset, AnimationVector2D>?>(null)
 
-    /** This cell has been the lifted one since its last landing — the one a drop that took the item away leaves. */
+    /**
+     * This cell started the drag since its last landing — the one a drop that took the item away leaves.
+     *
+     * **Set by the lift ([onLifted]), not by drawing the carried item.** Other cells draw it too: a MovingGap surface
+     * holds a gap row for an item arriving from another zone, and the HOME list already holding the app dragged out of
+     * APPS draws that row as the gap. Both are where the item *lands*, and holding them invisible as the vacated
+     * source made the row blink out on release.
+     */
     private var lifted = false
+
+    /** This cell's own gesture lifted its item. */
+    fun onLifted() {
+        lifted = true
+    }
 
     /** Held invisible after a drop took its item away, until the cell is disposed or the handoff goes stale. */
     private var vacated by mutableStateOf(false)
@@ -75,8 +87,7 @@ class LandingGlide internal constructor(private val scope: CoroutineScope) {
      * frame the proxy disappears: the glide (or the hiding) has to exist before that frame draws, or the cell flashes
      * at its slot for one frame.
      */
-    fun update(isDragged: Boolean, landing: DragHandoff?, drawnIconSize: Dp? = null) {
-        if (isDragged) lifted = true
+    fun update(landing: DragHandoff?, drawnIconSize: Dp? = null) {
         if (landing == null || landing === taken || !landing.isFresh) return
         taken = landing
         val wasLifted = lifted

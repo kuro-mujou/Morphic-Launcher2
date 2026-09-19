@@ -153,7 +153,7 @@ internal fun IconContainerCell(
                         val gridItem = icon.asIconItem().asGridItem()
                         val landing = rememberLandingGlide()
                         // With this slot's icon size, so an icon carried in at a home cell's size shrinks into it.
-                        landing.update(false, coordinator?.landing?.takeIf { presented && it.item == gridItem }, iconSize)
+                        landing.update(coordinator?.landing?.takeIf { presented && it.item == gridItem }, iconSize)
                         Box(
                             modifier = Modifier
                                 // The one being carried keeps its slot but is not drawn: the floating proxy under the

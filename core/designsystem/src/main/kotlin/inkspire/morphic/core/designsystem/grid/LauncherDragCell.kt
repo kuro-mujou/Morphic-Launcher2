@@ -131,7 +131,7 @@ fun LauncherDragCell(
     // drawer stays composed behind home after an eject, holding a cell for the very app just dropped on home.
     val landing = rememberLandingGlide()
     val presented = LocalSurfacePresented.current
-    landing.update(isDragged, coordinator.landing?.takeIf { presented && it.item == item })
+    landing.update(coordinator.landing?.takeIf { presented && it.item == item })
     // Only for content that lifts something other than itself, and only then: this is a layout callback on every
     // cell on the surface otherwise, for a conversion nothing would ask for.
     var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
@@ -189,7 +189,10 @@ fun LauncherDragCell(
                     },
                     onShowMenu = { anchor -> showMenuFor(pressed, anchor, coordinates, onShowMenu, onShowInnerMenu) },
                     onBeginDrag = { root, grab, rest ->
-                        coordinator.lift(item, root, grab, rest, innerGrab(pressed, coordinates, pressRoot), pressRoot)
+                        val inner = innerGrab(pressed, coordinates, pressRoot)
+                        // Only when the cell lifts itself: an inner item's own drawing is the one it leaves.
+                        if (inner == null) landing.onLifted()
+                        coordinator.lift(item, root, grab, rest, inner, pressRoot)
                     },
                     onDragTo = { root -> coordinator.moveTo(root) },
                     onDrop = { onRelease() },

@@ -72,6 +72,8 @@ fun FloatingDragIcon(
         modifier
             .offset {
                 val center = centerInRoot + (settle?.value ?: Offset.Zero)
+                // What the landing starts from — see `DragCoordinator.carriedCenterInRoot`.
+                coordinator?.carriedCenterInRoot = center
                 IntOffset(
                     (center.x - size.width.toPx() / 2f).roundToInt(),
                     (center.y - size.height.toPx() / 2f).roundToInt(),

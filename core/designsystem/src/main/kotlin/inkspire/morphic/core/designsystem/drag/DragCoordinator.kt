@@ -123,6 +123,14 @@ class DragCoordinator {
     internal var carriedIconSize: Dp? = null
 
     /**
+     * Where the proxy last drew the item's centre, in root px — handed on as the landing's start in place of
+     * [DragSession.itemCenterInRoot]. The two differ wherever a surface does not draw its proxy at the item's centre:
+     * the HOME list pins its row-wide proxy to the list's width, so a landing from the item centre started the row
+     * off to one side of where it had just been seen. Plain for [carriedIconSize]'s reason.
+     */
+    internal var carriedCenterInRoot: Offset? = null
+
+    /**
      * Adds or replaces the zone registered under [zone]`.id`, recording [owner] as the id's current holder.
      *
      * [RegisterDropZone] calls this as a surface measures, moves, or comes on screen — and again on every
@@ -173,6 +181,7 @@ class DragCoordinator {
     ) {
         landing = null
         carriedIconSize = null
+        carriedCenterInRoot = null
         val lift = restCenterInRoot?.let { DragHandoff(item, it) }
         session = DragSession(item, fingerInRoot, grabFromCenter, activeZone = null, plan = null, lift = lift)
         moveTo(fingerInRoot)
@@ -231,7 +240,7 @@ class DragCoordinator {
     private fun land(current: DragSession, leftSource: Boolean) {
         landing = DragHandoff(
             current.item,
-            current.itemCenterInRoot,
+            carriedCenterInRoot ?: current.itemCenterInRoot,
             leftSource,
             current.sourceZone,
             iconSize = carriedIconSize,
