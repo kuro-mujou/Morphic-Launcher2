@@ -40,7 +40,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.alphabet.AlphabetStrip
 import inkspire.morphic.core.designsystem.backdrop.SurfaceBackdropLayer
@@ -265,7 +264,7 @@ internal fun HomeListSurface(
     // (`CoordinateDragGrid` still registers its zone, so an app carried over it falls through to the list beneath
     // rather than being refused on release) — hence the constant `null` one zone over.
     val planner = remember {
-        DropPlanner { item, fingerInRoot, _ ->
+        DropPlanner { item, _, itemCenterInRoot ->
             val geo = liveGeometry.value ?: return@DropPlanner null
             val app = (item as? GridItem.App)?.component ?: return@DropPlanner null
             // **An app arriving from the APPS surface is not in this list, so there is no gap to migrate** — it
@@ -275,9 +274,9 @@ internal fun HomeListSurface(
                 gap = liveOrder.value.size
                 return@DropPlanner ListReorderPlan
             }
-            // The row under the finger, unclamped at the bottom so `movingGap` can read "past the last item" as
-            // append; floored at zero because a finger above the first row still means the first row.
-            val slot = floor((fingerInRoot.y - geo.originInRoot.y) / geo.cellH).toInt().coerceAtLeast(0)
+            // The row under the carried row's centre, unclamped at the bottom so `movingGap` can read "past the last
+            // item" as append; floored at zero because a point above the first row still means the first row.
+            val slot = floor((itemCenterInRoot.y - geo.originInRoot.y) / geo.cellH).toInt().coerceAtLeast(0)
             gap = movingGap(
                 order = liveOrder.value,
                 dragged = app,
@@ -285,7 +284,7 @@ internal fun HomeListSurface(
                 flatSlot = slot,
                 // A list flows down, so the half that decides "before or after" is the top half of a row rather than
                 // the left half of a cell.
-                insertBefore = geo.cellFractionY(fingerInRoot) < 0.5f,
+                insertBefore = geo.cellFractionY(itemCenterInRoot) < 0.5f,
             )
             ListReorderPlan
         }
@@ -507,7 +506,7 @@ internal fun HomeListSurface(
                     },
                     // The same shared planner the pager pairing's two zones use — a zone is described by its
                     // geometry, its dimensions and its occupants, not by an algorithm of its own.
-                    planner = { item, finger, grabInItem ->
+                    planner = { item, _, itemCenter ->
                         areaGeometry?.let { geo ->
                             planCoordinateDrop(
                                 geo = geo,
@@ -524,8 +523,7 @@ internal fun HomeListSurface(
                                     .firstOrNull { it.gridItem == item }?.placement
                                     ?.let { GridSpan(colSpan = it.colSpan, rowSpan = it.rowSpan) }
                                     ?: GridSpan(areaConfig.cellMultiplier, areaConfig.cellMultiplier),
-                                fingerInRoot = finger,
-                                grabInItem = grabInItem,
+                                itemCenterInRoot = itemCenter,
                             )
                         }
                     },
@@ -699,17 +697,15 @@ internal fun HomeListSurface(
         // merely invisible — disposing it would kill the pointer stream driving the drag.
         // Gated on this being the surface on screen: the coordinator is the launcher's, so `session` is non-null
         // while the user drags inside the APPS drawer too, and home must not paint a second icon under that finger.
-        if (presented && proxyApp != null && finger != null && viewport != Rect.Zero) {
-            // **Pinned to the list's own left edge, following the finger only in y.** Every other surface centers its
-            // proxy on the finger because its proxy is one cell — roughly square, and smaller than the finger's
-            // travel. A row is the full width of the list, so centering it horizontally would swing the whole row
+        val itemCenter = session?.itemCenterInRoot
+        if (presented && proxyApp != null && itemCenter != null && viewport != Rect.Zero) {
+            // **Pinned to the list's own width, following the carried row only in y.** Every other surface centres its
+            // proxy on the item's centre because its proxy is one cell — roughly square, and smaller than the finger's
+            // travel. A row is the full width of the list, so letting it follow in x would swing the whole row
             // sideways with the thumb and leave it hanging off one edge. What a row can meaningfully be dragged
             // *along* is the one axis it has.
             FloatingDragIcon(
-                rootOffset = IntOffset(
-                    viewport.left.roundToInt(),
-                    (finger.y - rowHeightPx / 2f).roundToInt(),
-                ),
+                centerInRoot = Offset(viewport.center.x, itemCenter.y),
                 size = DpSize(with(density) { viewport.width.toDp() }, rowHeight),
             ) {
                 CompositionLocalProvider(LocalIconMetrics provides listMetrics) {

@@ -22,7 +22,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
-import androidx.compose.ui.unit.IntOffset
 import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.collection.AppAdditions
@@ -65,7 +64,6 @@ import inkspire.morphic.feature.apps.gridItem
 import inkspire.morphic.feature.apps.iconItem
 import inkspire.morphic.feature.apps.layout.rememberAppsGestureConfig
 import inkspire.morphic.feature.apps.layout.rememberAppsItemMenu
-import kotlin.math.roundToInt
 
 /**
  * This surface's drop zone — the pager viewport, exactly as home's paged main area registers one.
@@ -204,14 +202,14 @@ fun AppsPager(
     var mergeTarget by remember { mutableStateOf<AppsItem?>(null) }
 
     val planner = remember(config) {
-        DropPlanner { item, fingerInRoot, _ ->
+        DropPlanner { item, _, itemCenterInRoot ->
             val geo = geometry ?: return@DropPlanner null
             val page = pagerState.currentPage
             val stored = livePages.value.getOrNull(page).orEmpty()
             val others = stored.map { it.gridItem }.filterNot { it == item }
-            // Off a cell (the slack below a short page) holds the current gap rather than snapping it: the finger
+            // Off a cell (the slack below a short page) holds the current gap rather than snapping it: the item
             // is between targets, and moving the preview there would strobe.
-            val cell = geo.cellAt(fingerInRoot) ?: return@DropPlanner PagerReorderPlan
+            val cell = geo.cellAt(itemCenterInRoot) ?: return@DropPlanner PagerReorderPlan
             val slot = cell.row * config.cols + cell.col
             // **Three zones, because this surface holds folders.** The center third of an occupied cell is a merge
             // ring: dropping there folds the two together, and dwelling there opens the target to receive the app.
@@ -227,23 +225,23 @@ fun AppsPager(
                 perPage = perPage,
             )
             val over = displayed.getOrNull(slot)
-            if (over != null && over.gridItem != item && geo.thirdInCell(fingerInRoot) == Third.CENTER &&
+            if (over != null && over.gridItem != item && geo.thirdInCell(itemCenterInRoot) == Third.CENTER &&
                 canMergeInto(item, over)
             ) {
                 // The gap is deliberately left where it is. Collapsing it would reflow every icon the instant the
-                // finger crossed into a center third — including the one being aimed at, which would slide out
+                // item crossed into a center third — including the one being aimed at, which would slide out
                 // from under the footprint that had just appeared on it.
                 mergeTarget = over
                 return@DropPlanner PlacementPlan(GridPlacement(page, cell.row, cell.col), DropIntent.MERGE)
             }
             mergeTarget = null
             gap = if (page != gapPage) {
-                // Arriving on a page seeds the gap at the slot under the finger; `movingGap` refines from there as
-                // the finger keeps moving. Seeding through `movingGap` instead would start from index 0, because
+                // Arriving on a page seeds the gap at the slot under the item; `movingGap` refines from there as
+                // the item keeps moving. Seeding through `movingGap` instead would start from index 0, because
                 // the item it is asked about isn't in this page's list at all.
                 slot.coerceIn(0, others.size)
             } else {
-                movingGap(others, item, gap, slot, geo.cellFractionX(fingerInRoot) < 0.5f)
+                movingGap(others, item, gap, slot, geo.cellFractionX(itemCenterInRoot) < 0.5f)
             }
             gapPage = page
             PagerReorderPlan
@@ -440,12 +438,8 @@ fun AppsPager(
             if (presented && session != null && geo != null && draggedEntry != null &&
                 folderHost.openCollectionId == null
             ) {
-                val finger = session.fingerInRoot
                 FloatingDragIcon(
-                    rootOffset = IntOffset(
-                        (finger.x - geo.cellW / 2f).roundToInt(),
-                        (finger.y - geo.cellH / 2f).roundToInt(),
-                    ),
+                    centerInRoot = session.itemCenterInRoot,
                     size = DpSize(with(density) { geo.cellW.toDp() }, with(density) { geo.cellH.toDp() }),
                 ) {
                     // No `itemGestures`: the proxy follows the finger, it is not a touch target.

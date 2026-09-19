@@ -1,7 +1,6 @@
 package inkspire.morphic.feature.home
 
 import androidx.compose.ui.geometry.Offset
-import inkspire.morphic.core.designsystem.drag.GrabCenter
 import inkspire.morphic.core.designsystem.grid.Cell
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.GridSpan
@@ -14,14 +13,14 @@ import inkspire.morphic.data.layout.PushDirection
 import kotlin.math.abs
 
 /*
- * Home drop-planning: the cell-partition maths that turns a finger position over an occupant into a merge or a
+ * Home drop-planning: the cell-partition maths that turns the carried item's position over an occupant into a merge or a
  * directional push, and the one planner ([planCoordinateDrop]) that every free-placement zone on HOME runs. They
  * live in feature:home because they bridge GridGeometry (core:designsystem) and PushDirection (data:layout) —
  * neither of which depends on the other.
  */
 
 /**
- * Plans a drop of [item] at [fingerInRoot] on **any** free-placement zone of HOME — the pager's main area, the
+ * Plans a drop of [item] centred at [itemCenterInRoot] on **any** free-placement zone of HOME — the pager's main area, the
  * dock, and (later) the widget area all resolve a hover the same way, differing only in the arguments below.
  *
  * Having one function rather than one per zone is deliberate: a per-zone resolver becomes a near-copy of the home
@@ -30,7 +29,7 @@ import kotlin.math.abs
  *
  * The rule, unchanged from the single-zone version:
  * - the footprint is [span] logical cells, snapped to the **logical** lattice;
- * - if the finger is over an occupant, that occupant's cell partitions into a center merge ring plus four push
+ * - if the item's centre is over an occupant, that occupant's cell partitions into a center merge ring plus four push
  *   triangles — the ring merges into a folder, a triangle picks which way the occupant is shoved;
  * - otherwise the free-grid engine pushes whatever the footprint lands on.
  *
@@ -52,10 +51,10 @@ import kotlin.math.abs
  *   plan drew a 1×1 shadow and the `Move` it produced resized the widget to match on drop. The caller reads it
  *   from the item's own placement, which is the only place that knows.
  * @param occupants the zone's items *excluding* [item], already restricted to [page].
- * @param grabInItem where within the dragged item the finger sits (fraction of its bounds); the footprint is
- *   snapped so that point lands under the finger, matching the proxy. Defaults to the centre. **Only the footprint
- *   position uses it** — which occupant is under the finger, and where in it, stay questions about the finger
- *   itself (you point at a folder's ring to merge into it), so the merge/push reads below keep [fingerInRoot].
+ * @param itemCenterInRoot the carried item's centre ([inkspire.morphic.core.designsystem.drag.DragSession.itemCenterInRoot]),
+ *   never the finger: the footprint, the occupant under it, the merge ring and the push quadrant are all read from
+ *   it, so the shadow and every neighbour's reaction follow the proxy the user sees rather than wherever on the
+ *   item they happened to press. A widget grabbed by its corner would otherwise push occupants half a widget away.
  * @return the plan the live drop shadow and the eventual commit both read, or null when there is nothing to plan.
  */
 internal fun planCoordinateDrop(
@@ -65,21 +64,20 @@ internal fun planCoordinateDrop(
     occupants: Map<GridItem, GridPlacement>,
     item: GridItem,
     span: GridSpan,
-    fingerInRoot: Offset,
-    grabInItem: Offset = GrabCenter,
+    itemCenterInRoot: Offset,
 ): PlacementPlan {
     // Whatever size the item is, free to land on any logical cell in *position* — see
     // [GridGeometry.snapTopLeftCell] for why the lattice is the logical one rather than the visual one.
-    val topLeft = geo.snapTopLeftCell(fingerInRoot, colSpan = span.colSpan, rowSpan = span.rowSpan, grabInItem = grabInItem)
+    val topLeft = geo.snapTopLeftCell(itemCenterInRoot, colSpan = span.colSpan, rowSpan = span.rowSpan)
     val footprint = GridPlacement(page, topLeft.row, topLeft.col, rowSpan = span.rowSpan, colSpan = span.colSpan)
 
-    val target = geo.cellAt(fingerInRoot)?.let { cell -> occupants.entries.firstOrNull { it.value.covers(cell) } }
+    val target = geo.cellAt(itemCenterInRoot)?.let { cell -> occupants.entries.firstOrNull { it.value.covers(cell) } }
         ?: return FreeGridPlanner.plan(footprint, occupants, config)
 
-    if (canMerge(item, target.key) && geo.inMergeRingOf(fingerInRoot, target.value)) {
+    if (canMerge(item, target.key) && geo.inMergeRingOf(itemCenterInRoot, target.value)) {
         return FreeGridPlanner.plan(target.value, occupants, config, merge = true)
     }
-    return FreeGridPlanner.plan(footprint, occupants, config, geo.pushDirectionInRect(fingerInRoot, target.value))
+    return FreeGridPlanner.plan(footprint, occupants, config, geo.pushDirectionInRect(itemCenterInRoot, target.value))
 }
 
 /** Merge-ring radius as a fraction of the target's smaller side; inside it a drop combines rather than pushes. */
@@ -98,7 +96,7 @@ private const val MERGE_INNER_RADIUS = 0.3f
  *   holder whose contents are `IconItem`, i.e. exactly "app or folder".
  * - Neither kind of **widget** takes anything from this surface. A widget container holds widgets, and merging a
  *   widget into one is the drag that is still to come; nothing an icon drag is carrying can go there. Returning
- *   false is what makes the drop fall through to an ordinary push, which is the honest outcome — the finger is
+ *   false is what makes the drop fall through to an ordinary push, which is the honest outcome — the item is
  *   over something that cannot receive it.
  */
 internal fun canMerge(dragged: GridItem, target: GridItem): Boolean {
@@ -118,22 +116,22 @@ internal fun GridPlacement.covers(cell: Cell): Boolean =
 private fun GridGeometry.mergeRadius(rect: GridPlacement): Float =
     MERGE_INNER_RADIUS * minOf(rect.colSpan * cellW, rect.rowSpan * cellH)
 
-/** True when the finger sits in the inner merge ring of the item occupying [rect] — one circle at its center. */
-internal fun GridGeometry.inMergeRingOf(fingerInRoot: Offset, rect: GridPlacement): Boolean {
-    val dx = fingerInRoot.x - (originInRoot.x + (rect.col + rect.colSpan / 2f) * cellW)
-    val dy = fingerInRoot.y - (originInRoot.y + (rect.row + rect.rowSpan / 2f) * cellH)
+/** True when [point] sits in the inner merge ring of the item occupying [rect] — one circle at its center. */
+internal fun GridGeometry.inMergeRingOf(point: Offset, rect: GridPlacement): Boolean {
+    val dx = point.x - (originInRoot.x + (rect.col + rect.colSpan / 2f) * cellW)
+    val dy = point.y - (originInRoot.y + (rect.row + rect.rowSpan / 2f) * cellH)
     val radius = mergeRadius(rect)
     return dx * dx + dy * dy < radius * radius
 }
 
 /**
- * Which way to push the item occupying [rect], from where the finger sits within its rectangle: the rectangle
- * is split into four triangles by its diagonals and the occupant is shoved away from the nearest edge — finger
+ * Which way to push the item occupying [rect], from where [point] sits within its rectangle: the rectangle
+ * is split into four triangles by its diagonals and the occupant is shoved away from the nearest edge — a point
  * in the left triangle pushes it right, top pushes down, and so on.
  */
-internal fun GridGeometry.pushDirectionInRect(fingerInRoot: Offset, rect: GridPlacement): PushDirection {
-    val fx = (fingerInRoot.x - (originInRoot.x + rect.col * cellW)) / (rect.colSpan * cellW) - 0.5f
-    val fy = (fingerInRoot.y - (originInRoot.y + rect.row * cellH)) / (rect.rowSpan * cellH) - 0.5f
+internal fun GridGeometry.pushDirectionInRect(point: Offset, rect: GridPlacement): PushDirection {
+    val fx = (point.x - (originInRoot.x + rect.col * cellW)) / (rect.colSpan * cellW) - 0.5f
+    val fy = (point.y - (originInRoot.y + rect.row * cellH)) / (rect.rowSpan * cellH) - 0.5f
     return if (abs(fx) > abs(fy)) {
         if (fx < 0f) PushDirection.RIGHT else PushDirection.LEFT
     } else {

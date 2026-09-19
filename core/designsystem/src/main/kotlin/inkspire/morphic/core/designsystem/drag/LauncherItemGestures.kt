@@ -70,9 +70,11 @@ import kotlin.time.Duration.Companion.milliseconds
  *   modifier is attached to** — which is the item's visible extent, since that is where the gestures are hung
  *   (see the scope note above). Reported from here rather than reconstructed by each surface, so a menu can never be
  *   anchored to something other than what the user pressed; L1 rebuilt that rectangle three different ways.
- * @param onBeginDrag lift into a drag; the finger is at the given root position, and [grabInItem] is where within
- *   this modifier's rectangle the finger sits, as a fraction of its bounds (0..1) — what a proxy uses to stay under
- *   the grab rather than snapping its centre to the finger. See [DragSession.grabInItem].
+ * @param onBeginDrag lift into a drag; the finger is at the given root position, and `grabFromCenter` is where the
+ *   finger **pressed**, relative to the centre of this modifier's rectangle, in root px. See
+ *   [DragSession.grabFromCenter]. The press rather than the lift, because a lift happens only after the finger has
+ *   travelled [ItemGestureConfig.touchSlopPx]: measured there, the offset would carry that travel for the whole drag
+ *   and the item would trail the finger by it.
  * @param onDragTo the drag moved to the given root position.
  * @param onDrop release the drag.
  * @param onCancelDrag the gesture was canceled mid-drag.
@@ -88,7 +90,7 @@ fun Modifier.launcherItemGestures(
     onDoubleTap: () -> Unit = {},
     onSwipePull: (direction: SwipeDirection, offsetFromDown: Offset?) -> Unit = { _, _ -> },
     onShowMenu: (anchorInRoot: Rect) -> Unit,
-    onBeginDrag: (rootPosition: Offset, grabInItem: Offset) -> Unit,
+    onBeginDrag: (rootPosition: Offset, grabFromCenter: Offset) -> Unit,
     onDragTo: (rootPosition: Offset) -> Unit,
     onDrop: () -> Unit,
     onCancelDrag: () -> Unit,
@@ -157,16 +159,15 @@ fun Modifier.launcherItemGestures(
                 return Rect(c.positionInRoot(), c.size.toSize())
             }
 
-            // Where [rootFinger] sits within this node, as a fraction of its bounds — the grab offset a proxy is
-            // placed by. Centre when the node has no measured size yet, which is the same answer the old
-            // centre-on-finger placement gave, so a lift before measurement is no worse than it was.
-            fun grabFractionAt(rootFinger: Offset): Offset {
-                val rect = anchorInRoot()
-                if (rect.width <= 0f || rect.height <= 0f) return GrabCenter
-                return Offset(
-                    ((rootFinger.x - rect.left) / rect.width).coerceIn(0f, 1f),
-                    ((rootFinger.y - rect.top) / rect.height).coerceIn(0f, 1f),
-                )
+            // Where the gesture's down landed, in this node's coordinates — what the grab is measured from.
+            var pressLocal = Offset.Zero
+
+            // The press relative to this node's centre, both mapped through the same coordinates so a transformed
+            // ancestor cannot skew one and not the other. Zero before measurement, which centres the item.
+            fun grabFromCenter(): Offset {
+                val c = coordinates ?: return Offset.Zero
+                val center = Offset(c.size.width / 2f, c.size.height / 2f)
+                return c.localToRoot(pressLocal) - c.localToRoot(center)
             }
 
             // Whether *this* gesture currently holds the surface-swipe claim, so the release below is idempotent
@@ -217,7 +218,7 @@ fun Modifier.launcherItemGestures(
                     }
 
                     ItemGestureEffect.BeginDrag -> {
-                        claimSurface(); currentOnBeginDrag(rootOf(local), grabFractionAt(rootOf(local)))
+                        claimSurface(); currentOnBeginDrag(rootOf(local), grabFromCenter())
                     }
 
                     is ItemGestureEffect.DragTo -> currentOnDragTo(rootOf(local))
@@ -246,6 +247,7 @@ fun Modifier.launcherItemGestures(
 
                     val pointerId: PointerId = down.id
                     var local = down.position
+                    pressLocal = down.position
                     // A claim must not outlive the gesture that took it. Every machine path does release it, but a
                     // canceled `pointerInput` coroutine (the node leaving the tree mid-drag) takes none of them, and
                     // a leaked claim would lock the surface swipe for the rest of the session.

@@ -26,7 +26,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
@@ -65,7 +64,6 @@ import inkspire.morphic.feature.apps.AppsCategory
 import inkspire.morphic.feature.apps.layout.rememberAppsGestureConfig
 import inkspire.morphic.feature.apps.layout.rememberAppsItemMenu
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 /** This surface's drop zone — the pager viewport, as on the other paged surfaces. */
 private val CategoryZoneId = ZoneId("apps-category-pager")
@@ -269,12 +267,12 @@ fun AppsCategoryPager(
     }
 
     val planner = remember(cols) {
-        DropPlanner { item, fingerInRoot, _ ->
+        DropPlanner { item, _, itemCenterInRoot ->
             val page = pagerState.currentPage
             val geo = geometries[page] ?: return@DropPlanner null
             val stored = liveCategories.value.getOrNull(page)?.apps.orEmpty().map { GridItem.App(it.componentKey) }
             val others = stored.filterNot { it == item }
-            val cell = geo.cellAt(fingerInRoot)
+            val cell = geo.cellAt(itemCenterInRoot)
             if (cell == null) {
                 // **Off the grid is an answer, not silence.** A page's grid is SCROLL_GRID, so it is only as tall as
                 // its content — a category of three apps in a four-column grid is *one row* — and the rest of the
@@ -286,26 +284,26 @@ fun AppsCategoryPager(
                 // **Which end the slack means depends on the alignment, so it is read off the geometry rather than
                 // told**: a bottom-aligned page (the strip on the bottom) leaves its slack *above* the block, where a
                 // top-aligned one leaves it below, and the answer is the nearer end of the list either way — the end
-                // whose cell the footprint appears in is the one the finger is on the side of.
+                // whose cell the footprint appears in is the one the item is on the side of.
                 //
                 // Only on **arrival**, though. Once a cell on this page has answered, the slack holds that answer
-                // instead of snapping to an end: the finger is between targets there, and a preview that jumped every
+                // instead of snapping to an end: the item is between targets there, and a preview that jumped every
                 // time it crossed the block's edge would strobe — which is what carrying an app up to the eject band
                 // over a bottom-aligned page does on every drag.
                 if (page != gapPage) {
-                    gap = if (fingerInRoot.y < geo.originInRoot.y) 0 else others.size
+                    gap = if (itemCenterInRoot.y < geo.originInRoot.y) 0 else others.size
                     gapPage = page
                 }
                 return@DropPlanner CategoryReorderPlan
             }
             val slot = cell.row * cols + cell.col
             gap = if (page != gapPage) {
-                // Arriving on a page seeds the gap at the slot under the finger; `movingGap` refines it from there.
+                // Arriving on a page seeds the gap at the slot under the item; `movingGap` refines it from there.
                 // Seeding through `movingGap` would start at index 0, since the app isn't in this page's list.
                 slot.coerceIn(0, others.size)
             } else {
                 // Two zones: halves, not thirds. There is nothing to merge into on this surface.
-                movingGap(others, item, gap, slot, geo.cellFractionX(fingerInRoot) < 0.5f)
+                movingGap(others, item, gap, slot, geo.cellFractionX(itemCenterInRoot) < 0.5f)
             }
             gapPage = page
             CategoryReorderPlan
@@ -542,14 +540,8 @@ fun AppsCategoryPager(
             // been ejected onto home is still live here, and two proxies under one finger is what that would look
             // like.
             if (presented && session != null && cellWidth != null && draggedApp != null) {
-                val cellW = with(density) { cellWidth.toPx() }
-                val cellH = with(density) { cellHeight.toPx() }
-                val finger = session.fingerInRoot
                 FloatingDragIcon(
-                    rootOffset = IntOffset(
-                        (finger.x - cellW / 2f).roundToInt(),
-                        (finger.y - cellH / 2f).roundToInt(),
-                    ),
+                    centerInRoot = session.itemCenterInRoot,
                     size = DpSize(cellWidth, cellHeight),
                 ) {
                     AppCell(app = draggedApp, metrics = cell.metrics, modifier = Modifier.fillMaxSize())

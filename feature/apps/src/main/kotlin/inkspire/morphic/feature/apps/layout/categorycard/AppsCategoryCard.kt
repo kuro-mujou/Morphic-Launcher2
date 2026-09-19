@@ -25,10 +25,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.cell.AppCell
 import inkspire.morphic.core.designsystem.cell.IconMetrics
@@ -59,7 +57,6 @@ import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.feature.apps.AppsCategory
 import inkspire.morphic.feature.apps.layout.rememberAppsGestureConfig
 import inkspire.morphic.feature.apps.layout.rememberAppsItemMenu
-import kotlin.math.roundToInt
 
 /** This surface's drop zone — the whole card grid, as each paged surface registers its viewport. */
 private val CardGridZoneId = ZoneId("apps-category-cards")
@@ -167,7 +164,6 @@ fun AppsCategoryCard(
     modifier: Modifier = Modifier,
     categoryAdditions: ((categoryId: String) -> AppAdditions)? = null,
 ) {
-    val density = LocalDensity.current
     val gestureConfig = rememberAppsGestureConfig()
     // One menu handler for every app on this surface — see `rememberAppsItemMenu`.
     val showItemMenu = rememberAppsItemMenu()
@@ -395,10 +391,8 @@ fun AppsCategoryCard(
             // Gated on this being the surface on screen as well: the coordinator is the launcher's, so a drag
             // ejected onto home is still live here and would otherwise paint a second icon under the same finger.
             if (presented && session != null && draggedApp != null && openCategoryId == null) {
-                val finger = session.fingerInRoot
-                val halfPx = with(density) { 72.dp.toPx() } / 2f
                 FloatingDragIcon(
-                    rootOffset = IntOffset((finger.x - halfPx).roundToInt(), (finger.y - halfPx).roundToInt()),
+                    centerInRoot = session.itemCenterInRoot,
                     size = DpSize(72.dp, 72.dp),
                 ) {
                     // No `itemGestures`: the proxy follows the finger, it is not a touch target.

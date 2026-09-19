@@ -40,7 +40,7 @@ private const val MinVisibleAlpha = 0.05f
  * **Shows the grid, near whatever is being dragged** — the affordance that makes a sub-divided grid legible.
  *
  * A marker at every **visual** cell corner, fading in as the dragged item approaches and out again as it leaves,
- * so the lattice appears under the finger and nowhere else.
+ * so the lattice appears under the carried item and nowhere else.
  *
  * **Why the *visual* corners when the item snaps to the logical lattice.** `GridConfig.cellMultiplier` subdivides
  * the grid so an icon can come to rest straddling two visible cells; the corners are therefore *not* every place
@@ -54,11 +54,12 @@ private const val MinVisibleAlpha = 0.05f
  * `progress` as a function rather than a value.
  *
  * @param config the grid's **logical** dimensions; the markers are drawn every `cellMultiplier` cells.
- * @param localFinger the finger in this node's own coordinates, or null when nothing is being dragged over this
- *   grid — which draws nothing at all. Null rather than a separate `visible` flag because there is no meaningful
- *   position to fade around without a finger, so a separate flag would only be a second way to say the same thing.
+ * @param localItemCenter the carried item's centre ([inkspire.morphic.core.designsystem.drag.DragSession.itemCenterInRoot])
+ *   in this node's own coordinates, or null when nothing is being dragged over this grid — which draws nothing at
+ *   all. The centre rather than the finger, because the footprint below is laid around it: measured from the finger,
+ *   a widget grabbed by its corner would light the lattice half a widget away from itself.
  * @param draggedSpan the dragged footprint in logical cells, used to measure distance from the item's *edge*
- *   rather than from the finger — so a wide item lights up the lattice along its whole width.
+ *   rather than from its centre — so a wide item lights up the lattice along its whole width.
  * @param color a fixed color for every marker, or null to ink **each marker for the patch of wallpaper under it** —
  *   the same rule and reader `SpotTheme` gives a label, since a lattice spread over sky and flowers is text's
  *   problem at a smaller size. With nothing measured it is the theme's content.
@@ -66,7 +67,7 @@ private const val MinVisibleAlpha = 0.05f
 @Composable
 fun Modifier.gridSnapMarkers(
     config: GridConfig,
-    localFinger: () -> Offset?,
+    localItemCenter: () -> Offset?,
     draggedSpan: () -> GridSpan,
     color: Color? = null,
 ): Modifier {
@@ -78,7 +79,7 @@ fun Modifier.gridSnapMarkers(
     var screenOrigin by remember { mutableStateOf(IntOffset.Zero) }
     return onLayoutRectChanged(throttleMillis = 0, debounceMillis = 0) { screenOrigin = it.boundsInScreen.topLeft }
         .drawBehind {
-        val finger = localFinger() ?: return@drawBehind
+        val center = localItemCenter() ?: return@drawBehind
         val span = draggedSpan()
 
         val cellW = size.width / config.cols
@@ -98,9 +99,9 @@ fun Modifier.gridSnapMarkers(
                 val y = row * visualCellH
                 // Distance from the marker to the nearest point on the item's bounding box: zero while the marker
                 // is under the item, growing once it is outside — which is what makes the fade track the item's
-                // shape rather than a circle around the finger.
-                val dx = max(0f, abs(x - finger.x) - itemHalfW)
-                val dy = max(0f, abs(y - finger.y) - itemHalfH)
+                // shape rather than a circle around its centre.
+                val dx = max(0f, abs(x - center.x) - itemHalfW)
+                val dy = max(0f, abs(y - center.y) - itemHalfH)
                 val distance = sqrt(dx * dx + dy * dy)
                 if (distance >= buffer) continue
 

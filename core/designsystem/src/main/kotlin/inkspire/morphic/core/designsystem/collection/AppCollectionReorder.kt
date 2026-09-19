@@ -20,7 +20,8 @@ import inkspire.morphic.core.model.PlacementPlan
  */
 interface AppCollectionDragDelegate {
     /**
-     * The drag moved to [fingerInRoot] over the collection's zone: **advance the reorder gap** toward it and report
+     * The carried item's centre moved to [itemCenterInRoot] over the collection's zone: **advance the reorder gap**
+     * toward it and report
      * that the collection accepts a drop here ([AppCollectionReorderPlan]), or null if it can't take [item] at all.
      *
      * Unlike the `DropPlanner` it backs, this is a **command, not a query** — calling it changes the
@@ -28,7 +29,7 @@ interface AppCollectionDragDelegate {
      * coordinator calls it exactly once per finger move, and a name that promised purity would invite a
      * speculative second call that silently desynchronizes the gap.
      */
-    fun onHover(item: GridItem, fingerInRoot: Offset): PlacementPlan?
+    fun onHover(item: GridItem, itemCenterInRoot: Offset): PlacementPlan?
 
     /** Commit the current reorder — the drop landed on the collection's zone with [item] as the dragged app. */
     fun commitReorder(item: GridItem)

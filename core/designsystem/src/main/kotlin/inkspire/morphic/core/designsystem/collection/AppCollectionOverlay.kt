@@ -39,7 +39,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpSize
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import inkspire.morphic.core.designsystem.adaptive.currentDeviceConfiguration
 import inkspire.morphic.core.designsystem.backdrop.OnFilm
@@ -81,7 +80,6 @@ import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.PlacementPlan
 import inkspire.morphic.core.model.toGridConfig
 import kotlinx.coroutines.delay
-import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 
 /** This overlay's inner-grid drop zone, registered above the surface's zone (`z = 1`) on the shared coordinator. */
@@ -234,16 +232,16 @@ fun AppCollectionOverlay(
     val onReorderState = rememberUpdatedState(onReorder)
     val delegate = remember {
         object : AppCollectionDragDelegate {
-            override fun onHover(item: GridItem, fingerInRoot: Offset): PlacementPlan? {
+            override fun onHover(item: GridItem, itemCenterInRoot: Offset): PlacementPlan? {
                 val geo = geometry ?: return null
                 val dragged = (item as? GridItem.App)?.component ?: return null
                 val g = gridState.value
                 val ps = (g.cols * g.rows).coerceAtLeast(1)
                 // Off the grid → hold the current gap; on a cell → migrate the gap toward it. Two-zone: a collection
                 // holds no collections, so a cell splits into halves with no center merge third to read.
-                val cell = geo.cellAt(fingerInRoot) ?: return AppCollectionReorderPlan
+                val cell = geo.cellAt(itemCenterInRoot) ?: return AppCollectionReorderPlan
                 val flatSlot = flatSlotOf(cell.row, cell.col, g.cols, pagerState.currentPage, ps)
-                gap = movingGap(liveOrder.value, dragged, gap, flatSlot, geo.cellFractionX(fingerInRoot) < 0.5f)
+                gap = movingGap(liveOrder.value, dragged, gap, flatSlot, geo.cellFractionX(itemCenterInRoot) < 0.5f)
                 return AppCollectionReorderPlan
             }
 
@@ -276,7 +274,7 @@ fun AppCollectionOverlay(
                 id = CollectionZoneId,
                 bounds = it,
                 z = 1,
-                planner = { item, finger, _ -> delegate.onHover(item, finger) },
+                planner = { item, _, itemCenter -> delegate.onHover(item, itemCenter) },
                 accepts = { item -> item is GridItem.App },
                 onDrop = { outcome -> delegate.commitReorder(outcome.item) },
             )
@@ -553,12 +551,8 @@ fun AppCollectionOverlay(
             val geo = geometry
             val dragApp = remember(draggedComponent) { draggedComponent?.let(appByComponent::get) }
             if (presenting && session != null && geo != null && dragApp != null) {
-                val finger = session.fingerInRoot
                 FloatingDragIcon(
-                    rootOffset = IntOffset(
-                        (finger.x - geo.cellW / 2f).roundToInt(),
-                        (finger.y - geo.cellH / 2f).roundToInt(),
-                    ),
+                    centerInRoot = session.itemCenterInRoot,
                     size = DpSize(
                         with(LocalDensity.current) { geo.cellW.toDp() },
                         with(LocalDensity.current) { geo.cellH.toDp() }),

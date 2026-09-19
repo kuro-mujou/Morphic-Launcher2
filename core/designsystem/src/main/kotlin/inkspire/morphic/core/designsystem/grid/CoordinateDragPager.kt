@@ -134,8 +134,8 @@ fun <T> CoordinateDragPager(
         keepAllPagesPlaced = coordinator.isDragging,
     ) { page ->
         // The lattice, per page — each page is its own grid box, so the markers are drawn in the page's own
-        // coordinates and a mid-flip page shows them where its own cells are. The finger is only ever over one
-        // page, so the others draw nothing: their local finger is outside the buffer.
+        // coordinates and a mid-flip page shows them where its own cells are. The item is only ever over one
+        // page, so the others draw nothing: its centre is outside their buffer.
         val markerSpan = livePlan?.footprint?.let { GridSpan(it.colSpan, it.rowSpan) }
             ?: GridSpan(config.cellMultiplier, config.cellMultiplier)
         var pageBounds by remember { mutableStateOf<Rect?>(null) }
@@ -147,10 +147,10 @@ fun <T> CoordinateDragPager(
                 .onGloballyPositioned { pageBounds = it.boundsInRoot() }
                 .gridSnapMarkers(
                     config = config,
-                    localFinger = {
+                    localItemCenter = {
                         val origin = pageBounds?.topLeft
-                        val finger = coordinator.session?.takeIf { it.activeZone == zoneId }?.fingerInRoot
-                        if (origin == null || finger == null) null else finger - origin
+                        val center = coordinator.session?.takeIf { it.activeZone == zoneId }?.itemCenterInRoot
+                        if (origin == null || center == null) null else center - origin
                     },
                     draggedSpan = { markerSpan },
                 ),

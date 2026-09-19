@@ -24,8 +24,10 @@ data class GridGeometry(
     val rows: Int,
 ) {
     /**
-     * The footprint's top-left [Cell] for a [colSpan]×[rowSpan] item whose proxy is centered on the finger —
-     * the item's own top-left rounded to the nearest cell (half-cell hysteresis), clamped onto the grid.
+     * The footprint's top-left [Cell] for a [colSpan]×[rowSpan] item centred on [itemCenterInRoot] — the item's own
+     * top-left rounded to the nearest cell (half-cell hysteresis), clamped onto the grid. Pass
+     * [inkspire.morphic.core.designsystem.drag.DragSession.itemCenterInRoot], the point the proxy is drawn around,
+     * so the shadow snaps under what is being carried.
      *
      * **It snaps to the logical lattice, always, and that is the whole point of a sub-divided grid.** On a
      * `cellMultiplier = 2` home grid an app is a 2×2 logical footprint, and rounding its top-left to any *logical*
@@ -38,12 +40,9 @@ data class GridGeometry(
      * rather than defaulted, because its only ever use was that mistake and a parameter is an invitation to repeat
      * it. A surface that genuinely wants whole-cell alignment can round the result itself and say so.
      */
-    fun snapTopLeftCell(fingerInRoot: Offset, colSpan: Int, rowSpan: Int, grabInItem: Offset): Cell {
-        // Offset by *where in the item* the finger grabbed, not by half the footprint — so the shadow snaps under
-        // the proxy, which is drawn by the same grab. `(0.5, 0.5)` is the centred behaviour, which is what an app
-        // or a folder passes and what the footprint did for everything before widgets could be grabbed at an edge.
-        val topLeftX = fingerInRoot.x - originInRoot.x - grabInItem.x * colSpan * cellW
-        val topLeftY = fingerInRoot.y - originInRoot.y - grabInItem.y * rowSpan * cellH
+    fun snapTopLeftCell(itemCenterInRoot: Offset, colSpan: Int, rowSpan: Int): Cell {
+        val topLeftX = itemCenterInRoot.x - originInRoot.x - colSpan * cellW / 2f
+        val topLeftY = itemCenterInRoot.y - originInRoot.y - rowSpan * cellH / 2f
         return Cell(
             row = snapToLattice(topLeftY / cellH, rows - rowSpan),
             col = snapToLattice(topLeftX / cellW, cols - colSpan),

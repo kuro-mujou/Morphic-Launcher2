@@ -152,10 +152,10 @@ fun <T> CoordinateDragGrid(
                 config = config,
                 // Local to this grid, and null unless the drag is actually over *this* zone — the same test the
                 // push preview above makes, since a shared coordinator drives every zone at once.
-                localFinger = {
+                localItemCenter = {
                     val origin = bounds?.topLeft
-                    val finger = coordinator.session?.takeIf { it.activeZone == zoneId }?.fingerInRoot
-                    if (origin == null || finger == null) null else finger - origin
+                    val center = coordinator.session?.takeIf { it.activeZone == zoneId }?.itemCenterInRoot
+                    if (origin == null || center == null) null else center - origin
                 },
                 draggedSpan = { markerSpan },
             )

@@ -250,4 +250,30 @@ class DragCoordinatorTest {
         assertFalse(coordinator.isDragging)
         assertNull(coordinator.session)
     }
+
+    @Test
+    fun `the planner is asked about the item's centre, the zone about the finger`() {
+        val asked = mutableListOf<Pair<Offset, Offset>>()
+        val coordinator = DragCoordinator()
+        coordinator.register(
+            DropZone(
+                ZoneId("home"),
+                Rect(0f, 0f, 100f, 100f),
+                z = 0,
+                planner = { _, finger, center -> asked += finger to center; placePlan },
+                accepts = { true },
+                onDrop = {},
+            ),
+        )
+
+        // Pressed 30px right of and 10px below the item's centre.
+        coordinator.start(app("a"), Offset(95f, 50f), grabFromCenter = Offset(30f, 10f))
+        coordinator.moveTo(Offset(90f, 60f))
+
+        assertEquals(listOf(Offset(95f, 50f) to Offset(65f, 40f), Offset(90f, 60f) to Offset(60f, 50f)), asked)
+        assertEquals(Offset(60f, 50f), coordinator.session?.itemCenterInRoot)
+        // The centre alone would still be inside; the finger decides, and it is outside.
+        coordinator.moveTo(Offset(110f, 60f))
+        assertNull(coordinator.session?.activeZone)
+    }
 }

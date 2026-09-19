@@ -18,30 +18,32 @@ import inkspire.morphic.core.model.PlacementPlan
  * A drag in progress — an immutable snapshot replaced on every finger move, so any reader sees a consistent
  * view of "what is being dragged, where, and what a drop would do right now".
  *
+ * **Two points, and each question is asked of one of them.** The finger picks *what is pointed at* — which zone,
+ * a band, a tab, a card, a page edge. The item's centre ([itemCenterInRoot]) picks *where the item lands* — the
+ * cell under it, the occupant it is over, the quadrant it pushes from, and where the proxy is drawn. They differ by
+ * wherever on the item the finger pressed, and asking a cell question of the finger puts the drop shadow that far
+ * from the thing being carried.
+ *
  * @property item what is being dragged (identity, for accept-checks and the eventual commit).
  * @property fingerInRoot the finger position in root/window coordinates.
- * @property grabInItem **where within the item the finger came down**, as a fraction of the item's own bounds
- *   (0..1 each axis) — so a proxy can be placed to keep that point under the finger rather than snapping its centre
- *   there. `(0.5, 0.5)` is the centre, and the default for a lift that reported none. It matters only for an item
- *   whose touch target *is* its whole footprint: an app or a folder is grabbed by a small centred icon, so its
- *   grab is near centre anyway, but a widget fills its cell and can be grabbed at an edge — centring the proxy on
- *   the finger then jumps it half a widget the instant the drag begins.
+ * @property grabFromCenter the finger's offset from the item's **visual centre** at the press, in root px — fixed
+ *   for the whole drag, so the pixel the user pressed stays under the finger. Measured against the item as drawn
+ *   (its touch target, whose centre is its cell's: icon cells centre their icon+label group, a widget insets
+ *   symmetrically), never as a fraction of the touch target applied to a differently-sized footprint. Zero is a
+ *   lift that reported none, and centres the item on the finger.
  * @property activeZone the zone currently under the finger that accepts [item], or null (over a gap/edge).
  * @property plan what dropping now would do in [activeZone]; null when there is no zone or no droppable target.
  */
-/**
- * The centre of an item in [DragSession.grabInItem]'s fractional coordinates — the grab of an item lifted by a
- * small centred target (an app, a folder), and the default when a lift reports no grab.
- */
-val GrabCenter: Offset = Offset(0.5f, 0.5f)
-
 data class DragSession(
     val item: GridItem,
     val fingerInRoot: Offset,
-    val grabInItem: Offset = GrabCenter,
+    val grabFromCenter: Offset = Offset.Zero,
     val activeZone: ZoneId?,
     val plan: PlacementPlan?,
-)
+) {
+    /** Where the carried item's centre is now, in root px — the point every cell-level question is asked of. */
+    val itemCenterInRoot: Offset get() = fingerInRoot - grabFromCenter
+}
 
 /**
  * The committable result of a successful drop: [item] lands in [zone] as described by [plan]. Handed to that
@@ -140,21 +142,25 @@ class DragCoordinator {
     /**
      * Begins dragging [item] with the finger at [fingerInRoot] (root coordinates), resolving the first plan.
      *
-     * [grabInItem] is the finger's position within the item at lift, as a fraction of its bounds — carried so the
-     * proxy can be placed under the grab rather than under the item's centre; see [DragSession.grabInItem]. Defaults
-     * to the centre for a caller that does not report it.
+     * [grabFromCenter] is the finger's offset from the item's centre at the press; see [DragSession.grabFromCenter].
      */
-    fun start(item: GridItem, fingerInRoot: Offset, grabInItem: Offset = GrabCenter) {
-        session = DragSession(item, fingerInRoot, grabInItem, activeZone = null, plan = null)
+    fun start(item: GridItem, fingerInRoot: Offset, grabFromCenter: Offset = Offset.Zero) {
+        session = DragSession(item, fingerInRoot, grabFromCenter, activeZone = null, plan = null)
         moveTo(fingerInRoot)
     }
 
-    /** Updates the finger position, re-resolving the active zone and asking *that zone* what a drop would do. */
+    /**
+     * Updates the finger position, re-resolving the active zone and asking *that zone* what a drop would do.
+     *
+     * The zone is found by the **finger**, the plan asked of both points — see [DragSession] for which question
+     * belongs to which.
+     */
     fun moveTo(fingerInRoot: Offset) {
         val current = session ?: return
+        val moved = current.copy(fingerInRoot = fingerInRoot)
         val zone = activeZoneAt(fingerInRoot, current.item)
-        val plan = zone?.planner?.plan(current.item, fingerInRoot, current.grabInItem)
-        session = current.copy(fingerInRoot = fingerInRoot, activeZone = zone?.id, plan = plan)
+        val plan = zone?.planner?.plan(current.item, fingerInRoot, moved.itemCenterInRoot)
+        session = moved.copy(activeZone = zone?.id, plan = plan)
     }
 
     /**

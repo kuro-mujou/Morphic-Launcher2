@@ -121,6 +121,7 @@ fun LauncherDragCell(
     // What the current press landed on, resolved at the down and held until the next one. Written and read on the
     // pointer thread; nothing composes against it, which is why it costs no more than [coordinates] above does.
     var pressed by remember { mutableStateOf<InnerCellItem?>(null) }
+    var pressRoot by remember { mutableStateOf(Offset.Zero) }
 
     // The press, resolved through this node's **live** coordinates rather than a rectangle published from layout:
     // the grid sits in a pager, and a stored bounds goes stale the moment the page moves under a finger held still.
@@ -151,7 +152,10 @@ fun LauncherDragCell(
                 config = gestureConfig,
                 edgeActions = edgeActions,
                 doubleTap = doubleTap,
-                onPress = { root -> pressed = innerAt(root) },
+                onPress = { root ->
+                    pressRoot = root
+                    pressed = innerAt(root)
+                },
                 onOpen = { pressed?.let { onOpenInner(it.item) } ?: onOpen() },
                 onEdgeAction = onEdgeAction,
                 onDoubleTap = onDoubleTap,
@@ -165,13 +169,27 @@ fun LauncherDragCell(
                         onShowInnerMenu(inner.item, Rect(topLeft, inner.bounds.size))
                     }
                 },
-                onBeginDrag = { root, grab -> coordinator.start(pressed?.item ?: item, root, grab) },
+                onBeginDrag = { root, grab ->
+                    coordinator.start(pressed?.item ?: item, root, innerGrab(pressed, coordinates, pressRoot) ?: grab)
+                },
                 onDragTo = { root -> coordinator.moveTo(root) },
                 onDrop = { onRelease() },
                 onCancelDrag = { coordinator.cancel() },
             ),
         )
     }
+}
+
+/**
+ * The grab for a drag lifting [inner] rather than the whole cell, or null when the press was on the cell itself.
+ *
+ * **An inner item is carried from its own centre, not the cell's.** The gesture contract measures the grab against
+ * the node it is hung on, which here is the whole container; the icon the user pressed is one slot of it, so the
+ * container's centre would put the carried icon up to half a container away from the finger.
+ */
+private fun innerGrab(inner: InnerCellItem?, cell: LayoutCoordinates?, pressRoot: Offset): Offset? {
+    if (inner == null || cell == null) return null
+    return pressRoot - cell.localToRoot(inner.bounds.center)
 }
 
 /**

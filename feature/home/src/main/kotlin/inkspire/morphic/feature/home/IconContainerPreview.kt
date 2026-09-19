@@ -121,8 +121,9 @@ internal fun rememberIconContainerPreview(
                 // home's cells are not composed as drop targets behind it.
                 z = 1,
                 accepts = { it.asIconItem() != null },
-                planner = { _, finger, _ ->
-                    hovered = slots.nearestIndexTo(finger - bounds.topLeft) ?: -1
+                // The zone is the one the finger is in; the slot is the one the carried icon is nearest.
+                planner = { _, _, itemCenter ->
+                    hovered = slots.nearestIndexTo(itemCenter - bounds.topLeft) ?: -1
                     // The footprint goes unread on a REORDER intent — `DropFootprint` returns early on it — and
                     // should: the preview here is the container rearranging itself, so there is no target cell for
                     // a drop shadow to name.
