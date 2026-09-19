@@ -22,7 +22,9 @@ import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
- * Carries a dropped item from where the proxy let go of it into the cell that now holds it.
+ * Carries a dropped item from where the proxy let go of it into the cell that now holds it — a grid cell
+ * ([LauncherDragCell]), or anything else that draws an item a drag can land on, such as an icon inside a container.
+ * The holder calls [update] from composition, [onPlaced] from layout, and draws at [translation] and [alpha].
  *
  * **It chases the cell's placement rather than a target fixed at the drop**, and that is the part that cannot be
  * simpler. A drop commits through the view model, and the new placement reaches the grid through a state flow a frame
@@ -39,7 +41,7 @@ import kotlin.time.Duration.Companion.milliseconds
  * a merge used to show. It stays hidden instead, and a cell that newly holds the item is the one that glides in.
  */
 @Stable
-internal class LandingGlide(private val scope: CoroutineScope) {
+class LandingGlide internal constructor(private val scope: CoroutineScope) {
 
     /** The handoff already taken, so a recomposition does not restart the glide from the drop point. */
     private var taken: DragHandoff? = null
@@ -110,8 +112,9 @@ internal class LandingGlide(private val scope: CoroutineScope) {
     }
 }
 
+/** A [LandingGlide] for one drawn item, living as long as that item stays composed. */
 @Composable
-internal fun rememberLandingGlide(): LandingGlide {
+fun rememberLandingGlide(): LandingGlide {
     val scope = rememberCoroutineScope()
     return remember(scope) { LandingGlide(scope) }
 }

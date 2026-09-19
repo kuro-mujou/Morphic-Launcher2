@@ -19,6 +19,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -32,9 +33,13 @@ import inkspire.morphic.core.designsystem.cell.IconPreviewPlate
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.resolveIconSizeUnfloored
 import inkspire.morphic.core.designsystem.container.ArrangementSlot
+import inkspire.morphic.core.designsystem.drag.LocalDragCoordinator
 import inkspire.morphic.core.designsystem.grid.LocalInnerCellPull
 import inkspire.morphic.core.designsystem.grid.animatePlacement
+import inkspire.morphic.core.designsystem.grid.rememberLandingGlide
+import inkspire.morphic.core.designsystem.surface.LocalSurfacePresented
 import inkspire.morphic.core.model.IconArrangement
+import inkspire.morphic.core.model.IconItem
 import kotlin.math.roundToInt
 
 /**
@@ -77,6 +82,7 @@ internal fun IconContainerCell(
     iconScalePercent: Int = 100,
     spacingScalePercent: Int = 100,
     dropTarget: IconContainerDropTarget? = null,
+    resolveIncoming: (IconItem) -> ContainerIcon? = { null },
 ) {
     // `positionInRoot() + size`, never `boundsInRoot()`: this cell lives inside home's pager, and that call
     // clips to every ancestor — so a container on a half-scrolled page would report a clipped rectangle and
@@ -103,6 +109,7 @@ internal fun IconContainerCell(
             spacingScalePercent = spacingScalePercent,
             size = Size(widthPx, heightPx),
             bounds = boundsInRoot,
+            resolve = resolveIncoming,
         )
         val slots = preview.slots
 
@@ -129,6 +136,8 @@ internal fun IconContainerCell(
                 }
                 // A swipe claimed on one of these icons pulls that icon, not the container. See `InnerCellPull`.
                 val innerPull = LocalInnerCellPull.current
+                val coordinator = LocalDragCoordinator.current
+                val presented = LocalSurfacePresented.current
                 preview.shown.forEachIndexed { index, icon ->
                     // The gap a newcomer is about to fill: a slot with nothing to draw in it yet.
                     if (icon == null) return@forEachIndexed
@@ -139,6 +148,11 @@ internal fun IconContainerCell(
                     // arrival, a departure closing up. Without the key an icon was bound to its *index*, and every
                     // rearrangement jumped.
                     key(icon.asIconItem()) {
+                        // **An icon dropped in glides from where it was let go**, rather than appearing in its slot as
+                        // the proxy vanishes — the same landing a grid cell takes, for the same reason.
+                        val gridItem = icon.asIconItem().asGridItem()
+                        val landing = rememberLandingGlide()
+                        landing.update(false, coordinator?.landing?.takeIf { presented && it.item == gridItem })
                         Box(
                             modifier = Modifier
                                 // The one being carried keeps its slot but is not drawn: the floating proxy under the
@@ -152,10 +166,13 @@ internal fun IconContainerCell(
                                 // After the offset, so a new slot reads as a move and the icon glides to it.
                                 .animatePlacement()
                                 // At draw, so the pull moves the icon without re-laying the arrangement out.
+                                // Before the draw-time translations, so the glide measures the slot, not itself.
+                                .onPlaced(landing::onPlaced)
                                 .graphicsLayer {
-                                    val pulled = innerPull?.translationOf(icon.asIconItem().asGridItem()) ?: Offset.Zero
-                                    translationX = pulled.x
-                                    translationY = pulled.y
+                                    val pulled = innerPull?.translationOf(gridItem) ?: Offset.Zero
+                                    val landed = landing.translation()
+                                    translationX = pulled.x + landed.x
+                                    translationY = pulled.y + landed.y
                                 }
                                 .size(
                                     width = with(density) { slot.width.toDp() },

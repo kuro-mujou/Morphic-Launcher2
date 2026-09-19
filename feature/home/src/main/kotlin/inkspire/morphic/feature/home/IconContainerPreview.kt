@@ -92,6 +92,8 @@ internal data class IconContainerDropTarget(
  *   widget picker's preview, the settings screen's. Those register nothing, which is what stops a picture's zone
  *   shadowing the real container it is a picture of.
  * @param bounds the cell's rectangle in root coordinates, or null before it has been measured.
+ * @param resolve what an icon that is not a member yet draws as — used for one just dropped in, so it is drawn in its
+ *   slot from the drop's own frame rather than leaving the slot empty until the membership write lands.
  */
 @Composable
 internal fun rememberIconContainerPreview(
@@ -101,6 +103,7 @@ internal fun rememberIconContainerPreview(
     spacingScalePercent: Int,
     size: Size,
     bounds: Rect?,
+    resolve: (IconItem) -> ContainerIcon?,
 ): IconContainerPreview {
     val coordinator = LocalDragCoordinator.current
     val density = LocalDensity.current
@@ -154,7 +157,9 @@ internal fun rememberIconContainerPreview(
 
     // The same rearrangement the drop will commit, which is the point of computing it here: the preview cannot
     // promise something the drop then does differently.
-    val shown = pending?.let { order -> order.map { item -> icons.firstOrNull { it.asIconItem() == item } } }
+    val shown = pending?.let { order ->
+        order.map { item -> icons.firstOrNull { it.asIconItem() == item } ?: resolve(item) }
+    }
         ?: previewOrder(icons, members, lifted, incoming != null, hovered)
     return IconContainerPreview(slots, shown, lifted)
 }

@@ -640,6 +640,19 @@ internal fun HomePagerSurface(
         }
     }
 
+    // **What an icon not yet in a container draws as**, for one just dropped into it: the app from anywhere home knows
+    // it — a placement, a folder, or the catalog, since an app carried in from the APPS drawer is on none of home's
+    // surfaces — and a folder from the grid or from another container.
+    val resolveIcon: (IconItem) -> ContainerIcon? = { icon ->
+        when (icon) {
+            is IconItem.App -> (state.appInfo(icon.component) ?: state.catalog[icon.component])?.let(ContainerIcon::App)
+            is IconItem.Folder -> state.items.filterIsInstance<HomeItem.Folder>()
+                .firstOrNull { it.folder.id == icon.folderId }
+                ?.let { ContainerIcon.Folder(it.folder, it.apps) }
+                ?: containerFolder(state.items, icon.folderId)
+        }
+    }
+
     // A tap on a container's icon does what a tap on that icon does anywhere else. It arrives here rather than
     // through a `clickable` on the slot so that it fires **only** for a gesture the machine resolved as a tap —
     // never after a long-press, and never on the release that ends a reorder.
@@ -817,6 +830,7 @@ internal fun HomePagerSurface(
                             onReorderContainer = viewModel::reorderIconContainer,
                             onInsertIntoContainer = viewModel::insertIntoIconContainer,
                             containerPages = containerPages,
+                            resolveIcon = resolveIcon,
                         )
                     }
                 },
@@ -858,6 +872,7 @@ internal fun HomePagerSurface(
                             onReorderContainer = viewModel::reorderIconContainer,
                             onInsertIntoContainer = viewModel::insertIntoIconContainer,
                             containerPages = containerPages,
+                            resolveIcon = resolveIcon,
                         )
                     }
                 },
@@ -1185,6 +1200,7 @@ internal fun HomePagerSurface(
  *
  * @param session the live drag, needed only to hide a dragged-out app from a folder's tile preview (see below).
  * @param containerPages the page each widget container is showing; see [WidgetContainerPages].
+ * @param resolveIcon what an icon arriving in an icon container draws as before it is a member.
  * @param cellModifier fills the cell's layout footprint.
  * @param itemGestures must be handed to whatever should be *touchable*; the cells pass it to their icon+label
  *   group, leaving the surrounding slack free for the surface's own gestures. The two **containers** are the stated
@@ -1202,6 +1218,7 @@ private fun HomeItemCell(
     itemGestures: Modifier,
     metrics: IconMetrics,
     containerPages: WidgetContainerPages,
+    resolveIcon: (IconItem) -> ContainerIcon?,
     onReorderContainer: (Long, List<IconItem>) -> Unit = { _, _ -> },
     onInsertIntoContainer: (Long, IconItem, Int) -> Unit = { _, _, _ -> },
 ) {
@@ -1253,6 +1270,7 @@ private fun HomeItemCell(
             // The zone's own metrics, as every other cell here gets — a container's icons answer to the same
             // guardrails as the icons on the grid around it.
             metrics = metrics,
+            resolveIncoming = resolveIcon,
             dropTarget = IconContainerDropTarget(
                 containerId = item.container.id,
                 onReorder = { items -> onReorderContainer(item.container.id, items) },
