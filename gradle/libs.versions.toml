@@ -1,6 +1,6 @@
 [versions]
 # Build tooling
-agp = "9.3.0"
+agp = "9.4.1"
 kotlin = "2.4.0"
 ksp = "2.3.9"
 detekt = "1.23.8"
@@ -20,8 +20,8 @@ androidx-lifecycle = "2.11.0"
 androidx-datastore = "1.2.1"
 
 # Compose
-compose-bom = "2026.06.00"
-androidx-adaptive = "1.3.0-rc01"
+compose-bom = "2026.09.00"
+androidx-adaptive = "1.3.0"
 # material3 pinned ahead of the BOM for the Expressive APIs (SplitButton, etc.)
 androidx-material3 = "1.5.0-alpha22"
 
@@ -29,14 +29,14 @@ androidx-material3 = "1.5.0-alpha22"
 koin = "4.2.2"
 
 # Room
-room = "2.8.4"
+room = "2.8.5"
 
 # Coroutines & serialization
 coroutines = "1.11.0"
 kotlinx-serialization = "1.11.0"
 
 # Navigation 3
-navigation3 = "1.1.3"
+navigation3 = "1.1.7"
 
 # Testing
 junit = "4.13.2"
@@ -52,12 +52,12 @@ timber = "5.0.1"
 play-billing = "9.1.0"
 
 # Drag-to-reorder for LazyColumn (auto-scroll + live push)
-reorderable = "2.4.3"
+reorderable = "3.1.0"
 
 # Haze — real-time blur behind the Icon Studio's floating surfaces. 2.0 modular API, and the material comes from
 # the library rather than from a radius of ours:
 # Modifier.hazeBlur(input = HazeInput.Sources(state), style = HazeMaterials.ultraThin(tint))
-haze = "2.0.0-alpha04"
+haze = "2.0.0-rc02"
 
 # First-run coach-mark tour for the Icon Studio (icon-only tool rail).
 kmp-showcase = "0.1.0"
