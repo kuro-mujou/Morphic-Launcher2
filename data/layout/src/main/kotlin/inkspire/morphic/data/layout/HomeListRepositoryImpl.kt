@@ -71,6 +71,16 @@ internal class HomeListRepositoryImpl(
         }
     }
 
+    override suspend fun insert(component: ComponentKey, reported: List<ComponentKey>) {
+        withContext(dispatchers.io) {
+            val stored = order.first()
+            val known = if (component in stored) stored else stored + component
+            val next = reconcileReportedOrder(known = known, reported = reported)
+            if (next == stored) return@withContext
+            write(next)
+        }
+    }
+
     override suspend fun remove(component: ComponentKey) {
         withContext(dispatchers.io) { dao.deleteByComponent(component) }
     }

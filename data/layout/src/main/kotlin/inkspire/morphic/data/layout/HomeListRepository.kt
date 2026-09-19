@@ -78,6 +78,15 @@ interface HomeListRepository {
     suspend fun add(components: List<ComponentKey>)
 
     /**
+     * Adds [component] at the place it holds in [reported] — an app dragged in from the APPS surface, dropped on a row.
+     *
+     * [add]'s positional sibling: a drag *does* express a position, where a picker does not. The rest of [reported] is
+     * reconciled exactly as [setOrder] reconciles it, so the one membership change this makes is [component]. An app
+     * already in the list is simply reordered.
+     */
+    suspend fun insert(component: ComponentKey, reported: List<ComponentKey>)
+
+    /**
      * Removes [component] from the list, if it is in it.
      *
      * One of the two membership ops — [add] is the other, and the picker that needed it exists now. A drag has to be

@@ -150,10 +150,9 @@ private val ListReorderPlan = PlacementPlan(GridPlacement(0, 0, 0), DropIntent.R
  * index, committed through [HomeViewModel.reorderList]. The preview is MovingGap, the same model the APPS pager and
  * every folder use.
  *
- * **An app dragged in from the APPS surface lands at the end**, and that is the one place the reorder model does not
- * apply: MovingGap migrates the gap from where an item *already is*, and a stranger is nowhere. Appending is also the
- * honest reading of the gesture — this list has no cell to aim at, so a drop into it says "put this in my list", not
- * "put it at row seven". A chosen position stays reachable the way it always was, by dragging the row afterwards.
+ * **An app dragged in from the APPS surface lands where it is dropped.** MovingGap migrates the gap from where an
+ * item *already is*, and a stranger is nowhere, so its first hover opens the gap under the finger instead; after that
+ * it moves like any row. The drop is a membership write ([HomeViewModel.insertIntoList]), not a reorder.
  *
  * **A `Column` in a `verticalScroll`, deliberately not a `LazyColumn`** — the opposite call from `AppsVerticalList`,
  * and for two reasons that are both properties of this list rather than preferences. A lazy list disposes rows that
@@ -221,7 +220,13 @@ internal fun HomeListSurface(
     // The order the store reports, and the gap the finger is currently holding open in it. `gap` is an index into the
     // list *without* the dragged app (see `movingGap`), and `-1` means "not seeded yet" — the first hover derives it
     // from where the app already sits, so a drag that goes nowhere is a no-op rather than an off-by-one.
-    val order = remember(state.listApps) { state.listApps.map { it.componentKey } }
+    val stored = remember(state.listApps) { state.listApps.map { it.componentKey } }
+    // **The order a drop just committed, drawn until the state catches up.** The session clears on release, but the
+    // ViewModel's optimistic order reaches `state` a dispatch later — and for an app carried in from APPS, which the
+    // stored order does not hold, that frame has no row for it at all, so it blinks out and back.
+    var committed by remember { mutableStateOf<List<ComponentKey>?>(null) }
+    LaunchedEffect(stored) { committed = null }
+    val order = committed ?: stored
     val liveOrder = rememberUpdatedState(order)
     var gap by remember { mutableIntStateOf(-1) }
 
@@ -267,25 +272,27 @@ internal fun HomeListSurface(
         DropPlanner { item, _, itemCenterInRoot ->
             val geo = liveGeometry.value ?: return@DropPlanner null
             val app = (item as? GridItem.App)?.component ?: return@DropPlanner null
-            // **An app arriving from the APPS surface is not in this list, so there is no gap to migrate** — it
-            // lands at the end, which is what was specified for it. `movingGap` reasons about an item's *current*
-            // index, so asking it about a stranger would answer from index 0.
-            if (app !in liveOrder.value) {
-                gap = liveOrder.value.size
-                return@DropPlanner ListReorderPlan
-            }
             // The row under the carried row's centre, unclamped at the bottom so `movingGap` can read "past the last
             // item" as append; floored at zero because a point above the first row still means the first row.
             val slot = floor((itemCenterInRoot.y - geo.originInRoot.y) / geo.cellH).toInt().coerceAtLeast(0)
-            gap = movingGap(
-                order = liveOrder.value,
-                dragged = app,
-                currentGap = gap,
-                flatSlot = slot,
-                // A list flows down, so the half that decides "before or after" is the top half of a row rather than
-                // the left half of a cell.
-                insertBefore = geo.cellFractionY(itemCenterInRoot) < 0.5f,
-            )
+            // A list flows down, so the half that decides "before or after" is the top half of a row rather than the
+            // left half of a cell.
+            val insertBefore = geo.cellFractionY(itemCenterInRoot) < 0.5f
+            val order = liveOrder.value
+            gap = if (gap < 0 && app !in order) {
+                // **An app arriving from the APPS surface opens its gap where the finger is.** `movingGap` seeds from
+                // the item's current index, and a stranger has none — so its first hover is read against the list
+                // as drawn, which has no gap in it yet. From then on it migrates like any member's.
+                (if (insertBefore) slot else slot + 1).coerceIn(0, order.size)
+            } else {
+                movingGap(
+                    order = order,
+                    dragged = app,
+                    currentGap = gap,
+                    flatSlot = slot,
+                    insertBefore = insertBefore,
+                )
+            }
             ListReorderPlan
         }
     }
@@ -386,7 +393,9 @@ internal fun HomeListSurface(
 
     // What the user sees: the order with the dragged app lifted to the gap, everything else densified around it. The
     // same function produces the committed order on drop, so the preview and the write cannot disagree.
-    val displayed = remember(order, draggedApp, gap) { movingGapDisplayOrder(order, draggedApp, gap) }
+    // A stranger is only drawn once it has a gap: before its first hover here it is in the APPS drawer, not this list.
+    val lifted = draggedApp?.takeIf { gap >= 0 || it in order }
+    val displayed = remember(order, lifted, gap) { movingGapDisplayOrder(order, lifted, gap) }
     // Resolved through [appInfo] rather than from the list's own apps, so the row standing in for the gap can be an
     // app that is not in the list yet — one being carried in from the APPS drawer, which is in nothing home owns
     // until the drop. It renders invisible (it *is* the dragged item), which is exactly what the gap should look
@@ -398,13 +407,17 @@ internal fun HomeListSurface(
     val proxyApp = remember(draggedApp) { draggedApp?.let(state::appInfo) }
 
     // What a landing **in this list** means, whether the app was lifted from a row of it or carried in from the APPS
-    // drawer. Both are the same write, because `movingGapDisplayOrder` inserts a stranger and moves a member with the
-    // one expression — and the gap the planner left is what the user has been *looking at*, the same order the rows
-    // were drawn from, so the committed order is by construction the one on screen.
+    // drawer. Both commit the same order, because `movingGapDisplayOrder` inserts a stranger and moves a member with
+    // the one expression — and the gap the planner left is what the user has been *looking at*, so the committed
+    // order is by construction the one on screen. Only the write differs: a stranger is a membership change, which
+    // `reorderList` cannot make.
     fun commitLanding(outcome: DropOutcome) {
         if (gap < 0) return // the finger never rested on a row; nothing to write
         val app = (outcome.item as? GridItem.App)?.component ?: return
-        viewModel.reorderList(movingGapDisplayOrder(liveOrder.value, app, gap))
+        val next = movingGapDisplayOrder(liveOrder.value, app, gap)
+        // Only a real change is held: a drop where the app already was writes nothing, so no emission would clear it.
+        if (next != liveOrder.value) committed = next
+        if (app in liveOrder.value) viewModel.reorderList(next) else viewModel.insertIntoList(app, next)
     }
 
     // The list's own drop zone. `CoordinateDragGrid` registers the widget area's for itself; the list is a plain

@@ -646,6 +646,24 @@ class HomeViewModel(
     }
 
     /**
+     * Puts [component] on the vertical list at the place it holds in [order] — a drop from the APPS surface.
+     *
+     * A membership op rather than [reorderList], because `setOrder` reconciles against what is stored and would
+     * discard an app the list does not hold yet. Optimistic on the same terms as [reorderList].
+     */
+    fun insertIntoList(component: ComponentKey, order: List<ComponentKey>) {
+        listOrder.value = order
+        listWritesInFlight++
+        viewModelScope.launch {
+            try {
+                homeListRepository.insert(component, order)
+            } finally {
+                listWritesInFlight--
+            }
+        }
+    }
+
+    /**
      * Takes the widget [appWidgetId] off HOME — **and gives its id back to the platform**.
      *
      * The second half is why this is not a plain `RemoveFromGrid`. An allocated id is a resource that outlives this
