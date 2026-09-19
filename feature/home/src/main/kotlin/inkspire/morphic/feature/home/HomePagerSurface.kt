@@ -601,12 +601,15 @@ internal fun HomePagerSurface(
 
     // **What a press on an icon container is actually on** — one of its icons if the finger came down on one, and
     // the container itself everywhere else. Only a container answers anything but itself, which is why this is one
-    // lambda for the whole surface rather than a property of each cell.
+    // resolver for the whole surface rather than a property of each cell; it takes the zone's [metrics] because the
+    // icons are sized by them.
     //
-    // The slack matters as much as the icons do: a ring's hollow middle and the space around a short arc are how a
-    // container is picked up, resized, or long-pressed for its own menu, so [indexAt] answers on *containment*
-    // rather than handing back the least-far icon.
-    val liftedInCell: (HomeItem, Offset, IntSize) -> InnerCellItem? = { item, local, size ->
+    // **An icon's target is the icon, not its slot** — the grid's rule for a cell (the icon and its label, never the
+    // cell), applied one level down. A slot is the room an arrangement gives an icon and is usually much larger than
+    // the icon drawn in it, so pressing the space around an icon took the icon. The slack matters as much as the
+    // icons do: a ring's hollow middle, the gaps between icons and the space around a short arc are how a container
+    // is picked up, resized, or long-pressed for its own menu.
+    fun liftedInCell(metrics: IconMetrics): (HomeItem, Offset, IntSize) -> InnerCellItem? = { item, local, size ->
         (item as? HomeItem.IconContainer)?.let { container ->
             val slots = iconContainerSlots(
                 arrangement = container.container.arrangement,
@@ -618,12 +621,13 @@ internal fun HomePagerSurface(
                 // divergence `iconContainerSlots` exists to prevent, and it is silent when wrong.
                 spacingScalePercent = container.container.spacingScalePercent,
             )
-            slots.indexAt(local)?.let { i ->
-                val slot = slots[i]
-                InnerCellItem(
-                    item = container.icons[i].asIconItem().asGridItem(),
-                    bounds = Rect(slot.x, slot.y, slot.x + slot.width, slot.y + slot.height),
-                )
+            slots.withIndex().firstNotNullOfOrNull { (i, slot) ->
+                val iconPx = with(density) {
+                    containerIconSize(slot, metrics, container.container.iconScalePercent, density).toPx()
+                }
+                slot.iconBounds(iconPx).takeIf { it.contains(local) }?.let { bounds ->
+                    InnerCellItem(item = container.icons[i].asIconItem().asGridItem(), bounds = bounds)
+                }
             }
         }
     }
@@ -788,7 +792,7 @@ internal fun HomePagerSurface(
                         onGeometryChange = { dockGeometry = it },
                         onOpen = openItem,
                         onShowMenu = showMenu,
-                        innerItemAt = liftedInCell,
+                        innerItemAt = liftedInCell(layout.dockMetrics),
                         onOpenInner = openInner,
                         onShowInnerMenu = showInnerMenu,
                     ) { item, cellModifier, itemGestures ->
@@ -827,7 +831,7 @@ internal fun HomePagerSurface(
                         onGeometryChange = { geometry = it },
                         onOpen = openItem,
                         onShowMenu = showMenu,
-                        innerItemAt = liftedInCell,
+                        innerItemAt = liftedInCell(layout.mainMetrics),
                         onOpenInner = openInner,
                         onShowInnerMenu = showInnerMenu,
                     ) { item, cellModifier, itemGestures ->

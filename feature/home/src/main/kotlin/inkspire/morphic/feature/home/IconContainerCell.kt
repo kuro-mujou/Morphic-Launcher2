@@ -19,6 +19,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.toSize
 import inkspire.morphic.core.designsystem.backdrop.OnPanel
@@ -27,6 +29,7 @@ import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.IconPreviewPlate
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.resolveIconSizeUnfloored
+import inkspire.morphic.core.designsystem.container.ArrangementSlot
 import inkspire.morphic.core.designsystem.grid.animatePlacement
 import inkspire.morphic.core.model.IconArrangement
 import kotlin.math.roundToInt
@@ -125,28 +128,7 @@ internal fun IconContainerCell(
                     // The gap a newcomer is about to fill: a slot with nothing to draw in it yet.
                     if (icon == null) return@forEachIndexed
                     val slot = slots.getOrNull(index) ?: return@forEachIndexed
-                    val slotSize = with(density) { minOf(slot.width, slot.height).toDp() }
-                    // **The slot says how much room there is; the metrics say how much of it an icon may take.**
-                    // Without this the icon *was* the slot, so a container holding two apps drew them at half the
-                    // tile — far larger than any icon on the grid around it, and growing further with every resize.
-                    // The ceiling is the user's own `maxIconDp`, the same guardrail every other surface resolves
-                    // through, which is why this is a metrics read and not a number invented here.
-                    //
-                    // **Unfloored, which is the container's one departure**: `minIconDp` keeps an icon on a *grid*
-                    // readable, and a container packs many into one cell, so small icons are what it is for. With the
-                    // floor applied the icons pinned at 24dp partway through a resize and stopped answering to the
-                    // drag — the container grew and its contents did not. Capped to the slot as well, so an
-                    // `iconPercent` above 1 cannot spend the gap its neighbour is using.
-                    //
-                    // **The container's own scaling multiplies that result, and is bounded by the slot rather than
-                    // by `maxIconDp`.** The plan said the global ceiling should still bind; implementing it showed
-                    // that it cannot — the resolve already returns `maxIconDp` for any slot larger than it, so
-                    // every value above 100% coerced straight back and the control was inert everywhere. A
-                    // guardrail exists for icons nobody sized on purpose, and this slider *is* sizing them on
-                    // purpose. The slot stays binding, because past it neighbours overlap; lowering the spacing is
-                    // how the slot is made bigger, which is why the two are offered together.
-                    val iconSize = (metrics.resolveIconSizeUnfloored(slotSize, slotSize) * iconScalePercent / 100f)
-                        .coerceAtMost(slotSize)
+                    val iconSize = containerIconSize(slot, metrics, iconScalePercent, density)
                     // **Keyed by the icon, so a reflow moves it rather than redrawing a different icon in its place**,
                     // which is what lets `animatePlacement` glide it: an exchange being previewed, a gap opening for an
                     // arrival, a departure closing up. Without the key an icon was bound to its *index*, and every
@@ -192,4 +174,44 @@ internal fun IconContainerCell(
             }
         }
     }
+}
+
+/**
+ * The size an icon is drawn at in [slot] — **and the size of its touch target**, which is why it is one function:
+ * the cell draws with it and home's hit test (`liftedInCell`) resolves presses against it, and a copy in either
+ * would put the target a few dp off the picture, silently.
+ *
+ * **The slot says how much room there is; the metrics say how much of it an icon may take.**
+ * Without this the icon *was* the slot, so a container holding two apps drew them at half the
+ * tile — far larger than any icon on the grid around it, and growing further with every resize.
+ * The ceiling is the user's own `maxIconDp`, the same guardrail every other surface resolves
+ * through, which is why this is a metrics read and not a number invented here.
+ *
+ * **Unfloored, which is the container's one departure**: `minIconDp` keeps an icon on a *grid*
+ * readable, and a container packs many into one cell, so small icons are what it is for. With the
+ * floor applied the icons pinned at 24dp partway through a resize and stopped answering to the
+ * drag — the container grew and its contents did not. Capped to the slot as well, so an
+ * `iconPercent` above 1 cannot spend the gap its neighbour is using.
+ *
+ * **The container's own scaling multiplies that result, and is bounded by the slot rather than
+ * by `maxIconDp`.** The plan said the global ceiling should still bind; implementing it showed
+ * that it cannot — the resolve already returns `maxIconDp` for any slot larger than it, so
+ * every value above 100% coerced straight back and the control was inert everywhere. A
+ * guardrail exists for icons nobody sized on purpose, and this slider *is* sizing them on
+ * purpose. The slot stays binding, because past it neighbours overlap; lowering the spacing is
+ * how the slot is made bigger, which is why the two are offered together.
+ */
+internal fun containerIconSize(slot: ArrangementSlot, metrics: IconMetrics, iconScalePercent: Int, density: Density): Dp {
+    val slotSize = with(density) { minOf(slot.width, slot.height).toDp() }
+    return (metrics.resolveIconSizeUnfloored(slotSize, slotSize) * (iconScalePercent / PercentOf)).coerceAtMost(slotSize)
+}
+
+/** [containerIconSize]'s scale is a percentage. */
+private const val PercentOf = 100f
+
+/** The rectangle an icon of [iconPx] occupies in this slot, in the container's px — centred, as the cell draws it. */
+internal fun ArrangementSlot.iconBounds(iconPx: Float): Rect {
+    val left = x + (width - iconPx) / 2f
+    val top = y + (height - iconPx) / 2f
+    return Rect(left, top, left + iconPx, top + iconPx)
 }

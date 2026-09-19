@@ -36,27 +36,11 @@ internal fun iconContainerSlots(
 }
 
 /**
- * The index of the slot [local] falls in, or `null` for a press that missed every icon.
- *
- * **Containment, not nearest.** A press in a container's empty middle — the hole in a ring, the slack around a
- * short arc — is aimed at the container itself, and answering it with whichever icon happens to be least far away
- * would make the gaps unusable for lifting, resizing or reaching the container's own menu. Nearest-slot is the
- * right question while a *drag is already in flight* and has to land somewhere; it is the wrong one for deciding
- * what the finger came down on.
- */
-internal fun List<ArrangementSlot>.indexAt(local: Offset): Int? {
-    val i = indexOfFirst {
-        local.x >= it.x && local.x <= it.x + it.width && local.y >= it.y && local.y <= it.y + it.height
-    }
-    return i.takeIf { it >= 0 }
-}
-
-/**
  * The index of the slot nearest [local] by center, or `null` if there are none — the drop-time counterpart of
- * [indexAt].
+ * the press-time hit test, which asks whether a press is *on an icon* (`iconBounds`) and so can miss.
  *
  * A drag released over the container has to resolve to *some* slot, because the alternative is a drop that
- * silently does nothing on a target the user was plainly aiming at. So this never misses, where [indexAt]
+ * silently does nothing on a target the user was plainly aiming at. So this never misses, where the press-time test
  * deliberately can: the question at drop time is "which of these did you mean", not "did you hit one".
  */
 internal fun List<ArrangementSlot>.nearestIndexTo(local: Offset): Int? {
