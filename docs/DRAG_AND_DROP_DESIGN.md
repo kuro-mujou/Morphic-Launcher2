@@ -364,8 +364,8 @@ the `PlacementPlan`** — so it can never lie about the outcome (L1's 3×-Spread
 | Merge | shadow **expands** over target | `plan.intent == Merge` |
 | Push  | same as Valid | `plan.intent == Push` |
 
-**The shadow glides between cells** on the same `animatePlacement` spring the displaced occupants use; it snaps
-only when it first appears.
+**The shadow glides between cells** on the same `animatePlacement` spring the displaced occupants use, and on
+home resizes on that spring too (the dock's cells are a different height); it snaps only when it first appears.
 
 **The item itself never teleports between its two drawings** (`DragHandoff`). On lift the proxy starts at the cell's
 resting centre and springs onto the grab, closing the slop's travel. On drop, cancel or refusal the coordinator

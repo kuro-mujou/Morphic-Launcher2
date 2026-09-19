@@ -1,5 +1,8 @@
 package inkspire.morphic.feature.home
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -868,6 +871,21 @@ internal fun HomePagerSurface(
                 if (shadowGeo != null) {
                     session.plan?.let { plan ->
                         val topLeft = shadowGeo.topLeftInRoot(plan.footprint.row, plan.footprint.col)
+                        // **Sized from the plan, not from a cell count.** The plan already states the footprint it
+                        // resolved, spans included, so reading it here is what makes a widget's shadow the widget's
+                        // size — and removes the second, guessed derivation that made every shadow one visual cell.
+                        // Animated on the placement spring, so crossing into the dock (a different cell height) or
+                        // onto a larger merge target resizes the plate as it glides rather than snapping.
+                        val shadowWidth by animateDpAsState(
+                            with(density) { (shadowGeo.cellW * plan.footprint.colSpan).toDp() },
+                            spring(stiffness = Spring.StiffnessMediumLow),
+                            label = "shadowWidth",
+                        )
+                        val shadowHeight by animateDpAsState(
+                            with(density) { (shadowGeo.cellH * plan.footprint.rowSpan).toDp() },
+                            spring(stiffness = Spring.StiffnessMediumLow),
+                            label = "shadowHeight",
+                        )
                         DropFootprint(
                             intent = plan.intent,
                             modifier = Modifier
@@ -875,14 +893,7 @@ internal fun HomePagerSurface(
                                 // After the offset, so it sees each new cell as a move and glides there on the
                                 // spring the pushed occupants use, rather than jumping.
                                 .animatePlacement()
-                                // **Sized from the plan, not from a cell count.** The plan already states the
-                                // footprint it resolved, spans included, so reading it here is what makes a widget's
-                                // shadow the widget's size — and removes the second, guessed derivation that made
-                                // every shadow one visual cell.
-                                .size(
-                                    with(density) { (shadowGeo.cellW * plan.footprint.colSpan).toDp() },
-                                    with(density) { (shadowGeo.cellH * plan.footprint.rowSpan).toDp() },
-                                ),
+                                .size(shadowWidth, shadowHeight),
                         )
                     }
                 }
