@@ -4,13 +4,16 @@ import androidx.compose.ui.geometry.Offset
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridPlacement
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 /**
  * One grip on a resize frame, named by the edges it moves.
  *
- * Eight of them: four edges and four corners, a corner moving one edge on each axis. Encoding it as *which edges
- * move* rather than as a position is what lets [resizedPlacement] be one expression instead of eight — and what
- * makes [handlesFor] a filter rather than a table.
+ * **Two, on opposite corners** — between them they move every edge, so the item can grow or shrink in any
+ * direction, and a drag along one axis changes only that axis because each edge snaps to its nearest cell boundary
+ * (the finger starts on the other axis's boundary and stays there). Growing toward a corner without a grip — up and
+ * to the right — takes one drag on each. Encoding a grip as *which edges move* rather than as a position is what
+ * lets [resizedPlacement] be one expression.
  */
 enum class ResizeHandle(
     val movesLeft: Boolean,
@@ -18,17 +21,8 @@ enum class ResizeHandle(
     val movesRight: Boolean,
     val movesBottom: Boolean,
 ) {
-    LEFT(movesLeft = true, movesTop = false, movesRight = false, movesBottom = false),
-    RIGHT(movesLeft = false, movesTop = false, movesRight = true, movesBottom = false),
-    TOP(movesLeft = false, movesTop = true, movesRight = false, movesBottom = false),
-    BOTTOM(movesLeft = false, movesTop = false, movesRight = false, movesBottom = true),
     TOP_LEFT(movesLeft = true, movesTop = true, movesRight = false, movesBottom = false),
-    TOP_RIGHT(movesLeft = false, movesTop = true, movesRight = true, movesBottom = false),
-    BOTTOM_LEFT(movesLeft = true, movesTop = false, movesRight = false, movesBottom = true),
-    BOTTOM_RIGHT(movesLeft = false, movesTop = false, movesRight = true, movesBottom = true);
-
-    /** True for the four that move an edge on each axis. They are drawn differently — a corner, not a pill. */
-    val isCorner: Boolean get() = (movesLeft || movesRight) && (movesTop || movesBottom)
+    BOTTOM_RIGHT(movesLeft = false, movesTop = false, movesRight = true, movesBottom = true),
 }
 
 /**
@@ -37,8 +31,8 @@ enum class ResizeHandle(
  * Which axes may move and how small the item may get are decisions above this layer, so they are passed in. The
  * launcher's current answer for widgets is "both axes, always": a provider's `resizeMode` is deliberately not
  * honored, because providers under-declare it constantly (see `AppWidgetResizeRules` in `data:appwidgets`). The
- * single-axis case is still expressible, and drawn correctly — a `horizontal = false` frame shows two pills and no
- * corners — so the policy can change without this changing.
+ * single-axis case is still expressible — both grips are offered and [resizedPlacement] moves only the permitted
+ * axis — so the policy can change without this changing.
  *
  * @property minColSpan the smallest width in logical cells, at least 1.
  */
@@ -49,19 +43,14 @@ data class ResizeBounds(
     val minRowSpan: Int,
 )
 
-/** The handles worth drawing: every handle whose moved axes are all permitted by [bounds]. */
-fun handlesFor(bounds: ResizeBounds): List<ResizeHandle> = ResizeHandle.entries.filter { handle ->
-    val horizontalOk = !(handle.movesLeft || handle.movesRight) || bounds.horizontal
-    val verticalOk = !(handle.movesTop || handle.movesBottom) || bounds.vertical
-    horizontalOk && verticalOk
-}
+/** The handles worth drawing: both, unless [bounds] permits no axis at all — a frame with nothing to grab. */
+fun handlesFor(bounds: ResizeBounds): List<ResizeHandle> =
+    if (bounds.horizontal || bounds.vertical) ResizeHandle.entries else emptyList()
 
 /**
- * Where a handle's center sits within the frame `[left, top, right, bottom]`, pulled [inset] px *inward*.
- *
- * Inward rather than on the edge for two reasons L1 found the hard way: the frame is clipped, so a glyph centered
- * on the boundary loses half its touch target, and a handle on the screen's own edge competes with the system's
- * back gesture.
+ * Where a handle's center sits within the frame `[left, top, right, bottom]`: [inset] px in from the corner on
+ * each axis. For a grip drawn along a rounded corner of radius `r`, the midpoint of that arc is `r × (1 − 1/√2)` in
+ * — see [cornerArcInset].
  */
 fun handleCenter(
     handle: ResizeHandle,
@@ -71,17 +60,12 @@ fun handleCenter(
     bottom: Float,
     inset: Float,
 ): Offset = Offset(
-    x = when {
-        handle.movesLeft -> left + inset
-        handle.movesRight -> right - inset
-        else -> (left + right) / 2f
-    },
-    y = when {
-        handle.movesTop -> top + inset
-        handle.movesBottom -> bottom - inset
-        else -> (top + bottom) / 2f
-    },
+    x = if (handle.movesLeft) left + inset else right - inset,
+    y = if (handle.movesTop) top + inset else bottom - inset,
 )
+
+/** How far the midpoint of a rounded corner of [radius] sits in from the rectangle's own corner, on each axis. */
+fun cornerArcInset(radius: Float): Float = radius * (1f - 1f / sqrt(2f))
 
 /**
  * The placement [handle] would give [base] with the finger at [localFinger] (grid-local pixels).

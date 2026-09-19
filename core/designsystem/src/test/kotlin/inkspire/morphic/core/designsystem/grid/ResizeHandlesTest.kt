@@ -7,7 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * Spec for the resize geometry — which handles a provider gets, and what dragging one does to a placement.
+ * Spec for the resize geometry — which grips an item gets, and what dragging one does to a placement.
  *
  * The grid throughout is 8×10 logical cells of 100px, and the item under test occupies cells (2,2) to (4,4)
  * exclusive — a 2×2 footprint whose left edge is at x = 200 and whose right edge is at x = 400.
@@ -23,15 +23,15 @@ class ResizeHandlesTest {
         resizedPlacement(base, handle, Offset(x, y), cell, cell, bounds)
 
     @Test
-    fun `a provider that resizes both ways gets every handle`() {
-        assertEquals(ResizeHandle.entries.toSet(), handlesFor(bothAxes).toSet())
+    fun `a resizable item gets both grips`() {
+        assertEquals(listOf(ResizeHandle.TOP_LEFT, ResizeHandle.BOTTOM_RIGHT), handlesFor(bothAxes))
     }
 
     @Test
-    fun `a height-only provider gets the two vertical handles and no corners`() {
+    fun `a single-axis item still gets both grips`() {
+        // A grip moves an edge on each axis, but only the permitted one actually moves (see below).
         val bounds = ResizeBounds(horizontal = false, vertical = true, minColSpan = 1, minRowSpan = 1)
-        // A corner moves an edge on *each* axis, so it is offered only when both are permitted.
-        assertEquals(listOf(ResizeHandle.TOP, ResizeHandle.BOTTOM), handlesFor(bounds))
+        assertEquals(listOf(ResizeHandle.TOP_LEFT, ResizeHandle.BOTTOM_RIGHT), handlesFor(bounds))
     }
 
     @Test
@@ -44,19 +44,20 @@ class ResizeHandlesTest {
     }
 
     @Test
-    fun `dragging the right edge moves only that edge`() {
-        // Finger at x = 620 rounds to column 6; the left edge stays at 2.
+    fun `a sideways drag on a corner moves only the width`() {
+        // The finger stays on the bottom boundary (y = 400 rounds to row 4), so the height is untouched; x = 620
+        // rounds to column 6. This is what makes two corner grips enough — no edge grip is needed for one axis.
         assertEquals(
             GridPlacement(0, row = 2, col = 2, rowSpan = 2, colSpan = 4),
-            resize(ResizeHandle.RIGHT, x = 620f, y = 300f),
+            resize(ResizeHandle.BOTTOM_RIGHT, x = 620f, y = 410f),
         )
     }
 
     @Test
-    fun `dragging the left edge keeps the right one fixed`() {
+    fun `dragging the top-left corner keeps the bottom-right one fixed`() {
         assertEquals(
             GridPlacement(0, row = 2, col = 0, rowSpan = 2, colSpan = 4),
-            resize(ResizeHandle.LEFT, x = 10f, y = 300f),
+            resize(ResizeHandle.TOP_LEFT, x = 10f, y = 190f),
         )
     }
 
@@ -74,15 +75,14 @@ class ResizeHandlesTest {
         val bounds = bothAxes.copy(minColSpan = 2)
         assertEquals(
             GridPlacement(0, row = 2, col = 2, rowSpan = 2, colSpan = 2),
-            resize(ResizeHandle.RIGHT, x = 0f, y = 300f, bounds = bounds),
+            resize(ResizeHandle.BOTTOM_RIGHT, x = 0f, y = 400f, bounds = bounds),
         )
     }
 
     @Test
     fun `an axis the provider refuses does not move`() {
         val bounds = ResizeBounds(horizontal = false, vertical = true, minColSpan = 1, minRowSpan = 1)
-        // A corner drag on a height-only widget changes the height and leaves the width alone. (The overlay
-        // would not offer this handle; the maths refuses it independently, which is the belt to that braces.)
+        // A corner drag on a height-only widget changes the height and leaves the width alone.
         assertEquals(
             GridPlacement(0, row = 0, col = 2, rowSpan = 4, colSpan = 2),
             resize(ResizeHandle.TOP_LEFT, x = 20f, y = 20f, bounds = bounds),
@@ -93,7 +93,7 @@ class ResizeHandlesTest {
     fun `the growing edge is allowed to overshoot the grid`() {
         // Deliberately unclamped: the caller compares this with `clampToGrid` to tell an over-drag from a legal
         // resize that happens to end at the edge.
-        val over = resize(ResizeHandle.RIGHT, x = 1_200f, y = 300f)
+        val over = resize(ResizeHandle.BOTTOM_RIGHT, x = 1_200f, y = 400f)
         assertEquals(12, over.colEndExclusive)
         assertEquals(GridPlacement(0, row = 2, col = 2, rowSpan = 2, colSpan = 6), clampToGrid(over, config))
     }
@@ -108,14 +108,15 @@ class ResizeHandlesTest {
     }
 
     @Test
-    fun `a handle sits inside the frame, on the edges it moves`() {
-        val center = handleCenter(ResizeHandle.TOP_RIGHT, left = 0f, top = 0f, right = 100f, bottom = 200f, inset = 10f)
-        assertEquals(90f, center.x)
-        assertEquals(10f, center.y)
+    fun `a grip sits at the midpoint of its rounded corner`() {
+        val inset = cornerArcInset(radius = 20f)
+        // r(1 - 1/sqrt 2): the 45-degree point of a quarter circle of radius 20, measured from the square corner.
+        assertEquals(5.858f, inset, 0.001f)
 
-        // An edge handle is centered on the axis it does not move.
-        val bottom = handleCenter(ResizeHandle.BOTTOM, left = 0f, top = 0f, right = 100f, bottom = 200f, inset = 10f)
-        assertEquals(50f, bottom.x)
-        assertEquals(190f, bottom.y)
+        val topLeft = handleCenter(ResizeHandle.TOP_LEFT, left = 0f, top = 0f, right = 100f, bottom = 200f, inset = inset)
+        assertEquals(Offset(inset, inset), topLeft)
+        val bottomRight =
+            handleCenter(ResizeHandle.BOTTOM_RIGHT, left = 0f, top = 0f, right = 100f, bottom = 200f, inset = inset)
+        assertEquals(Offset(100f - inset, 200f - inset), bottomRight)
     }
 }
