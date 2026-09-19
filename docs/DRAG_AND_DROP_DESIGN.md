@@ -359,13 +359,16 @@ the `PlacementPlan`** — so it can never lie about the outcome (L1's 3×-Spread
 
 | State | Look | When |
 |---|---|---|
-| Valid | normal fill | `plan.valid`, intent = place |
+| Valid | solid content-colored plate, 12dp corners, no outline | `plan.valid`, intent = place |
 | Error | red / error fill | zone rejects item, or `FreePush` cascade runs off the grid |
 | Merge | shadow **expands** over target | `plan.intent == Merge` |
-| Push  | debug tint (dev only) | `plan.intent == Push` |
+| Push  | same as Valid | `plan.intent == Push` |
+
+**The shadow glides between cells** on the same `animatePlacement` spring the displaced occupants use; it snaps
+only when it first appears.
 
 **Positioning — half-cell hysteresis.** The target cell is the **dragged item's own snapped position**, not the
-cell under the finger: take the item's top-left (its proxy is finger-centered) and **round** to the nearest cell.
+cell under the finger: take the item's top-left (the item's centre, which the proxy is drawn around) and **round** to the nearest cell.
 Rounding gives free hysteresis — the footprint holds still until the item has traveled half a cell, then steps
 one cell in the drag direction — so it never jitters cell-to-cell on small movements. The top-left is clamped so
 a multi-cell footprint stays on the grid. (This is a surface-geometry rule, so every real surface applies it,
@@ -461,7 +464,7 @@ in one sitting.
   effects to callbacks (drag callbacks in root coordinates). Not unit-tested (plumbing); verified end-to-end
   with the first real surface. Single-surface tracking only; cross-surface root-overlay takeover deferred.
 - [x] **4. `FloatingDragIcon` + `DropFootprint`** — the drag visuals. `DropFootprint` renders the four §7
-  shadow states from `DropIntent` (monochrome; red only for INVALID; PUSH is a debug tint); `FloatingDragIcon`
+  shadow states from `DropIntent` (monochrome; red only for INVALID; PUSH paints as PLACE); `FloatingDragIcon`
   is the root-positioned, lifted proxy that follows the finger. Positioning/wiring is the surface's job (Part
   5). Also hardened `PlacementPlan.footprint` to non-null (INVALID keeps the hovered cell so the red shadow has
   somewhere to paint; "no target" is a null plan).

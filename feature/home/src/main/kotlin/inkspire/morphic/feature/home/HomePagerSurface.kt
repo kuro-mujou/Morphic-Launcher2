@@ -47,6 +47,7 @@ import inkspire.morphic.core.designsystem.grid.GridSpan
 import inkspire.morphic.core.designsystem.grid.InnerCellItem
 import inkspire.morphic.core.designsystem.grid.ResizeBounds
 import inkspire.morphic.core.designsystem.grid.ResizeOverlay
+import inkspire.morphic.core.designsystem.grid.animatePlacement
 import inkspire.morphic.core.designsystem.grid.clampToGrid
 import inkspire.morphic.core.designsystem.menu.LocalMenuHost
 import inkspire.morphic.core.designsystem.menu.MenuAction
@@ -871,6 +872,9 @@ internal fun HomePagerSurface(
                             intent = plan.intent,
                             modifier = Modifier
                                 .offset { IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()) }
+                                // After the offset, so it sees each new cell as a move and glides there on the
+                                // spring the pushed occupants use, rather than jumping.
+                                .animatePlacement()
                                 // **Sized from the plan, not from a cell count.** The plan already states the
                                 // footprint it resolved, spans included, so reading it here is what makes a widget's
                                 // shadow the widget's size — and removes the second, guessed derivation that made

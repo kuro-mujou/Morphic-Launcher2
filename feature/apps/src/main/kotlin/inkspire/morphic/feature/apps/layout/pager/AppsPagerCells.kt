@@ -9,6 +9,7 @@ import inkspire.morphic.core.designsystem.cell.FolderCell
 import inkspire.morphic.core.designsystem.drag.DragSession
 import inkspire.morphic.core.designsystem.drag.DropFootprint
 import inkspire.morphic.core.designsystem.grid.LauncherGridScope
+import inkspire.morphic.core.designsystem.grid.animatePlacement
 import inkspire.morphic.core.model.DropIntent
 import inkspire.morphic.core.model.GridConfig
 import inkspire.morphic.core.model.GridPlacement
@@ -70,7 +71,12 @@ internal fun LauncherGridScope.dropFootprintCell(
         else -> null
     } ?: return
     val (row, col) = cell
-    Box(Modifier.gridPlacement(GridPlacement(0, row, col))) {
+    // Glides from slot to slot as the gap migrates, on the spring the reflowing icons use.
+    Box(
+        Modifier
+            .gridPlacement(GridPlacement(0, row, col))
+            .animatePlacement(),
+    ) {
         DropFootprint(
             intent = if (merge != null) DropIntent.MERGE else DropIntent.REORDER,
             modifier = Modifier.fillMaxSize(),

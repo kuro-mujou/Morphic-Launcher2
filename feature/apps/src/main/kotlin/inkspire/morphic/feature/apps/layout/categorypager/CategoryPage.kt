@@ -42,6 +42,7 @@ import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.LauncherDragCell
 import inkspire.morphic.core.designsystem.grid.LauncherGrid
 import inkspire.morphic.core.designsystem.grid.LauncherGridScope
+import inkspire.morphic.core.designsystem.grid.animatePlacement
 import inkspire.morphic.core.designsystem.grid.derivedCell
 import inkspire.morphic.core.designsystem.grid.fitCols
 import inkspire.morphic.core.designsystem.grid.flowItems
@@ -293,7 +294,11 @@ internal fun CategoryPage(
 @Composable
 private fun LauncherGridScope.dropFootprintCell(draggingHere: Boolean, gap: Int, cols: Int) {
     if (!draggingHere || gap < 0) return
-    Box(Modifier.gridPlacement(GridPlacement(0, gap / cols, gap % cols))) {
+    Box(
+        Modifier
+            .gridPlacement(GridPlacement(0, gap / cols, gap % cols))
+            .animatePlacement(),
+    ) {
         DropFootprint(DropIntent.REORDER, Modifier.fillMaxSize())
     }
 }

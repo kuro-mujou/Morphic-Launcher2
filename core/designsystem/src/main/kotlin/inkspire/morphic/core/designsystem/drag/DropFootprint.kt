@@ -2,16 +2,12 @@ package inkspire.morphic.core.designsystem.drag
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
@@ -27,13 +23,14 @@ import inkspire.morphic.core.model.DropIntent
  * Positioning is the surface's job: it places this over the target cell using its own cell geometry. This
  * component only renders the box, filling whatever bounds [modifier] gives it.
  *
- * The four painted states, in the monochrome palette (only [DropIntent.INVALID] uses real color — red — since
- * that is the reserved error hue):
- * - [DropIntent.PLACE] — a quiet accent wash: "drops here".
- * - [DropIntent.MERGE] — a stronger accent that **expands** slightly, signalling a combine.
- * - [DropIntent.INVALID] — a red wash: can't drop here.
- * - [DropIntent.PUSH] — a debug-only tint (drops the same as PLACE); distinct just so pushes are visible while
- *   developing.
+ * **One solid plate, no outline.** Every droppable intent paints the same flat fill of the theme's content color —
+ * a surface-coloured tile standing where the item will be, which reads against a wallpaper where a thin wash and a
+ * stroke did not. Only two intents depart from it:
+ * - [DropIntent.MERGE] — a denser fill that **expands** slightly, signalling a combine.
+ * - [DropIntent.INVALID] — the error hue, the one real color this palette reserves.
+ *
+ * [DropIntent.PUSH] paints exactly like [DropIntent.PLACE], because it drops exactly like one; the occupants gliding
+ * out of the way are what say "push".
  *
  * **[DropIntent.REORDER] paints the slot the item will occupy** — the gap an ordered surface has opened for it.
  * It reads like [DropIntent.PLACE] on purpose: both promise "it lands here", and the only difference is how the
@@ -53,13 +50,15 @@ import inkspire.morphic.core.model.DropIntent
  * plan, whose footprint stays a meaningless token for this intent.
  *
  * State changes animate (color + the merge expansion) so the shadow morphs rather than jumps as the finger
- * crosses zones.
+ * crosses zones. **Its movement is the caller's**, since the caller places it: a grid surface puts it in a cell
+ * carrying `animatePlacement`, so the plate glides from cell to cell on the same spring as the occupants it
+ * displaces.
  */
 @Composable
 fun DropFootprint(
     intent: DropIntent,
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(20.dp),
+    shape: Shape = RoundedCornerShape(12.dp),
 ) {
     val colors = LocalMorphicColors.current
 
@@ -67,24 +66,15 @@ fun DropFootprint(
     if (intent == DropIntent.REMOVE) return
 
     val fill = when (intent) {
-        DropIntent.PLACE, DropIntent.REORDER -> colors.accent.copy(alpha = 0.12f)
-        DropIntent.MERGE -> colors.accent.copy(alpha = 0.22f)
-        DropIntent.INVALID -> colors.error.copy(alpha = 0.16f)
-        DropIntent.PUSH -> DebugPushTint.copy(alpha = 0.18f)
+        DropIntent.PLACE, DropIntent.PUSH, DropIntent.REORDER -> colors.content.copy(alpha = 0.28f)
+        DropIntent.MERGE -> colors.content.copy(alpha = 0.42f)
+        DropIntent.INVALID -> colors.error.copy(alpha = 0.4f)
         DropIntent.REMOVE -> return // unreachable; the early return above covers it, and `when` must be exhaustive
-    }
-    val stroke = when (intent) {
-        DropIntent.PLACE, DropIntent.REORDER -> colors.accent.copy(alpha = 0.45f)
-        DropIntent.MERGE -> colors.accent
-        DropIntent.INVALID -> colors.error.copy(alpha = 0.7f)
-        DropIntent.PUSH -> DebugPushTint.copy(alpha = 0.7f)
-        DropIntent.REMOVE -> return
     }
     // Merge grows the footprint a touch to read as "swallowing" the target; the rest sit at cell size.
     val targetScale = if (intent == DropIntent.MERGE) 1.08f else 1f
 
     val animatedFill by animateColorAsState(fill, label = "footprintFill")
-    val animatedStroke by animateColorAsState(stroke, label = "footprintStroke")
     val animatedScale by animateFloatAsState(targetScale, label = "footprintScale")
 
     Box(
@@ -93,15 +83,6 @@ fun DropFootprint(
                 scaleX = animatedScale
                 scaleY = animatedScale
             }
-            .clip(shape)
-            .background(animatedFill)
-            .border(BorderStroke(2.dp, animatedStroke), shape),
+            .background(animatedFill, shape),
     )
 }
-
-/**
- * A deliberately off-palette tint for the debug-only [DropIntent.PUSH] shadow. Not a design token: pushes drop
- * exactly like [DropIntent.PLACE], and this only exists so a push is visible during development. Remove or gate
- * behind a debug flag before ship.
- */
-private val DebugPushTint = Color(0xFF3B82F6)

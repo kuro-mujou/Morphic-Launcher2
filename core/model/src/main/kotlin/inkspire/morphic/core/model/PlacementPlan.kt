@@ -3,7 +3,7 @@ package inkspire.morphic.core.model
 /**
  * What a drop would do, once the partition strategy has decided the target cell and (on free grids) which way
  * to push. Drives how the drop shadow reads: PLACE/PUSH/MERGE/REORDER are all droppable, INVALID paints the
- * error shadow. (PUSH is visually distinct only for debugging; it drops the same as PLACE.)
+ * error shadow. (PUSH paints and drops the same as PLACE.)
  *
  * [REORDER] is the odd one and the reason it exists: an **ordered** surface previews a drop by reflowing its own
  * cells around a migrating gap, so there is no target cell for a shadow to name. Without it such a surface has to

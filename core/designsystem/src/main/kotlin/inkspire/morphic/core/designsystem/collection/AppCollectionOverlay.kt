@@ -58,6 +58,7 @@ import inkspire.morphic.core.designsystem.drag.ZoneId
 import inkspire.morphic.core.designsystem.grid.GridGeometry
 import inkspire.morphic.core.designsystem.grid.LauncherDragCell
 import inkspire.morphic.core.designsystem.grid.LauncherGrid
+import inkspire.morphic.core.designsystem.grid.animatePlacement
 import inkspire.morphic.core.designsystem.grid.flowItems
 import inkspire.morphic.core.designsystem.insets.uiInsets
 import inkspire.morphic.core.designsystem.ordered.cellFractionX
@@ -478,9 +479,9 @@ fun AppCollectionOverlay(
                                     if (presenting && session != null && gap >= 0 && gap / pageSize == pageIndex) {
                                         val slot = gap % pageSize
                                         Box(
-                                            Modifier.gridPlacement(
-                                                GridPlacement(0, slot / grid.cols, slot % grid.cols),
-                                            ),
+                                            Modifier
+                                                .gridPlacement(GridPlacement(0, slot / grid.cols, slot % grid.cols))
+                                                .animatePlacement(),
                                         ) {
                                             DropFootprint(DropIntent.REORDER, Modifier.fillMaxSize())
                                         }
