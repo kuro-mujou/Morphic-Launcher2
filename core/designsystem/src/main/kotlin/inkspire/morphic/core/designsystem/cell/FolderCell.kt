@@ -32,7 +32,9 @@ fun FolderCell(
     ) { iconSize ->
         IconPreviewPlate(
             apps = apps,
-            size = iconSize
+            size = iconSize,
+            // A folder is what an app is merged into, so an app just dropped here lands in its preview.
+            receivesDrops = true,
         )
     }
 }
