@@ -221,7 +221,7 @@ class DragCoordinator {
      * snapshot, so the frame the proxy disappears is the frame a cell can already read where to start from.
      */
     private fun land(current: DragSession, leftSource: Boolean) {
-        landing = DragHandoff(current.item, current.itemCenterInRoot, leftSource)
+        landing = DragHandoff(current.item, current.itemCenterInRoot, leftSource, current.sourceZone)
         session = null
     }
 

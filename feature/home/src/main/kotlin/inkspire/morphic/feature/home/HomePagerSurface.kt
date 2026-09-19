@@ -374,6 +374,9 @@ internal fun HomePagerSurface(
     // space, so there is no boundary for the drag to cross.
     val coordinator = requireDragCoordinator()
 
+    // The page each widget container is showing — read by the drag proxy and by a container recreated elsewhere.
+    val containerPages = remember { WidgetContainerPages() }
+
     // The dragged item + hovered plan drive the root overlay below; the dwelled push preview + edge page-flip
     // live inside CoordinateDragPager.
     val session = coordinator.session
@@ -797,6 +800,7 @@ internal fun HomePagerSurface(
                             metrics = layout.dockMetrics,
                             onReorderContainer = viewModel::reorderIconContainer,
                             onInsertIntoContainer = viewModel::insertIntoIconContainer,
+                            containerPages = containerPages,
                         )
                     }
                 },
@@ -835,6 +839,7 @@ internal fun HomePagerSurface(
                             metrics = layout.mainMetrics,
                             onReorderContainer = viewModel::reorderIconContainer,
                             onInsertIntoContainer = viewModel::insertIntoIconContainer,
+                            containerPages = containerPages,
                         )
                     }
                 },
@@ -911,7 +916,11 @@ internal fun HomePagerSurface(
                 // Resolved once: everything but a loose app is identified by its own grid item, since only an app can
                 // be mid-flight with no placement of its own.
                 val draggedItem = state.items.firstOrNull { it.gridItem == session.item }
-                val draggedFolder = draggedItem as? HomeItem.Folder
+                // **A folder can be carried out of an icon container**, where it has no grid cell for [draggedItem] to
+                // find — the same gap the dragged app closes through [appInfo]. Without this the proxy had nothing to
+                // draw and the drag went on with only its shadow.
+                val draggedFolder = (draggedItem as? HomeItem.Folder)?.let { ContainerIcon.Folder(it.folder, it.apps) }
+                    ?: (session.item as? GridItem.Folder)?.let { carried -> containerFolder(state.items, carried.folderId) }
                 // An **icon container** is re-drawn like any other cell — its contents are icons the launcher owns, so
                 // there is nothing here it cannot paint a second time.
                 val draggedIconContainer = draggedItem as? HomeItem.IconContainer
@@ -923,13 +932,13 @@ internal fun HomePagerSurface(
                 // `AppWidgetHostController.snapshot`.
                 val draggedWidget = session.item as? GridItem.AppWidget
                 val widgetShot = remember(draggedWidget) { draggedWidget?.let { widgetHost.snapshot(it.appWidgetId) } }
-                // A **widget container** is the same problem one level up, and the page to capture answers itself:
-                // `snapshot` returns null for a widget that is not currently composed, and a pager composes the page it
-                // is showing — so the first non-null is the page the user was looking at. Null for an empty container,
-                // which `WidgetContainerProxy` draws as the bare panel it really is.
+                // A **widget container** is the same problem one level up: a snapshot of the page the container was
+                // showing, which the cell records in [containerPages]. Null for an empty container, which
+                // `WidgetContainerProxy` draws as the bare panel it really is.
                 val draggedWidgetContainer = draggedItem as? HomeItem.WidgetContainer
+                val containerPage = draggedWidgetContainer?.let { containerPages.of(it.container.id) } ?: 0
                 val containerShot = remember(draggedWidgetContainer) {
-                    draggedWidgetContainer?.container?.widgetIds?.firstNotNullOfOrNull { widgetHost.snapshot(it) }
+                    draggedWidgetContainer?.widgets?.getOrNull(containerPage)?.let { widgetHost.snapshot(it.appWidgetId) }
                 }
                 val hasProxy = draggedApp != null || draggedFolder != null || widgetShot != null ||
                     draggedIconContainer != null || draggedWidgetContainer != null || draggedOwnWidget != null
@@ -972,7 +981,13 @@ internal fun HomePagerSurface(
                                     modifier = Modifier.fillMaxSize(),
                                 )
                             } else if (draggedWidgetContainer != null) {
-                                WidgetContainerProxy(snapshot = containerShot, modifier = Modifier.fillMaxSize())
+                                WidgetContainerProxy(
+                                    snapshot = containerShot,
+                                    page = containerPage,
+                                    pageCount = draggedWidgetContainer.widgets.size,
+                                    axis = draggedWidgetContainer.container.axis,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
                             } else if (draggedOwnWidget != null) {
                                 WidgetCell(recipe = draggedOwnWidget.widget.recipe)
                             } else if (widgetShot != null) {
@@ -1151,6 +1166,7 @@ internal fun HomePagerSurface(
  * dragged across the screen.
  *
  * @param session the live drag, needed only to hide a dragged-out app from a folder's tile preview (see below).
+ * @param containerPages the page each widget container is showing; see [WidgetContainerPages].
  * @param cellModifier fills the cell's layout footprint.
  * @param itemGestures must be handed to whatever should be *touchable*; the cells pass it to their icon+label
  *   group, leaving the surrounding slack free for the surface's own gestures. The two **containers** are the stated
@@ -1167,6 +1183,7 @@ private fun HomeItemCell(
     cellModifier: Modifier,
     itemGestures: Modifier,
     metrics: IconMetrics,
+    containerPages: WidgetContainerPages,
     onReorderContainer: (Long, List<IconItem>) -> Unit = { _, _ -> },
     onInsertIntoContainer: (Long, IconItem, Int) -> Unit = { _, _, _ -> },
 ) {
@@ -1226,8 +1243,10 @@ private fun HomeItemCell(
         )
 
         is HomeItem.WidgetContainer -> WidgetContainerCell(
+            containerId = item.container.id,
             widgets = item.widgets,
             axis = item.container.axis,
+            pages = containerPages,
             modifier = cellModifier,
             itemGestures = itemGestures,
             autoRotate = item.container.autoRotate,
@@ -1297,3 +1316,10 @@ private fun HomeResizeRules.asResizeBounds(geometry: GridGeometry, config: GridC
     )
 }
 
+/** The folder [folderId] as an icon container holds it, or null when no container on home holds it. */
+private fun containerFolder(items: List<HomeItem>, folderId: Long): ContainerIcon.Folder? =
+    items.asSequence()
+        .filterIsInstance<HomeItem.IconContainer>()
+        .flatMap { it.icons }
+        .filterIsInstance<ContainerIcon.Folder>()
+        .firstOrNull { it.folder.id == folderId }

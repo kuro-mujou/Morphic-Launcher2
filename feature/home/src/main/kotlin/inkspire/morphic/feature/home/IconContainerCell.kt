@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -26,6 +27,7 @@ import inkspire.morphic.core.designsystem.cell.IconMetrics
 import inkspire.morphic.core.designsystem.cell.IconPreviewPlate
 import inkspire.morphic.core.designsystem.cell.LocalIconMetrics
 import inkspire.morphic.core.designsystem.cell.resolveIconSizeUnfloored
+import inkspire.morphic.core.designsystem.grid.animatePlacement
 import inkspire.morphic.core.model.IconArrangement
 import kotlin.math.roundToInt
 
@@ -109,7 +111,10 @@ internal fun IconContainerCell(
         // panel told it was over frost would fill flat, which is the tile itself disappearing.
         OnPanel {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                if (icons.isEmpty()) {
+                // **Empty is what is about to be shown, not what is stored.** The first app dropped into an empty
+                // container is promised a slot before the store holds it; testing the stored list drew the "+" over
+                // that promise until the write landed, so the container flicked between empty and filled.
+                if (preview.shown.isEmpty()) {
                     ContainerAddGlyph(
                         contentDescription = "Add app",
                         modifier = Modifier.fillMaxSize(),
@@ -142,36 +147,45 @@ internal fun IconContainerCell(
                     // how the slot is made bigger, which is why the two are offered together.
                     val iconSize = (metrics.resolveIconSizeUnfloored(slotSize, slotSize) * iconScalePercent / 100f)
                         .coerceAtMost(slotSize)
-                    Box(
-                        modifier = Modifier
-                            // The one being carried keeps its slot but is not drawn: the floating proxy under the
-                            // finger is standing in for it, and `LauncherDragCell` hides a lifted *cell* the same way.
-                            .alpha(if (icon.asIconItem() == preview.lifted) 0f else 1f)
-                            // Absolute placement inside the container, so the arrangement owns the layout completely — there
-                            // is no row/column structure for a shape like the circle or the beehive to be forced into.
-                            .align(Alignment.TopStart)
-                            .offset { IntOffset(slot.x.roundToInt(), slot.y.roundToInt()) }
-                            .size(
-                                width = with(density) { slot.width.toDp() },
-                                height = with(density) { slot.height.toDp() },
-                            ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        when (icon) {
-                            is ContainerIcon.App -> AppIcon(
-                                component = icon.info.componentKey,
-                                contentDescription = icon.info.label,
-                                sizePx = with(density) { iconSize.roundToPx() },
-                                modifier = Modifier.size(iconSize),
-                            )
-                            // `backing = false` for the category cluster's reason: the container already has a fill, so a
-                            // plate inside it is a box within a box — and dropping the plate drops its inset with it, which
-                            // is only there to keep icons off the plate's own rounded edge.
-                            is ContainerIcon.Folder -> IconPreviewPlate(
-                                apps = icon.apps,
-                                size = iconSize,
-                                backing = false,
-                            )
+                    // **Keyed by the icon, so a reflow moves it rather than redrawing a different icon in its place**,
+                    // which is what lets `animatePlacement` glide it: an exchange being previewed, a gap opening for an
+                    // arrival, a departure closing up. Without the key an icon was bound to its *index*, and every
+                    // rearrangement jumped.
+                    key(icon.asIconItem()) {
+                        Box(
+                            modifier = Modifier
+                                // The one being carried keeps its slot but is not drawn: the floating proxy under the
+                                // finger is standing in for it, and `LauncherDragCell` hides a lifted *cell* the same way.
+                                .alpha(if (icon.asIconItem() == preview.lifted) 0f else 1f)
+                                // Absolute placement inside the container, so the arrangement owns the layout
+                                // completely — there is no row/column structure for a shape like the circle or the
+                                // beehive to be forced into.
+                                .align(Alignment.TopStart)
+                                .offset { IntOffset(slot.x.roundToInt(), slot.y.roundToInt()) }
+                                // After the offset, so a new slot reads as a move and the icon glides to it.
+                                .animatePlacement()
+                                .size(
+                                    width = with(density) { slot.width.toDp() },
+                                    height = with(density) { slot.height.toDp() },
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            when (icon) {
+                                is ContainerIcon.App -> AppIcon(
+                                    component = icon.info.componentKey,
+                                    contentDescription = icon.info.label,
+                                    sizePx = with(density) { iconSize.roundToPx() },
+                                    modifier = Modifier.size(iconSize),
+                                )
+                                // `backing = false` for the category cluster's reason: the container already has a
+                                // fill, so a plate inside it is a box within a box — and dropping the plate drops its
+                                // inset with it, which is only there to keep icons off the plate's own rounded edge.
+                                is ContainerIcon.Folder -> IconPreviewPlate(
+                                    apps = icon.apps,
+                                    size = iconSize,
+                                    backing = false,
+                                )
+                            }
                         }
                     }
                 }

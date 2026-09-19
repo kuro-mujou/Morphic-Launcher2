@@ -122,6 +122,22 @@ class IconRenderManager(
         cache.get(IconId(component, layerSet, sizePx))
 
     /**
+     * The same icon baked at **another** size, to draw scaled for the frames before [sizePx] is baked — the closest
+     * larger bake if there is one (it scales down cleanly), else the largest smaller one. Null when this icon has not
+     * been baked at any size.
+     *
+     * For a size the screen has never asked for before: a new folder's first preview tile, an icon container being
+     * resized, whose icons change size on every step. Each drew an empty box until its bake landed, which on a drag or
+     * a resize reads as a flash. Scans the cache, so it is for a miss, not a hot path; and it reads a snapshot, so it
+     * does not refresh anything's recency.
+     */
+    fun peekNearest(component: ComponentKey, layerSet: IconLayerSet, sizePx: Int): Bitmap? {
+        val sizes = cache.snapshot().filterKeys { it.component == component && it.layerSet == layerSet }
+        return sizes.entries.filter { it.key.sizePx >= sizePx }.minByOrNull { it.key.sizePx }?.value
+            ?: sizes.entries.maxByOrNull { it.key.sizePx }?.value
+    }
+
+    /**
      * Bumped every time something is evicted — **the one input [IconId] cannot capture**, and the reason it exists.
      *
      * That key is built to make invalidation automatic: it carries the component, the resolved layer set and the

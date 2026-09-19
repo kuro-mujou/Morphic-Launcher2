@@ -322,6 +322,8 @@ class DragCoordinatorTest {
         coordinator.moveTo(Offset(50f, 150f))
         coordinator.drop()
         assertTrue(coordinator.landing!!.leftSource)
+        // And it remembers where it came from, which is what a holder asks to tell a departure from an arrival.
+        assertEquals(ZoneId("home"), coordinator.landing!!.fromZone)
 
         // Merged into something.
         coordinator.start(app("a"), Offset(50f, 50f))

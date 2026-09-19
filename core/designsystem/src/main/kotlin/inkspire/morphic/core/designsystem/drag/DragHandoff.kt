@@ -21,11 +21,14 @@ import inkspire.morphic.core.model.GridItem
  * @property leftSource for a landing: the drop took the item away from where it was lifted — merged into a folder,
  *   removed, or carried into another zone. The cell it was lifted out of is about to be disposed, so it must stay
  *   hidden rather than glide back toward a slot the item no longer has; only a cell that newly holds it glides in.
+ * @property fromZone for a landing: the zone the item was lifted in. What tells a holder that draws its own members
+ *   (an icon container) "this left *me*" from "this arrived *here* from somewhere else" — both have [leftSource].
  */
 data class DragHandoff(
     val item: GridItem,
     val centerInRoot: Offset,
     val leftSource: Boolean = false,
+    val fromZone: ZoneId? = null,
     val atNanos: Long = System.nanoTime(),
 ) {
     val isFresh: Boolean get() = System.nanoTime() - atNanos < HandoffFreshMs * 1_000_000L

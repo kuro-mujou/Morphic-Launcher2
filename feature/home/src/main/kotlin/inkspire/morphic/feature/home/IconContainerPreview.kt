@@ -2,6 +2,7 @@ package inkspire.morphic.feature.home
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -10,6 +11,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalDensity
 import inkspire.morphic.core.designsystem.container.ArrangementSlot
+import inkspire.morphic.core.designsystem.drag.DragCoordinator
 import inkspire.morphic.core.designsystem.drag.DropZone
 import inkspire.morphic.core.designsystem.drag.LocalDragCoordinator
 import inkspire.morphic.core.designsystem.drag.RegisterDropZone
@@ -19,6 +21,8 @@ import inkspire.morphic.core.model.GridPlacement
 import inkspire.morphic.core.model.IconArrangement
 import inkspire.morphic.core.model.IconItem
 import inkspire.morphic.core.model.PlacementPlan
+import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * What an icon container should draw right now, given whatever drag is in flight over it.
@@ -31,7 +35,8 @@ import inkspire.morphic.core.model.PlacementPlan
  *   drawing it.
  * @property lifted the icon being carried out of *this* container, which the caller draws invisible. It keeps its
  *   place rather than being removed: the proxy stands in for it, and taking it out would re-flow the arrangement
- *   around a gap that is about to be filled again.
+ *   around a gap that is about to be filled again. It stays set after a drop that carried the icon elsewhere, until
+ *   the membership write takes it out — see [rememberIconContainerPreview].
  */
 internal data class IconContainerPreview(
     val slots: List<ArrangementSlot>,
@@ -76,6 +81,13 @@ internal data class IconContainerDropTarget(
  * aside — it goes in instead. That is the trade an open collection already makes, and the container is still moved
  * by dragging the container.
  *
+ * **What a drop promised is held until the store says it**, and that is what keeps a drop from flashing. The write
+ * reaches this cell a frame or more after the release, and the release is also when the drag stops describing
+ * anything. Falling back to the stored membership in between drew the old arrangement for those frames: a reordered
+ * pair swapped back and forth, an arriving icon's gap closed and reopened, a departing icon reappeared in its slot.
+ * So a drop into the container records the order it wrote, and one out of it keeps its icon hidden, until the
+ * membership catches up — or, for a write that never lands, until [PendingDropTimeoutMs].
+ *
  * @param target null for a container being drawn as something other than itself — the floating drag proxy, the
  *   widget picker's preview, the settings screen's. Those register nothing, which is what stops a picture's zone
  *   shadowing the real container it is a picture of.
@@ -94,12 +106,15 @@ internal fun rememberIconContainerPreview(
     val density = LocalDensity.current
     val members = icons.map { it.asIconItem() }
     val carried = coordinator?.session?.item?.asIconItem()
-    val lifted = carried?.takeIf { it in members }
+    val lifted = carried?.takeIf { it in members } ?: coordinator?.departedMember(members, zoneIdOf(target))
     // Something this container does not hold, hovering over it — so it is about to gain a slot. Resolved before
     // the slots are laid out, because it is what decides how many there are.
     val incoming = carried?.takeIf { it !in members && coordinator.session?.activeZone == zoneIdOf(target) }
 
-    val slotCount = icons.size + if (incoming != null) 1 else 0
+    // The order the last drop into this container wrote, drawn until the membership reports it. See the KDoc.
+    var pending by rememberPendingDrop(members)
+
+    val slotCount = pending?.size ?: (icons.size + if (incoming != null) 1 else 0)
     val slots = remember(arrangement, slotCount, size, density, spacingScalePercent) {
         iconContainerSlots(arrangement, slotCount, size.width, size.height, density, spacingScalePercent)
     }
@@ -130,7 +145,7 @@ internal fun rememberIconContainerPreview(
                     PlacementPlan(GridPlacement(0, 0, 0), DropIntent.REORDER)
                 },
                 onDrop = { outcome ->
-                    commitDrop(outcome.item.asIconItem(), members, hovered, target.onReorder, target.onInsert)
+                    pending = commitDrop(outcome.item.asIconItem(), members, hovered, target.onReorder, target.onInsert)
                     hovered = -1
                 },
             ),
@@ -139,8 +154,43 @@ internal fun rememberIconContainerPreview(
 
     // The same rearrangement the drop will commit, which is the point of computing it here: the preview cannot
     // promise something the drop then does differently.
-    return IconContainerPreview(slots, previewOrder(icons, members, lifted, incoming != null, hovered), lifted)
+    val shown = pending?.let { order -> order.map { item -> icons.firstOrNull { it.asIconItem() == item } } }
+        ?: previewOrder(icons, members, lifted, incoming != null, hovered)
+    return IconContainerPreview(slots, shown, lifted)
 }
+
+/**
+ * A member just carried out of **this** container ([zone]) by a drop elsewhere: gone as far as the user can see,
+ * still a member until the write lands. Null once the membership has caught up, when the last drop kept its item
+ * where it was, and for an icon that was dropped *into* this container — that one has left its own source too, and
+ * mistaking it for a departure hid every newly added icon.
+ */
+private fun DragCoordinator.departedMember(members: List<IconItem>, zone: ZoneId?): IconItem? =
+    landing
+        ?.takeIf { zone != null && it.fromZone == zone && it.leftSource && it.isFresh && session == null }
+        ?.item?.asIconItem()?.takeIf { it in members }
+
+/**
+ * Holds the order a drop wrote, clearing it once [members] reports that order, or after [PendingDropTimeoutMs] for a
+ * write that never lands.
+ */
+@Composable
+private fun rememberPendingDrop(members: List<IconItem>): MutableState<List<IconItem>?> {
+    val pending = remember { mutableStateOf<List<IconItem>?>(null) }
+    LaunchedEffect(members, pending.value) {
+        val expected = pending.value ?: return@LaunchedEffect
+        if (members != expected) delay(PendingDropTimeoutMs.milliseconds)
+        pending.value = null
+    }
+    return pending
+}
+
+/**
+ * How long a drop's promised order is drawn if the membership never reports it — a write that failed, or one the
+ * store turned into something else. Long enough for any write that does land; short enough that a lost one does not
+ * leave the container misdrawn for more than a moment.
+ */
+private const val PendingDropTimeoutMs = 1_000L
 
 /** The zone id a container publishes, or null for one that is not itself (a proxy, a preview). */
 private fun zoneIdOf(target: IconContainerDropTarget?): ZoneId? =
@@ -156,7 +206,8 @@ private fun <T> List<T>.exchanging(a: Int, b: Int): List<T> =
     else toMutableList().also { it[a] = this[b]; it[b] = this[a] }
 
 /**
- * Writes the drop: an exchange for something the container already holds, an insert for anything else.
+ * Writes the drop: an exchange for something the container already holds, an insert for anything else. Returns the
+ * membership order the write will produce, or null when nothing was written.
  *
  * A no-op for a release that resolved to no slot, and for an exchange that would leave the order as it was —
  * neither is a change the user made, and writing one would still cost a round trip through the store.
@@ -167,14 +218,14 @@ private fun commitDrop(
     hovered: Int,
     onReorder: (List<IconItem>) -> Unit,
     onInsert: (IconItem, Int) -> Unit,
-) {
-    if (dropped == null || hovered < 0) return
+): List<IconItem>? {
+    if (dropped == null || hovered < 0) return null
     val from = members.indexOf(dropped)
     if (from < 0) {
         onInsert(dropped, hovered)
-    } else {
-        members.exchanging(from, hovered).takeIf { it != members }?.let(onReorder)
+        return members.toMutableList().also { it.add(hovered.coerceIn(0, it.size), dropped) }
     }
+    return members.exchanging(from, hovered).takeIf { it != members }?.also(onReorder)
 }
 
 /**

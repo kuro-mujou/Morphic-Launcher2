@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -19,6 +20,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -66,11 +68,16 @@ private const val AutoRotateIntervalMs = 5_000L
  * flow this surface already holds (bind a widget, then the provider's configuration screen) through `onOpen`, the
  * same gesture contract every tap uses, rather than through a second `onClick` that would fire on release after a
  * long-press had already opened the menu.
+ *
+ * @param pages where this container's current page is recorded, for its drag proxy to capture and for a recreated
+ *   cell to reopen on.
  */
 @Composable
 internal fun WidgetContainerCell(
+    containerId: Long,
     widgets: List<AppWidgetInfo>,
     axis: WidgetContainerAxis,
+    pages: WidgetContainerPages,
     modifier: Modifier = Modifier,
     itemGestures: Modifier = Modifier,
     autoRotate: Boolean = false,
@@ -97,7 +104,14 @@ internal fun WidgetContainerCell(
             return@Box
         }
 
-        val pagerState = rememberPagerState(pageCount = { widgets.size })
+        // Starts on the page it was last showing: a container moved to another page or zone is a new cell, and a
+        // fresh pager would open it on page one.
+        val pagerState = rememberPagerState(initialPage = pages.of(containerId).coerceIn(0, widgets.size - 1)) {
+            widgets.size
+        }
+        LaunchedEffect(pagerState, containerId) {
+            snapshotFlow { pagerState.currentPage }.collect { pages.record(containerId, it) }
+        }
         // Gated off mid-drag for the reason every other dragging surface gates its own scroller: two gestures
         // otherwise fight over one finger while an item is being carried across the screen.
         val userScrollEnabled = !coordinator.isDragging
@@ -153,30 +167,54 @@ internal fun WidgetContainerCell(
             ) { page(it) }
         }
 
-        // A single page is not paged, so it gets no dots — the same rule the folder's pager follows.
-        if (widgets.size > 1) {
-            // On the trailing edge of whichever axis is *not* being swiped, so the dots never sit under the finger
-            // that is changing them.
-            val edge = if (axis == WidgetContainerAxis.VERTICAL) Alignment.CenterEnd else Alignment.BottomCenter
-            // **Themed against the panel, like the "+" beside them**, since they are drawn on the tile rather than
-            // on home. The scope is captured because [OnPanel]'s content is not a `BoxScope` and `align` needs one.
-            // The widgets themselves need nothing: an embedded `View` draws its own colors.
-            val tile = this
-            OnPanel {
-                PageDots(
-                    count = widgets.size,
-                    current = pagerState.currentPage,
-                    axis = axis,
-                    modifier = with(tile) { Modifier.align(edge) },
-                )
-            }
-        }
+        PanelPageDots(count = widgets.size, current = pagerState.currentPage, axis = axis)
+    }
+}
+
+/**
+ * The container's page dots, placed on its tile. Shared by the cell and its drag proxy, so lifting a container does
+ * not take its dots away and dropping it put them back.
+ */
+@Composable
+private fun BoxScope.PanelPageDots(count: Int, current: Int, axis: WidgetContainerAxis) {
+    // A single page is not paged, so it gets no dots — the same rule the folder's pager follows.
+    if (count <= 1) return
+    // On the trailing edge of whichever axis is *not* being swiped, so the dots never sit under the finger that is
+    // changing them.
+    val edge = if (axis == WidgetContainerAxis.VERTICAL) Alignment.CenterEnd else Alignment.BottomCenter
+    // **Themed against the panel, like the "+" beside them**, since they are drawn on the tile rather than on home.
+    // The scope is captured because [OnPanel]'s content is not a `BoxScope` and `align` needs one. The widgets
+    // themselves need nothing: an embedded `View` draws its own colors.
+    val tile = this
+    OnPanel {
+        PageDots(count = count, current = current, axis = axis, modifier = with(tile) { Modifier.align(edge) })
+    }
+}
+
+/**
+ * Which page each widget container is showing, by container id — kept outside the cell because two things outside it
+ * need the answer.
+ *
+ * The **drag proxy** captures that page. It used to take the first page whose widget had a view, on the assumption
+ * that the pager composes only the page on screen; it does not (a page just left stays composed), so a container
+ * scrolled to page two lifted as a picture of page one. And a **recreated cell** reopens on it: a container dropped on
+ * another page or into another zone is a new composition, which would otherwise start again at the first page.
+ *
+ * A plain map rather than state: nothing composes against a page being recorded, only reads it at those two moments.
+ */
+internal class WidgetContainerPages {
+    private val current = HashMap<Long, Int>()
+
+    fun of(containerId: Long): Int = current[containerId] ?: 0
+
+    fun record(containerId: Long, page: Int) {
+        current[containerId] = page
     }
 }
 
 /**
  * A widget container as the **floating drag proxy** draws it: the same panel, with a still picture of the page that
- * was on screen when the drag began.
+ * was on screen when the drag began, and the same dots marking that page ([page] of [pageCount]).
  *
  * **It cannot be the real cell**, for `AppWidgetHostController.snapshot`'s reason one level up. A container's pages
  * are `AppWidgetHostView`s, so re-composing it under the finger would build a *second* live instance of every
@@ -188,7 +226,13 @@ internal fun WidgetContainerCell(
  * "+" is deliberately left out — a button is not something to draw on a proxy that cannot be pressed.
  */
 @Composable
-internal fun WidgetContainerProxy(snapshot: Bitmap?, modifier: Modifier = Modifier) {
+internal fun WidgetContainerProxy(
+    snapshot: Bitmap?,
+    page: Int,
+    pageCount: Int,
+    axis: WidgetContainerAxis,
+    modifier: Modifier = Modifier,
+) {
     Box(modifier = modifier.containerPanel(), contentAlignment = Alignment.Center) {
         if (snapshot != null) {
             Image(
@@ -197,6 +241,7 @@ internal fun WidgetContainerProxy(snapshot: Bitmap?, modifier: Modifier = Modifi
                 modifier = Modifier.fillMaxSize(),
             )
         }
+        PanelPageDots(count = pageCount, current = page, axis = axis)
     }
 }
 

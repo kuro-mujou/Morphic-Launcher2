@@ -101,11 +101,14 @@ fun LauncherIcon(
     // would re-run and the stale bitmap would stay until something else happened to recompose this cell. See
     // [IconRenderManager.generation] for why the key cannot capture this on its own.
     val generation = manager.generation
+    val exact = remember(component, layerSet, sizePx, generation) { manager.peek(component, layerSet, sizePx) }
+    // **Until the exact size is baked, the same icon at another size, scaled** — rather than an empty box, which is
+    // what a new folder's preview and a container mid-resize drew for a frame or more. See `peekNearest`.
     var bitmap by remember(component, layerSet, sizePx, generation) {
-        mutableStateOf(manager.peek(component, layerSet, sizePx))
+        mutableStateOf(exact ?: manager.peekNearest(component, layerSet, sizePx))
     }
     LaunchedEffect(component, layerSet, sizePx, generation) {
-        if (bitmap == null) bitmap = manager.get(component, layerSet, sizePx)
+        if (exact == null) manager.get(component, layerSet, sizePx)?.let { bitmap = it }
     }
 
     val rendered = bitmap
