@@ -35,7 +35,6 @@ import inkspire.morphic.core.designsystem.collection.AppAdditions
 import inkspire.morphic.core.designsystem.collection.AppCollectionOverlay
 import inkspire.morphic.core.designsystem.collection.AppCollectionPhase
 import inkspire.morphic.core.designsystem.collection.rememberAppCollectionHostState
-import inkspire.morphic.core.designsystem.drag.DragSession
 import inkspire.morphic.core.designsystem.drag.DropFootprint
 import inkspire.morphic.core.designsystem.drag.DropOutcome
 import inkspire.morphic.core.designsystem.drag.DropPlanner
@@ -376,6 +375,10 @@ internal fun HomePagerSurface(
 
     // The page each widget container is showing — read by the drag proxy and by a container recreated elsewhere.
     val containerPages = remember { WidgetContainerPages() }
+
+    // Folders that have just dissolved into their last app, so that app's cell shows the change. See [FolderDissolves].
+    val dissolves = remember { FolderDissolves() }
+    dissolves.observe(state.items)
 
     // The dragged item + hovered plan drive the root overlay below; the dwelled push preview + edge page-flip
     // live inside CoordinateDragPager.
@@ -823,13 +826,13 @@ internal fun HomePagerSurface(
                     ) { item, cellModifier, itemGestures ->
                         HomeItemCell(
                             item = item,
-                            session = session,
                             cellModifier = cellModifier,
                             itemGestures = itemGestures,
                             metrics = layout.dockMetrics,
                             onReorderContainer = viewModel::reorderIconContainer,
                             onInsertIntoContainer = viewModel::insertIntoIconContainer,
                             containerPages = containerPages,
+                            dissolves = dissolves,
                             resolveIcon = resolveIcon,
                         )
                     }
@@ -865,13 +868,13 @@ internal fun HomePagerSurface(
                     ) { item, cellModifier, itemGestures ->
                         HomeItemCell(
                             item = item,
-                            session = session,
                             cellModifier = cellModifier,
                             itemGestures = itemGestures,
                             metrics = layout.mainMetrics,
                             onReorderContainer = viewModel::reorderIconContainer,
                             onInsertIntoContainer = viewModel::insertIntoIconContainer,
                             containerPages = containerPages,
+                            dissolves = dissolves,
                             resolveIcon = resolveIcon,
                         )
                     }
@@ -1198,8 +1201,8 @@ internal fun HomePagerSurface(
  * or a folder identically, and a cell that differed per zone would make an item change appearance simply by being
  * dragged across the screen.
  *
- * @param session the live drag, needed only to hide a dragged-out app from a folder's tile preview (see below).
  * @param containerPages the page each widget container is showing; see [WidgetContainerPages].
+ * @param dissolves folders that have just turned into their last app, whose cell shows the change.
  * @param resolveIcon what an icon arriving in an icon container draws as before it is a member.
  * @param cellModifier fills the cell's layout footprint.
  * @param itemGestures must be handed to whatever should be *touchable*; the cells pass it to their icon+label
@@ -1213,18 +1216,31 @@ internal fun HomePagerSurface(
 @Composable
 private fun HomeItemCell(
     item: HomeItem,
-    session: DragSession?,
     cellModifier: Modifier,
     itemGestures: Modifier,
     metrics: IconMetrics,
     containerPages: WidgetContainerPages,
+    dissolves: FolderDissolves,
     resolveIcon: (IconItem) -> ContainerIcon?,
     onReorderContainer: (Long, List<IconItem>) -> Unit = { _, _ -> },
     onInsertIntoContainer: (Long, IconItem, Int) -> Unit = { _, _, _ -> },
 ) {
     when (item) {
-        is HomeItem.App ->
-            AppCell(app = item.info, modifier = cellModifier, metrics = metrics, itemGestures = itemGestures)
+        is HomeItem.App -> {
+            val from = dissolves.from(item.gridItem)
+            if (from == null) {
+                AppCell(app = item.info, modifier = cellModifier, metrics = metrics, itemGestures = itemGestures)
+            } else {
+                FolderDissolveCell(
+                    folder = from,
+                    app = item,
+                    metrics = metrics,
+                    modifier = cellModifier,
+                    itemGestures = itemGestures,
+                    onFinished = { dissolves.finished(item.gridItem) },
+                )
+            }
+        }
 
         is HomeItem.AppWidget -> AppWidgetCell(
             appWidgetId = item.info.appWidgetId,
@@ -1245,7 +1261,7 @@ private fun HomeItemCell(
             // isn't shown in the folder icon and under the finger at the same time. The real folder removal commits
             // on drop — removing it now would dispose the dragged cell (it lives in the folder's grid) and kill the
             // drag.
-            val dragged = (session?.item as? GridItem.App)?.component
+            val dragged = (requireDragCoordinator().session?.item as? GridItem.App)?.component
             val preview = if (dragged == null) item.apps else item.apps.filterNot { it.componentKey == dragged }
             FolderCell(
                 label = item.folder.label,
